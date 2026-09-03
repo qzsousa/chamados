@@ -8,9 +8,14 @@
 !**/*.ts
 !**/*.html
 
+# Exclui arquivos duplicados/legados
+Código.js
+CódigoForms.js
+testes.js
+database/
+
 # Agora, explicitamente EXCLUI os itens do seu gitignore
 # (caso eles estejam dentro das pastas incluídas, ou na raiz)
 package-lock.json
 package.json
 node_modules/
-database/
