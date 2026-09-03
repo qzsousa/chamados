@@ -1,0 +1,3663 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Matriz v2</title>
+<style>
+:root {
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --bg-tertiary: #334155;
+  --bg-card: #1e293b;
+  --bg-hover: #334155;
+  --bg-input: #0f172a;
+  --border-color: #334155;
+  --border-light: #475569;
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --accent-primary: #3b82f6;
+  --accent-primary-hover: #2563eb;
+  --accent-secondary: #10b981;
+  --accent-warning: #f59e0b;
+  --accent-danger: #ef4444;
+  --accent-purple: #a855f7;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.3);
+  --shadow-lg: 0 10px 15px rgba(0,0,0,0.3);
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-full: 9999px;
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-base: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 18px;
+  --font-size-2xl: 24px;
+  --font-size-3xl: 32px;
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+  --sidebar-width: 280px;
+  --sidebar-right-width: 320px;
+  --header-height: 64px;
+  --toolbar-height: 48px;
+}
+
+body.light {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f1f5f9;
+  --bg-card: #ffffff;
+  --bg-hover: #f1f5f9;
+  --bg-input: #ffffff;
+  --border-color: #e2e8f0;
+  --border-light: #cbd5e1;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.07);
+  --shadow-lg: 0 10px 15px rgba(0,0,0,0.1);
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: var(--font-size-base);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.5;
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: var(--header-height) 1fr;
+  grid-template-columns: var(--sidebar-width) 1fr var(--sidebar-right-width);
+  grid-template-areas:
+    "header header header"
+    "sidebar-left main sidebar-right";
+  overflow: hidden;
+}
+
+@media (max-width: 1200px) {
+  body {
+    grid-template-columns: var(--sidebar-width) 1fr;
+    grid-template-areas:
+      "header header"
+      "sidebar-left main";
+  }
+}
+
+@media (max-width: 1024px) {
+  body {
+    grid-template-columns: 1fr;
+    grid-template-rows: var(--header-height) auto 1fr;
+    grid-template-areas:
+      "header"
+      "toolbar"
+      "main";
+  }
+  :root {
+    --sidebar-width: 0;
+    --sidebar-right-width: 0;
+  }
+}
+
+/* ===== HEADER ===== */
+.header {
+  grid-area: header;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--header-height);
+  padding: 0 var(--spacing-lg);
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  z-index: 100;
+}
+
+.header-left, .header-center, .header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.header-left {
+  flex: 1;
+}
+
+.header-center {
+  flex: 1;
+  justify-content: center;
+}
+
+.header-right {
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-weight: 700;
+  font-size: var(--font-size-xl);
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.logo-icon {
+  width: 36px;
+  height: 36px;
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-purple));
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: var(--font-size-lg);
+}
+
+.clock {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-lg);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  padding: var(--spacing-xs) var(--spacing-md);
+  border-radius: var(--radius-full);
+  min-width: 140px;
+  text-align: center;
+}
+
+.header-btn {
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.header-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.header-btn.active {
+  background: var(--accent-primary);
+  color: white;
+}
+
+.header-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+.theme-toggle {
+  position: relative;
+  width: 48px;
+  height: 28px;
+}
+
+.theme-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.theme-toggle .slider {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-full);
+  transition: background var(--transition-fast);
+  display: flex;
+  align-items: center;
+  padding: 2px;
+}
+
+.theme-toggle .slider::before {
+  content: '';
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  background: white;
+  border-radius: 50%;
+  left: 2px;
+  transition: transform var(--transition-fast);
+  box-shadow: var(--shadow-sm);
+}
+
+.theme-toggle input:checked + .slider {
+  background: var(--accent-primary);
+}
+
+.theme-toggle input:checked + .slider::before {
+  transform: translateX(20px);
+}
+
+.theme-toggle .slider svg {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  color: var(--text-secondary);
+  transition: opacity var(--transition-fast);
+}
+
+.theme-toggle .slider .sun-icon {
+  left: 6px;
+}
+
+.theme-toggle .slider .moon-icon {
+  right: 6px;
+  opacity: 0;
+}
+
+.theme-toggle input:checked + .slider .sun-icon {
+  opacity: 0;
+}
+
+.theme-toggle input:checked + .slider .moon-icon {
+  opacity: 1;
+}
+
+/* ===== SIDEBAR LEFT ===== */
+.sidebar-left {
+  grid-area: sidebar-left;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: var(--spacing-md);
+  gap: var(--spacing-lg);
+}
+
+.sidebar-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-md);
+}
+
+.sidebar-section-title {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: var(--spacing-md);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sidebar-section-title .icon {
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+}
+
+.filter-group {
+  margin-bottom: var(--spacing-md);
+}
+
+.filter-group:last-child {
+  margin-bottom: 0;
+}
+
+.filter-label {
+  display: block;
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-xs);
+}
+
+.filter-input, .filter-select {
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  transition: all var(--transition-fast);
+}
+
+.filter-input:focus, .filter-select:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+.filter-input::placeholder {
+  color: var(--text-muted);
+}
+
+.filter-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--spacing-md) center;
+  padding-right: 40px;
+}
+
+.preset-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-sm);
+}
+
+.preset-btn {
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.preset-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.preset-btn.active {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: white;
+}
+
+.saved-views-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.saved-view-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.saved-view-item:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent-primary);
+}
+
+.saved-view-item .view-name {
+  flex: 1;
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.saved-view-item .view-actions {
+  display: flex;
+  gap: var(--spacing-xs);
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.saved-view-item:hover .view-actions {
+  opacity: 1;
+}
+
+.saved-view-item .view-action-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.saved-view-item .view-action-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.saved-view-item .view-action-btn.delete:hover {
+  color: var(--accent-danger);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.no-saved-views {
+  text-align: center;
+  padding: var(--spacing-lg);
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.save-view-btn {
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--accent-primary);
+  border: none;
+  border-radius: var(--radius-md);
+  color: white;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  transition: all var(--transition-fast);
+  margin-top: var(--spacing-md);
+}
+
+.save-view-btn:hover {
+  background: var(--accent-primary-hover);
+}
+
+/* ===== MAIN AREA ===== */
+.main {
+  grid-area: main;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-primary);
+}
+
+.toolbar {
+  height: var(--toolbar-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--spacing-md);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+}
+
+.chips-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+  flex: 1;
+  min-width: 0;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: var(--accent-primary);
+  color: white;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  max-width: 200px;
+}
+
+.chip.remove-btn {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.2);
+  border: none;
+  color: white;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+}
+
+.chip.remove-btn:hover {
+  background: rgba(255,255,255,0.3);
+}
+
+.chip-category { background: var(--accent-purple); }
+.chip-status { background: var(--accent-warning); }
+.chip-priority { background: var(--accent-danger); }
+.chip-technician { background: var(--accent-secondary); }
+.chip-unit { background: #06b6d4; }
+.chip-date { background: #8b5cf6; }
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.toolbar-btn {
+  padding: var(--spacing-xs) var(--spacing-md);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  transition: all var(--transition-fast);
+}
+
+.toolbar-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border-light);
+}
+
+.toolbar-btn.primary {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: white;
+}
+
+.toolbar-btn.primary:hover {
+  background: var(--accent-primary-hover);
+}
+
+.toolbar-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.column-toggle {
+  position: relative;
+}
+
+.column-toggle-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: var(--spacing-xs);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-sm);
+  min-width: 200px;
+  box-shadow: var(--shadow-lg);
+  z-index: 50;
+  display: none;
+}
+
+.column-toggle-menu.open {
+  display: block;
+}
+
+.column-toggle-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast);
+}
+
+.column-toggle-item:hover {
+  background: var(--bg-hover);
+}
+
+.column-toggle-item input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent-primary);
+}
+
+.column-toggle-item label {
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+  cursor: pointer;
+  flex: 1;
+}
+
+.column-toggle-item .required-badge {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  background: var(--bg-tertiary);
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+}
+
+/* ===== TABS ===== */
+.tabs {
+  display: flex;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  padding: 0 var(--spacing-md);
+}
+
+.tab-btn {
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.tab-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+.tab-btn.active {
+  color: var(--accent-primary);
+  border-bottom-color: var(--accent-primary);
+}
+
+.tab-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.tab-content {
+  flex: 1;
+  overflow: auto;
+  padding: var(--spacing-md);
+}
+
+.tab-panel {
+  display: none;
+}
+
+.tab-panel.active {
+  display: block;
+  animation: fadeIn var(--transition-fast);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ===== KPI CARDS ===== */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+}
+
+@media (max-width: 900px) {
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 500px) {
+  .kpi-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.kpi-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-md);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-md);
+  transition: all var(--transition-fast);
+}
+
+.kpi-card:hover {
+  border-color: var(--border-light);
+  box-shadow: var(--shadow-md);
+}
+
+.kpi-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.kpi-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.kpi-card.abertos .kpi-icon { background: rgba(59, 130, 246, 0.15); color: var(--accent-primary); }
+.kpi-card.andamento .kpi-icon { background: rgba(16, 185, 129, 0.15); color: var(--accent-secondary); }
+.kpi-card.comunicado .kpi-icon { background: rgba(245, 158, 11, 0.15); color: var(--accent-warning); }
+.kpi-card.resolvidos .kpi-icon { background: rgba(139, 92, 246, 0.15); color: var(--accent-purple); }
+
+.kpi-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.kpi-label {
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: var(--spacing-xs);
+}
+
+.kpi-value {
+  font-size: var(--font-size-2xl);
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.kpi-trend {
+  font-size: var(--font-size-xs);
+  color: var(--accent-secondary);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-xs);
+}
+
+.kpi-trend.negative {
+  color: var(--accent-danger);
+}
+
+/* ===== TABLE ===== */
+.table-container {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.table-wrapper {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.table th,
+.table td {
+  padding: var(--spacing-sm) var(--spacing-md);
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.table th {
+  background: var(--bg-tertiary);
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.table tbody tr {
+  transition: background var(--transition-fast);
+}
+
+.table tbody tr:hover {
+  background: var(--bg-hover);
+}
+
+.table tbody tr.selected {
+  background: rgba(59, 130, 246, 0.1);
+  border-left: 3px solid var(--accent-primary);
+}
+
+.table td {
+  color: var(--text-primary);
+  vertical-align: middle;
+}
+
+.table .cell-protocolo {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--accent-primary);
+}
+
+.table .cell-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+}
+
+.table .status-abertos { background: rgba(59, 130, 246, 0.15); color: var(--accent-primary); }
+.table .status-andamento { background: rgba(16, 185, 129, 0.15); color: var(--accent-secondary); }
+.table .status-comunicado { background: rgba(245, 158, 11, 0.15); color: var(--accent-warning); }
+.table .status-resolvidos { background: rgba(139, 92, 246, 0.15); color: var(--accent-purple); }
+
+.table .cell-urgency {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+}
+
+.table .urgency-critica { background: rgba(239, 68, 68, 0.15); color: var(--accent-danger); }
+.table .urgency-alta { background: rgba(249, 115, 22, 0.15); color: #f97316; }
+.table .urgency-media { background: rgba(245, 158, 11, 0.15); color: var(--accent-warning); }
+.table .urgency-baixa { background: rgba(16, 185, 129, 0.15); color: var(--accent-secondary); }
+
+.table .cell-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.table tbody tr:hover .cell-actions {
+  opacity: 1;
+}
+
+.action-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.action-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.action-btn.view:hover { color: var(--accent-primary); }
+.action-btn.status:hover { color: var(--accent-secondary); }
+.action-btn.reply:hover { color: var(--accent-purple); }
+.action-btn.attachment:hover { color: var(--accent-warning); }
+.action-btn.delete:hover { color: var(--accent-danger); background: rgba(239, 68, 68, 0.1); }
+
+.action-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.table .checkbox-cell {
+  width: 40px;
+}
+
+.table input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent-primary);
+  cursor: pointer;
+}
+
+/* ===== MODAL ===== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transition: all var(--transition-normal);
+  padding: var(--spacing-md);
+}
+
+.modal-overlay.open {
+  opacity: 1;
+  visibility: visible;
+}
+
+.modal {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  width: 100%;
+  max-width: 800px;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transform: scale(0.95) translateY(20px);
+  transition: transform var(--transition-normal);
+}
+
+.modal-overlay.open .modal {
+  transform: scale(1) translateY(0);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+}
+
+.modal-title {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.modal-close {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.modal-close:hover {
+  background: var(--bg-hover);
+  color: var(--accent-danger);
+}
+
+.modal-close svg {
+  width: 20px;
+  height: 20px;
+}
+
+.modal-body {
+  flex: 1;
+  overflow: auto;
+  padding: var(--spacing-lg);
+}
+
+.modal-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: var(--spacing-md);
+}
+
+.modal-tab-btn {
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.modal-tab-btn:hover {
+  color: var(--text-primary);
+}
+
+.modal-tab-btn.active {
+  color: var(--accent-primary);
+  border-bottom-color: var(--accent-primary);
+}
+
+.modal-tab-panel {
+  display: none;
+}
+
+.modal-tab-panel.active {
+  display: block;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--spacing-md);
+}
+
+@media (max-width: 600px) {
+  .detail-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.detail-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.detail-field.full-width {
+  grid-column: 1 / -1;
+}
+
+.detail-label {
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.detail-value {
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  font-family: var(--font-mono);
+}
+
+.detail-value.long-text {
+  font-family: var(--font-sans);
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-height: 80px;
+}
+
+.detail-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+}
+
+.modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+}
+
+/* ===== KANBAN ===== */
+.kanban-board {
+  display: flex;
+  gap: var(--spacing-md);
+  overflow-x: auto;
+  padding: var(--spacing-md) 0;
+  min-height: 500px;
+}
+
+.kanban-column {
+  min-width: 300px;
+  max-width: 340px;
+  flex: 1;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+}
+
+.kanban-column-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-md);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.kanban-column-title {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+}
+
+.kanban-column-count {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+
+.kanban-cards {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  min-height: 400px;
+}
+
+.kanban-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  cursor: grab;
+  transition: all var(--transition-fast);
+}
+
+.kanban-card:hover {
+  border-color: var(--border-light);
+  box-shadow: var(--shadow-md);
+}
+
+.kanban-card.dragging {
+  opacity: 0.5;
+  cursor: grabbing;
+}
+
+.kanban-card.drag-over {
+  border-color: var(--accent-primary);
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.kanban-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: var(--spacing-sm);
+}
+
+.kanban-card-protocolo {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  color: var(--accent-primary);
+}
+
+.kanban-card-urgency {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-full);
+}
+
+.kanban-card-body {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-sm);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.kanban-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
+/* ===== GROUPED VIEW ===== */
+.grouped-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.group-category {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.group-category-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-md);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.group-category-header:hover {
+  background: var(--bg-hover);
+}
+
+.group-category-title {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+}
+
+.group-category-count {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+
+.group-category-toggle {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  transition: transform var(--transition-fast);
+}
+
+.group-category.expanded .group-category-toggle {
+  transform: rotate(180deg);
+}
+
+.group-category-content {
+  display: none;
+  padding: var(--spacing-md);
+}
+
+.group-category.expanded .group-category-content {
+  display: block;
+}
+
+.group-unit {
+  margin-bottom: var(--spacing-md);
+}
+
+.group-unit:last-child {
+  margin-bottom: 0;
+}
+
+.group-unit-header {
+  display: flex;
+  align-items center;
+  justify-content: space-between;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.group-unit-count {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.group-tickets {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.group-ticket {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.group-ticket:hover {
+  border-color: var(--border-light);
+  background: var(--bg-hover);
+}
+
+.group-ticket-protocolo {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--accent-primary);
+  min-width: 100px;
+}
+
+.group-ticket-status {
+  min-width: 100px;
+}
+
+.group-ticket-title {
+  flex: 1;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ===== SIDEBAR RIGHT ===== */
+.sidebar-right {
+  grid-area: sidebar-right;
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: var(--spacing-md);
+  gap: var(--spacing-lg);
+}
+
+.stats-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-md);
+}
+
+.stats-section-title {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--spacing-md);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-sm) 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.stat-item:last-child {
+  border-bottom: none;
+}
+
+.stat-label {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+.stat-value {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+}
+
+.sparkline {
+  width: 80px;
+  height: 24px;
+  display: block;
+}
+
+.batch-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--border-color);
+}
+
+.batch-btn {
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  transition: all var(--transition-fast);
+}
+
+.batch-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border-light);
+}
+
+.batch-btn.primary {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: white;
+}
+
+.batch-btn.primary:hover {
+  background: var(--accent-primary-hover);
+}
+
+.batch-btn.danger {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: var(--accent-danger);
+  color: var(--accent-danger);
+}
+
+.batch-btn.danger:hover {
+  background: var(--accent-danger);
+  color: white;
+}
+
+/* ===== CHAT ===== */
+.chat-container {
+  display: flex;
+  flex-direction: column;
+  height: 300px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+}
+
+.chat-title {
+  color: var(--text-primary);
+}
+
+.chat-dev-badge {
+  font-size: var(--font-size-xs);
+  background: var(--accent-purple);
+  color: white;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-full);
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.chat-message {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  max-width: 85%;
+}
+
+.chat-message.own {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.chat-message.other {
+  align-self: flex-start;
+  align-items: flex-start;
+}
+
+.chat-message-bubble {
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-lg);
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+}
+
+.chat-message.own .chat-message-bubble {
+  background: var(--accent-primary);
+  color: white;
+  border-bottom-right-radius: var(--radius-sm);
+}
+
+.chat-message.other .chat-message-bubble {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  border-bottom-left-radius: var(--radius-sm);
+}
+
+.chat-message-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
+.chat-input-area {
+  display: flex;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+}
+
+.chat-input {
+  flex: 1;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.chat-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+.chat-send-btn {
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: var(--accent-primary);
+  color: white;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.chat-send-btn:hover {
+  background: var(--accent-primary-hover);
+}
+
+.chat-send-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* ===== RESPONSIVE TABLE CARDS ===== */
+@media (max-width: 1024px) {
+  .table th:nth-child(6), .table td:nth-child(6),
+  .table th:nth-child(8), .table td:nth-child(8),
+  .table th:nth-child(9), .table td:nth-child(9),
+  .table th:nth-child(10), .table td:nth-child(10) {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .table-wrapper {
+    display: none;
+  }
+  
+  .table-cards {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-md);
+  }
+  
+  .table-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-md);
+  }
+  
+  .table-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--spacing-sm);
+    padding-bottom: var(--spacing-sm);
+    border-bottom: 1px solid var(--border-color);
+  }
+  
+  .table-card-protocolo {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    color: var(--accent-primary);
+  }
+  
+  .table-card-fields {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--spacing-sm);
+  }
+  
+  .table-card-field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+  }
+  
+  .table-card-field-label {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  
+  .table-card-field-value {
+    font-size: var(--font-size-sm);
+    color: var(--text-primary);
+  }
+  
+  .table-card-actions {
+    display: flex;
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-md);
+    padding-top: var(--spacing-md);
+    border-top: 1px solid var(--border-color);
+  }
+  
+  .sidebar-left {
+    position: fixed;
+    left: -100%;
+    top: var(--header-height);
+    bottom: 0;
+    width: 280px;
+    z-index: 200;
+    box-shadow: var(--shadow-lg);
+    transition: left var(--transition-normal);
+  }
+  
+  .sidebar-left.open {
+    left: 0;
+  }
+  
+  .sidebar-right {
+    position: fixed;
+    right: -100%;
+    top: var(--header-height);
+    bottom: 0;
+    width: 320px;
+    z-index: 200;
+    box-shadow: var(--shadow-lg);
+    transition: right var(--transition-normal);
+  }
+  
+  .sidebar-right.open {
+    right: 0;
+  }
+  
+  .modal {
+    max-width: 95vw;
+    max-height: 95vh;
+    margin: var(--spacing-sm);
+  }
+  
+  .kanban-board {
+    flex-direction: column;
+  }
+  
+  .kanban-column {
+    min-width: 100%;
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .kpi-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    height: auto;
+    padding: var(--spacing-sm);
+    gap: var(--spacing-sm);
+  }
+  
+  .chips-container {
+    order: -1;
+  }
+  
+  .header {
+    flex-wrap: wrap;
+    height: auto;
+    padding: var(--spacing-sm) var(--spacing-md);
+    gap: var(--spacing-sm);
+  }
+  
+  .header-center {
+    order: 3;
+    width: 100%;
+    justify-content: center;
+    margin-top: var(--spacing-xs);
+  }
+  
+  .header-left, .header-right {
+    flex: 1;
+  }
+  
+  .detail-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .table-card-fields {
+    grid-template-columns: 1fr;
+  }
+  
+  .preset-buttons {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ===== FOCUS VISIBLE ===== */
+:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+/* ===== ANIMATIONS ===== */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.loading {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* ===== SCROLLBAR ===== */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-light);
+}
+
+/* ===== UTILITIES ===== */
+.hidden { display: none !important; }
+.flex { display: flex; }
+.flex-1 { flex: 1; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.gap-sm { gap: var(--spacing-sm); }
+.gap-md { gap: var(--spacing-md); }
+.text-center { text-align: center; }
+.text-muted { color: var(--text-muted); }
+.text-secondary { color: var(--text-secondary); }
+</style>
+</head>
+<body class="dark">
+<div class="header" role="banner">
+  <div class="header-left">
+    <button class="header-btn" id="sidebar-left-toggle" aria-label="Abrir filtros" title="Filtros" style="display: none;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="4" y1="21" x2="4" y2="14"/>
+        <line x1="4" y1="10" x2="4" y2="3"/>
+        <line x1="12" y1="21" x2="12" y2="12"/>
+        <line x1="12" y1="8" x2="12" y2="3"/>
+        <line x1="20" y1="21" x2="20" y2="16"/>
+        <line x1="20" y1="12" x2="20" y2="3"/>
+        <line x1="1" y1="14" x2="7" y2="14"/>
+        <line x1="9" y1="8" x2="15" y2="8"/>
+        <line x1="17" y1="16" x2="23" y2="16"/>
+      </svg>
+    </button>
+    <a href="#" class="logo">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <rect x="3" y="3" width="7" height="7" rx="1"/>
+          <rect x="14" y="3" width="7" height="7" rx="1"/>
+          <rect x="3" y="14" width="7" height="7" rx="1"/>
+          <rect x="14" y="14" width="7" height="7" rx="1"/>
+        </svg>
+      </div>
+      <span>SCI Chamados</span>
+    </a>
+  </div>
+  <div class="header-center">
+    <div class="clock" id="clock">--:--:--</div>
+  </div>
+  <div class="header-right">
+    <button class="header-btn" title="Som" aria-label="Alternar som">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M11 5L6 9H2v6h4l5 4V5z"/>
+        <line x1="23" y1="9" x2="17" y2="15"/>
+        <line x1="17" y1="9" x2="23" y2="15"/>
+      </svg>
+    </button>
+    <button class="header-btn" title="Exportar" aria-label="Exportar dados">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+    </button>
+    <button class="header-btn" title="Usuário" aria-label="Menu do usuário">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+        <circle cx="12" cy="7" r="4"/>
+      </svg>
+    </button>
+    <button class="header-btn" id="sidebar-right-toggle" aria-label="Abrir estatísticas" title="Estatísticas" style="display: none;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="18" y1="20" x2="18" y2="10"/>
+        <line x1="12" y1="20" x2="12" y2="4"/>
+        <line x1="6" y1="20" x2="6" y2="14"/>
+      </svg>
+    </button>
+    <label class="theme-toggle" title="Alternar tema" aria-label="Alternar tema claro/escuro">
+      <input type="checkbox" id="theme-toggle" checked>
+      <span class="slider">
+        <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="5"/>
+          <line x1="12" y1="1" x2="12" y2="3"/>
+          <line x1="12" y1="21" x2="12" y2="23"/>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+          <line x1="1" y1="12" x2="3" y2="12"/>
+          <line x1="21" y1="12" x2="23" y2="12"/>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+        </svg>
+        <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+      </span>
+    </label>
+  </div>
+</div>
+
+<aside class="sidebar-left" role="complementary" aria-label="Filtros e visões salvas">
+  <section class="sidebar-section" aria-labelledby="filters-title">
+    <h2 class="sidebar-section-title" id="filters-title">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+      </svg>
+      Filtros
+    </h2>
+    <div class="filter-group">
+      <label class="filter-label" for="filter-protocolo">Protocolo</label>
+      <input type="text" class="filter-input" id="filter-protocolo" placeholder="Buscar protocolo...">
+    </div>
+    <div class="filter-group">
+      <label class="filter-label" for="filter-unidade">Unidade</label>
+      <select class="filter-select" id="filter-unidade">
+        <option value="">Todas as unidades</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label class="filter-label" for="filter-categoria">Categoria</label>
+      <select class="filter-select" id="filter-categoria">
+        <option value="">Todas as categorias</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label class="filter-label" for="filter-status">Status</label>
+      <select class="filter-select" id="filter-status">
+        <option value="">Todos os status</option>
+        <option value="Abertos">Abertos</option>
+        <option value="Andamento">Andamento</option>
+        <option value="Comunicado">Comunicado</option>
+        <option value="Resolvidos">Resolvidos</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label class="filter-label" for="filter-urgency">Urgência</label>
+      <select class="filter-select" id="filter-urgency">
+        <option value="">Todas as urgências</option>
+        <option value="Crítica">Crítica</option>
+        <option value="Alta">Alta</option>
+        <option value="Média">Média</option>
+        <option value="Baixa">Baixa</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label class="filter-label" for="filter-technician">Técnico</label>
+      <select class="filter-select" id="filter-technician">
+        <option value="">Todos os técnicos</option>
+        <option value="sem-tecnico">Sem técnico</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label class="filter-label" for="filter-date-range">Período</label>
+      <select class="filter-select" id="filter-date-range">
+        <option value="">Período personalizado</option>
+        <option value="today">Hoje</option>
+        <option value="last-7-days">Últimos 7 dias</option>
+        <option value="last-30-days">Últimos 30 dias</option>
+        <option value="this-month">Este mês</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label class="filter-label">Presets rápidos</label>
+      <div class="preset-buttons">
+        <button class="preset-btn" data-preset="meus-abertos">Meus Abertos</button>
+        <button class="preset-btn" data-preset="alta-prioridade">Alta Prioridade</button>
+        <button class="preset-btn" data-preset="sem-tecnico">Sem Técnico</button>
+        <button class="preset-btn" data-preset="vencidos">Vencidos</button>
+        <button class="preset-btn" data-preset="ultimos-7d">Últimos 7d</button>
+      </div>
+    </div>
+  </section>
+  
+  <section class="sidebar-section" aria-labelledby="saved-views-title">
+    <h2 class="sidebar-section-title" id="saved-views-title">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+      </svg>
+      Visões Salvas
+      <button class="save-view-btn" id="save-view-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="12" y1="5" x2="12" y2="19"/>
+          <line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        Salvar visão atual
+      </button>
+    </h2>
+    <div class="saved-views-list" id="saved-views-list">
+      <div class="no-saved-views">Nenhuma visão salva ainda</div>
+    </div>
+  </section>
+</aside>
+
+<main class="main" role="main">
+  <div class="toolbar" role="toolbar" aria-label="Filtros ativos e ações">
+    <div class="chips-container" id="chips-container" aria-label="Filtros ativos"></div>
+    <div class="toolbar-actions">
+      <div class="column-toggle">
+        <button class="toolbar-btn" id="column-toggle-btn" aria-expanded="false" aria-haspopup="true" aria-label="Alternar colunas">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7" rx="1"/>
+            <rect x="14" y="3" width="7" height="7" rx="1"/>
+            <rect x="3" y="14" width="7" height="7" rx="1"/>
+            <rect x="14" y="14" width="7" height="7" rx="1"/>
+          </svg>
+          Colunas
+        </button>
+        <div class="column-toggle-menu" id="column-toggle-menu" role="menu">
+          <div class="column-toggle-item" role="menuitem">
+            <input type="checkbox" id="col-urgency" checked disabled>
+            <label for="col-urgency">Urgência <span class="required-badge">fixa</span></label>
+          </div>
+          <div class="column-toggle-item" role="menuitem">
+            <input type="checkbox" id="col-protocolo" checked disabled>
+            <label for="col-protocolo">Protocolo <span class="required-badge">fixa</span></label>
+          </div>
+          <div class="column-toggle-item" role="menuitem">
+            <input type="checkbox" id="col-unit" checked disabled>
+            <label for="col-unit">Unidade <span class="required-badge">fixa</span></label>
+          </div>
+          <div class="column-toggle-item" role="menuitem">
+            <input type="checkbox" id="col-status" checked disabled>
+            <label for="col-status">Status <span class="required-badge">fixa</span></label>
+          </div>
+          <div class="column-toggle-item" role="menuitem">
+            <input type="checkbox" id="col-time" checked disabled>
+            <label for="col-time">Tempo <span class="required-badge">fixa</span></label>
+          </div>
+          <hr style="margin: var(--spacing-xs) 0; border-color: var(--border-color);">
+          <div class="column-toggle-item" role="menuitem">
+            <input type="checkbox" id="col-category" checked>
+            <label for="col-category">Categoria</label>
+          </div>
+          <div class="column-toggle-item" role="menuitem">
+            <input type="checkbox" id="col-description" checked>
+            <label for="col-description">Descrição</label>
+          </div>
+          <div class="column-toggle-item" role="menuitem">
+            <input type="checkbox" id="col-technician" checked>
+            <label for="col-technician">Técnico</label>
+          </div>
+          <div class="column-toggle-item" role="menuitem">
+            <input type="checkbox" id="col-inventory" checked>
+            <label for="col-inventory">Inventário</label>
+          </div>
+          <div class="column-toggle-item" role="menuitem">
+            <input type="checkbox" id="col-requester" checked>
+            <label for="col-requester">Solicitante</label>
+          </div>
+        </div>
+      </div>
+      <button class="toolbar-btn primary" id="export-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Exportar
+      </button>
+    </div>
+  </div>
+  
+  <div class="kpi-grid" role="region" aria-label="Indicadores principais" id="kpi-grid">
+    <article class="kpi-card abertos">
+      <div class="kpi-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+      </div>
+      <div class="kpi-content">
+        <div class="kpi-label">Abertos</div>
+        <div class="kpi-value" id="kpi-abertos">0</div>
+        <div class="kpi-trend" id="trend-abertos"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/></svg> +0%</div>
+      </div>
+    </article>
+    <article class="kpi-card andamento">
+      <div class="kpi-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+          <polyline points="22 4 12 14.01 9 11.01"/>
+        </svg>
+      </div>
+      <div class="kpi-content">
+        <div class="kpi-label">Em Andamento</div>
+        <div class="kpi-value" id="kpi-andamento">0</div>
+        <div class="kpi-trend" id="trend-andamento"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/></svg> +0%</div>
+      </div>
+    </article>
+    <article class="kpi-card comunicado">
+      <div class="kpi-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+      </div>
+      <div class="kpi-content">
+        <div class="kpi-label">Comunicado</div>
+        <div class="kpi-value" id="kpi-comunicado">0</div>
+        <div class="kpi-trend" id="trend-comunicado"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/></svg> +0%</div>
+      </div>
+    </article>
+    <article class="kpi-card resolvidos">
+      <div class="kpi-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+      </div>
+      <div class="kpi-content">
+        <div class="kpi-label">Resolvidos</div>
+        <div class="kpi-value" id="kpi-resolvidos">0</div>
+        <div class="kpi-trend" id="trend-resolvidos"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/></svg> +0%</div>
+      </div>
+    </article>
+  </div>
+  
+  <nav class="tabs" role="tablist" aria-label="Visualizações" id="tabs">
+    <button class="tab-btn active" role="tab" aria-selected="true" aria-controls="panel-lista" id="tab-lista">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="8" y1="6" x2="21" y2="6"/>
+        <line x1="8" y1="12" x2="21" y2="12"/>
+        <line x1="8" y1="18" x2="21" y2="18"/>
+        <line x1="3" y1="6" x2="3.01" y2="6"/>
+        <line x1="3" y1="12" x2="3.01" y2="12"/>
+        <line x1="3" y1="18" x2="3.01" y2="18"/>
+      </svg>
+      Lista
+    </button>
+    <button class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-kanban" id="tab-kanban">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="3" width="5" height="5" rx="1"/>
+        <rect x="16" y="3" width="5" height="5" rx="1"/>
+        <rect x="3" y="16" width="5" height="5" rx="1"/>
+        <rect x="16" y="16" width="5" height="5" rx="1"/>
+      </svg>
+      Kanban
+    </button>
+    <button class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-grouped" id="tab-grouped">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+        <circle cx="9" cy="7" r="4"/>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+      </svg>
+      Agrupado
+    </button>
+  </nav>
+  
+  <div class="tab-content" role="tabpanel">
+    <section class="tab-panel active" id="panel-lista" role="tabpanel" aria-labelledby="tab-lista">
+      <div class="table-container">
+        <div class="table-wrapper">
+          <table class="table" role="grid" aria-label="Lista de chamados">
+            <thead>
+              <tr role="row">
+                <th class="checkbox-cell" scope="col"><input type="checkbox" id="select-all" aria-label="Selecionar todos"></th>
+                <th scope="col">Urgência</th>
+                <th scope="col">Protocolo</th>
+                <th scope="col">Unidade</th>
+                <th scope="col">Categoria</th>
+                <th scope="col">Descrição</th>
+                <th scope="col">Status</th>
+                <th scope="col">Técnico</th>
+                <th scope="col">Inventário</th>
+                <th scope="col">Solicitante</th>
+                <th scope="col">Tempo</th>
+                <th scope="col" style="width: 160px;">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="table-body" role="rowgroup">
+            </tbody>
+          </table>
+        </div>
+        <div class="table-cards" id="table-cards" aria-label="Chamados em formato de cards">
+        </div>
+      </div>
+    </section>
+    
+    <section class="tab-panel" id="panel-kanban" role="tabpanel" aria-labelledby="tab-kanban">
+      <div class="kanban-board" id="kanban-board" role="list" aria-label="Quadro Kanban">
+      </div>
+    </section>
+    
+    <section class="tab-panel" id="panel-grouped" role="tabpanel" aria-labelledby="tab-grouped">
+      <div class="grouped-view" id="grouped-view" aria-label="Visualização agrupada">
+      </div>
+    </section>
+  </div>
+</main>
+
+<aside class="sidebar-right" role="complementary" aria-label="Estatísticas e ações">
+  <section class="stats-section" aria-labelledby="general-stats-title">
+    <h2 class="stats-section-title" id="general-stats-title">Estatísticas Gerais</h2>
+    <div class="stat-item">
+      <span class="stat-label">Total de chamados</span>
+      <span class="stat-value" id="stat-total">0</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-label">Tempo médio (h)</span>
+      <span class="stat-value" id="stat-avg-time">0h</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-label">Taxa resolução</span>
+      <span class="stat-value" id="stat-resolution-rate">0%</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-label">Top categoria</span>
+      <span class="stat-value" id="stat-top-category">-</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-label">Top técnico</span>
+      <span class="stat-value" id="stat-top-tech">-</span>
+    </div>
+  </section>
+  
+  <section class="stats-section" aria-labelledby="top-categories-title">
+    <h2 class="stats-section-title" id="top-categories-title">Top 5 Categorias</h2>
+    <div id="top-categories-list">
+    </div>
+  </section>
+  
+  <section class="stats-section" aria-labelledby="tech-load-title">
+    <h2 class="stats-section-title" id="tech-load-title">Carga por Técnico</h2>
+    <div id="tech-load-list">
+    </div>
+  </section>
+  
+  <section class="stats-section" aria-labelledby="trend-title">
+    <h2 class="stats-section-title" id="trend-title">Tendência (7 dias)</h2>
+    <div style="height: 60px;" id="trend-sparkline">
+    </div>
+  </section>
+  
+  <section class="stats-section" id="selection-stats" aria-labelledby="selection-title" style="display: none;">
+    <h2 class="stats-section-title" id="selection-title">Selecionados (<span id="selection-count">0</span>)</h2>
+    <div class="stat-item">
+      <span class="stat-label">Abertos</span>
+      <span class="stat-value" id="sel-abertos">0</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-label">Andamento</span>
+      <span class="stat-value" id="sel-andamento">0</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-label">Comunicado</span>
+      <span class="stat-value" id="sel-comunicado">0</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-label">Resolvidos</span>
+      <span class="stat-value" id="sel-resolvidos">0</span>
+    </div>
+    <div class="batch-actions">
+      <button class="batch-btn primary" id="batch-status-btn">Alterar Status</button>
+      <button class="batch-btn" id="batch-reply-btn">Responder em Lote</button>
+      <button class="batch-btn danger" id="batch-delete-btn">Excluir Selecionados</button>
+    </div>
+  </section>
+</aside>
+
+<div class="modal-overlay" id="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div class="modal">
+    <header class="modal-header">
+      <h2 class="modal-title" id="modal-title">Detalhes do Chamado</h2>
+      <button class="modal-close" id="modal-close" aria-label="Fechar modal">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </header>
+    <div class="modal-body">
+      <nav class="modal-tabs" role="tablist" aria-label="Abas do detalhe">
+        <button class="modal-tab-btn active" role="tab" aria-selected="true" aria-controls="modal-details" id="modal-tab-details">Detalhes</button>
+        <button class="modal-tab-btn" role="tab" aria-selected="false" aria-controls="modal-chat" id="modal-tab-chat">Chat</button>
+      </nav>
+      
+      <div class="modal-tab-panel active" id="modal-details" role="tabpanel" aria-labelledby="modal-tab-details">
+        <div class="detail-grid" id="detail-grid">
+        </div>
+      </div>
+      
+      <div class="modal-tab-panel" id="modal-chat" role="tabpanel" aria-labelledby="modal-tab-chat">
+        <div class="chat-container">
+          <div class="chat-header">
+            <span class="chat-title" id="chat-title">Chat do chamado</span>
+            <span class="chat-dev-badge">dev - Chat do chamado #<span id="chat-protocolo">-</span> <span id="chat-dev-id" style="font-family: var(--font-mono); font-size: 10px; opacity: 0.7; margin-left: 8px;"></span></span>
+          </div>
+          <div class="chat-messages" id="chat-messages" role="log" aria-live="polite">
+          </div>
+          <div class="chat-input-area">
+            <input type="text" class="chat-input" id="chat-input" placeholder="Digite uma mensagem..." aria-label="Mensagem">
+            <button class="chat-send-btn" id="chat-send-btn" aria-label="Enviar mensagem">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="22" y1="2" x2="11" y2="13"/>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <footer class="modal-footer">
+      <button class="toolbar-btn" id="modal-close-btn">Fechar</button>
+      <button class="toolbar-btn primary" id="modal-save-btn">Salvar Alterações</button>
+    </footer>
+  </div>
+</div>
+
+<div id="toast-container" style="position: fixed; bottom: 24px; right: 24px; z-index: 2000; display: flex; flex-direction: column; gap: 8px;"></div>
+<script>
+const DEV_CHAT_ID = 'AKfycbwLsy_Ye7xmm7BoFRC3pFjSwPFohRzDrupw5QZgNF7zZK1S34DanLRe7wMHHR323CgF';
+
+const STATUS_OPTIONS = ['Abertos', 'Andamento', 'Comunicado', 'Resolvidos'];
+const URGENCY_OPTIONS = ['Crítica', 'Alta', 'Média', 'Baixa'];
+const UNIDADES = ['São Paulo', 'Rio de Janeiro', 'Belo Horizonte', 'Porto Alegre', 'Curitiba', 'Brasília', 'Salvador', 'Fortaleza'];
+const CATEGORIAS = ['Hardware', 'Software', 'Rede', 'Segurança', 'Infraestrutura', 'Aplicação', 'Banco de Dados', 'Telecom'];
+const TECNICOS = ['João Silva', 'Maria Santos', 'Pedro Oliveira', 'Ana Costa', 'Carlos Lima', 'Fernanda Rocha', 'Ricardo Alves', 'Juliana Pereira'];
+
+function generateMockTickets(count = 150) {
+  const tickets = [];
+  const now = new Date();
+  for (let i = 0; i < count; i++) {
+    const createdDaysAgo = Math.floor(Math.random() * 60);
+    const createdAt = new Date(now.getTime() - createdDaysAgo * 24 * 60 * 60 * 1000);
+    const status = STATUS_OPTIONS[Math.floor(Math.random() * STATUS_OPTIONS.length)];
+    const urgency = URGENCY_OPTIONS[Math.floor(Math.random() * URGENCY_OPTIONS.length)];
+    const unidade = UNIDADES[Math.floor(Math.random() * UNIDADES.length)];
+    const categoria = CATEGORIAS[Math.floor(Math.random() * CATEGORIAS.length)];
+    const tecnico = Math.random() > 0.15 ? TECNICOS[Math.floor(Math.random() * TECNICOS.length)] : null;
+    const protocolo = `SCI-${String(10000 + i).padStart(5, '0')}`;
+    const hoursOpen = Math.floor((now - createdAt) / (1000 * 60 * 60));
+    const inventario = Math.random() > 0.3 ? `INV-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}` : '';
+    const solicitante = `Usuario ${Math.floor(Math.random() * 200) + 1}`;
+    
+    tickets.push({
+      id: i + 1,
+      protocolo,
+      unidade,
+      categoria,
+      descricao: `Chamado ${protocolo}: ${categoria} - ${['Lentidão', 'Erro', 'Falha', 'Solicitação', 'Dúvida', 'Incidente'][Math.floor(Math.random() * 6)]} em ${unidade}`,
+      status,
+      urgencia: urgency,
+      tecnico,
+      inventario,
+      solicitante,
+      tempo: `${hoursOpen}h`,
+      horas: hoursOpen,
+      createdAt: createdAt.toISOString(),
+      updatedAt: new Date(now.getTime() - Math.random() * createdDaysAgo * 24 * 60 * 60 * 1000).toISOString()
+    });
+  }
+  return tickets;
+}
+
+let allTickets = generateMockTickets(200);
+let filteredTickets = [...allTickets];
+let selectedTickets = new Set();
+let currentTicketId = null;
+let columnVisibility = {
+  category: true,
+  description: true,
+  technician: true,
+  inventory: true,
+  requester: true
+};
+
+const filterState = {
+  protocolo: '',
+  unidade: '',
+  categoria: '',
+  status: '',
+  urgencia: '',
+  tecnico: '',
+  dateRange: ''
+};
+
+function init() {
+  populateFilterOptions();
+  renderKPIs();
+  renderTable();
+  renderSidebarStats();
+  renderSavedViews();
+  setupEventListeners();
+  updateClock();
+  setInterval(updateClock, 1000);
+  loadTheme();
+}
+
+function populateFilterOptions() {
+  const unidades = [...new Set(allTickets.map(t => t.unidade))].sort();
+  const categorias = [...new Set(allTickets.map(t => t.categoria))].sort();
+  const tecnicos = [...new Set(allTickets.map(t => t.tecnico).filter(Boolean))].sort();
+  
+  const unidadeSelect = document.getElementById('filter-unidade');
+  const categoriaSelect = document.getElementById('filter-categoria');
+  const tecnicoSelect = document.getElementById('filter-technician');
+  
+  unidades.forEach(u => {
+    const opt = document.createElement('option');
+    opt.value = u;
+    opt.textContent = u;
+    unidadeSelect.appendChild(opt);
+  });
+  
+  categorias.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c;
+    opt.textContent = c;
+    categoriaSelect.appendChild(opt);
+  });
+  
+  tecnicos.forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t;
+    opt.textContent = t;
+    tecnicoSelect.appendChild(opt);
+  });
+}
+
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent = now.toLocaleTimeString('pt-BR', { hour12: false });
+}
+
+function loadTheme() {
+  const saved = localStorage.getItem('theme') || 'dark';
+  document.body.className = saved;
+  document.getElementById('theme-toggle').checked = saved === 'dark';
+}
+
+function saveTheme(theme) {
+  localStorage.setItem('theme', theme);
+  document.body.className = theme;
+}
+
+function setupEventListeners() {
+  document.getElementById('theme-toggle').addEventListener('change', (e) => {
+    saveTheme(e.target.checked ? 'dark' : 'light');
+  });
+  
+  document.querySelectorAll('.filter-input, .filter-select').forEach(el => {
+    el.addEventListener('input', debounce(() => applyFilters(), 150));
+    el.addEventListener('change', () => applyFilters());
+  });
+  
+  document.querySelectorAll('.preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => applyPreset(btn.dataset.preset));
+  });
+  
+  document.getElementById('column-toggle-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.getElementById('column-toggle-menu').classList.toggle('open');
+  });
+  
+  document.addEventListener('click', () => {
+    document.getElementById('column-toggle-menu').classList.remove('open');
+  });
+  
+  document.querySelectorAll('#column-toggle-menu input[type="checkbox"]:not(:disabled)').forEach(cb => {
+    cb.addEventListener('change', () => {
+      columnVisibility[cb.id.replace('col-', '')] = cb.checked;
+      renderTable();
+    });
+  });
+  
+  document.getElementById('select-all').addEventListener('change', (e) => {
+    const checkboxes = document.querySelectorAll('#table-body input[type="checkbox"]');
+    checkboxes.forEach(cb => {
+      cb.checked = e.target.checked;
+      const id = parseInt(cb.dataset.id, 10);
+      if (e.target.checked) selectedTickets.add(id);
+      else selectedTickets.delete(id);
+    });
+    updateSelectionUI();
+  });
+  
+  document.getElementById('modal-close').addEventListener('click', closeModal);
+  document.getElementById('modal-close-btn').addEventListener('click', closeModal);
+  document.getElementById('modal-overlay').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeModal();
+  });
+  
+  document.addEventListener('click', (e) => {
+    if (window.innerWidth < 1024) {
+      const sidebarLeft = document.querySelector('.sidebar-left');
+      const sidebarRight = document.querySelector('.sidebar-right');
+      const leftToggle = document.getElementById('sidebar-left-toggle');
+      const rightToggle = document.getElementById('sidebar-right-toggle');
+      
+      if (sidebarLeft.classList.contains('open') && 
+          !sidebarLeft.contains(e.target) && 
+          !leftToggle.contains(e.target)) {
+        sidebarLeft.classList.remove('open');
+      }
+      
+      if (sidebarRight.classList.contains('open') && 
+          !sidebarRight.contains(e.target) && 
+          !rightToggle.contains(e.target)) {
+        sidebarRight.classList.remove('open');
+      }
+    }
+  });
+  
+  document.getElementById('modal-tab-details').addEventListener('click', () => switchModalTab('details'));
+  document.getElementById('modal-tab-chat').addEventListener('click', () => switchModalTab('chat'));
+  
+  document.getElementById('chat-send-btn').addEventListener('click', sendChatMessage);
+  document.getElementById('chat-input').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') sendChatMessage();
+  });
+  
+  document.getElementById('save-view-btn').addEventListener('click', saveCurrentView);
+  document.getElementById('export-btn').addEventListener('click', exportData);
+  document.getElementById('modal-save-btn').addEventListener('click', () => {
+    showToast('Alterações salvas (funcionalidade de edição em desenvolvimento)');
+  });
+  
+  document.getElementById('batch-status-btn').addEventListener('click', batchChangeStatus);
+  document.getElementById('batch-reply-btn').addEventListener('click', batchReply);
+  document.getElementById('batch-delete-btn').addEventListener('click', batchDelete);
+  
+  document.getElementById('sidebar-left-toggle').addEventListener('click', () => {
+    document.querySelector('.sidebar-left').classList.toggle('open');
+  });
+  
+  document.getElementById('sidebar-right-toggle').addEventListener('click', () => {
+    document.querySelector('.sidebar-right').classList.toggle('open');
+  });
+  
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchTab(btn.id.replace('tab-', '')));
+  });
+  
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if (document.getElementById('modal-overlay').classList.contains('open')) {
+        closeModal();
+      } else {
+        document.getElementById('column-toggle-menu').classList.remove('open');
+      }
+    }
+    if (e.ctrlKey && e.key === 'k') {
+      e.preventDefault();
+      document.getElementById('filter-protocolo').focus();
+    }
+    if (e.ctrlKey && e.key === 'e') {
+      e.preventDefault();
+      exportData();
+    }
+  });
+  
+  updateSidebarToggles();
+  window.addEventListener('resize', updateSidebarToggles);
+}
+
+function updateSidebarToggles() {
+  const isMobile = window.innerWidth < 1024;
+  document.getElementById('sidebar-left-toggle').style.display = isMobile ? 'flex' : 'none';
+  document.getElementById('sidebar-right-toggle').style.display = isMobile ? 'flex' : 'none';
+  
+  if (!isMobile) {
+    document.querySelector('.sidebar-left').classList.remove('open');
+    document.querySelector('.sidebar-right').classList.remove('open');
+  }
+}
+
+function debounce(fn, delay) {
+  let timeoutId;
+  return (...args) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => fn.apply(this, args), delay);
+  };
+}
+
+function applyFilters() {
+  filterState.protocolo = document.getElementById('filter-protocolo').value.toLowerCase();
+  filterState.unidade = document.getElementById('filter-unidade').value;
+  filterState.categoria = document.getElementById('filter-categoria').value;
+  filterState.status = document.getElementById('filter-status').value;
+  filterState.urgencia = document.getElementById('filter-urgency').value;
+  filterState.tecnico = document.getElementById('filter-technician').value;
+  filterState.dateRange = document.getElementById('filter-date-range').value;
+  
+  document.querySelectorAll('.preset-btn').forEach(btn => btn.classList.remove('active'));
+  
+  filteredTickets = allTickets.filter(t => {
+    if (filterState.protocolo && !t.protocolo.toLowerCase().includes(filterState.protocolo)) return false;
+    if (filterState.unidade && t.unidade !== filterState.unidade) return false;
+    if (filterState.categoria && t.categoria !== filterState.categoria) return false;
+    if (filterState.status && t.status !== filterState.status) return false;
+    if (filterState.urgencia && t.urgencia !== filterState.urgencia) return false;
+    if (filterState.tecnico) {
+      if (filterState.tecnico === 'sem-tecnico') {
+        if (t.tecnico) return false;
+      } else if (t.tecnico !== filterState.tecnico) return false;
+    }
+    if (filterState.dateRange) {
+      const now = new Date();
+      const created = new Date(t.createdAt);
+      const diffDays = (now - created) / (1000 * 60 * 60 * 24);
+      if (filterState.dateRange === 'today' && diffDays >= 1) return false;
+      if (filterState.dateRange === 'last-7-days' && diffDays > 7) return false;
+      if (filterState.dateRange === 'last-30-days' && diffDays > 30) return false;
+      if (filterState.dateRange === 'this-month' && created.getMonth() !== now.getMonth()) return false;
+    }
+    return true;
+  });
+  
+  selectedTickets.clear();
+  document.getElementById('select-all').checked = false;
+  renderChips();
+  renderKPIs();
+  renderTable();
+  renderSidebarStats();
+}
+
+function applyPreset(preset) {
+  clearFilters();
+  
+  switch (preset) {
+    case 'meus-abertos':
+      filterState.status = 'Abertos';
+      filterState.tecnico = TECNICOS[0];
+      break;
+    case 'alta-prioridade':
+      filterState.urgencia = 'Crítica';
+      break;
+    case 'sem-tecnico':
+      filterState.tecnico = 'sem-tecnico';
+      break;
+    case 'vencidos':
+      filterState.status = 'Abertos';
+      break;
+    case 'ultimos-7d':
+      filterState.dateRange = 'last-7-days';
+      break;
+  }
+  
+  syncFiltersToUI();
+  document.querySelector(`.preset-btn[data-preset="${preset}"]`)?.classList.add('active');
+  applyFilters();
+}
+
+function clearFilters() {
+  filterState.protocolo = '';
+  filterState.unidade = '';
+  filterState.categoria = '';
+  filterState.status = '';
+  filterState.urgencia = '';
+  filterState.tecnico = '';
+  filterState.dateRange = '';
+}
+
+function syncFiltersToUI() {
+  document.getElementById('filter-protocolo').value = filterState.protocolo;
+  document.getElementById('filter-unidade').value = filterState.unidade;
+  document.getElementById('filter-categoria').value = filterState.categoria;
+  document.getElementById('filter-status').value = filterState.status;
+  document.getElementById('filter-urgency').value = filterState.urgencia;
+  document.getElementById('filter-technician').value = filterState.tecnico;
+  document.getElementById('filter-date-range').value = filterState.dateRange;
+}
+
+function renderChips() {
+  const container = document.getElementById('chips-container');
+  container.innerHTML = '';
+  
+  const chips = [
+    { key: 'protocolo', label: 'Protocolo', class: 'chip-category' },
+    { key: 'unidade', label: 'Unidade', class: 'chip-unit' },
+    { key: 'categoria', label: 'Categoria', class: 'chip-category' },
+    { key: 'status', label: 'Status', class: 'chip-status' },
+    { key: 'urgencia', label: 'Urgência', class: 'chip-priority' },
+    { key: 'tecnico', label: 'Técnico', class: 'chip-technician' },
+    { key: 'dateRange', label: 'Período', class: 'chip-date' }
+  ];
+  
+  chips.forEach(({ key, label, class: chipClass }) => {
+    const value = filterState[key];
+    if (value) {
+      const displayValue = key === 'tecnico' && value === 'sem-tecnico' ? 'Sem técnico' : value;
+      const chip = document.createElement('span');
+      chip.className = `chip ${chipClass}`;
+      chip.innerHTML = `${label}: ${displayValue} <button class="remove-btn" data-filter="${key}" aria-label="Remover filtro ${label}">×</button>`;
+      container.appendChild(chip);
+    }
+  });
+  
+  container.querySelectorAll('.remove-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const key = btn.dataset.filter;
+      filterState[key] = '';
+      syncFiltersToUI();
+      applyFilters();
+    });
+  });
+}
+
+function renderKPIs() {
+  const counts = {
+    Abertos: filteredTickets.filter(t => t.status === 'Abertos').length,
+    Andamento: filteredTickets.filter(t => t.status === 'Andamento').length,
+    Comunicado: filteredTickets.filter(t => t.status === 'Comunicado').length,
+    Resolvidos: filteredTickets.filter(t => t.status === 'Resolvidos').length
+  };
+  
+  document.getElementById('kpi-abertos').textContent = counts.Abertos;
+  document.getElementById('kpi-andamento').textContent = counts.Andamento;
+  document.getElementById('kpi-comunicado').textContent = counts.Comunicado;
+  document.getElementById('kpi-resolvidos').textContent = counts.Resolvidos;
+}
+
+function getStatusClass(status) {
+  return `status-${status.toLowerCase()}`;
+}
+
+function getUrgencyClass(urgency) {
+  return `urgency-${urgency.toLowerCase()}`;
+}
+
+function renderTable() {
+  const tbody = document.getElementById('table-body');
+  const cardsContainer = document.getElementById('table-cards');
+  
+  tbody.innerHTML = '';
+  cardsContainer.innerHTML = '';
+  
+  const visibleColumns = {
+    category: columnVisibility.category,
+    description: columnVisibility.description,
+    technician: columnVisibility.technician,
+    inventory: columnVisibility.inventory,
+    requester: columnVisibility.requester
+  };
+  
+  filteredTickets.forEach(ticket => {
+    const isSelected = selectedTickets.has(ticket.id);
+    const tr = document.createElement('tr');
+    tr.dataset.id = ticket.id;
+    tr.className = isSelected ? 'selected' : '';
+    tr.style.cursor = 'pointer';
+    
+    tr.innerHTML = `
+      <td class="checkbox-cell"><input type="checkbox" data-id="${ticket.id}" ${isSelected ? 'checked' : ''} aria-label="Selecionar chamado ${ticket.protocolo}"></td>
+      <td><span class="cell-urgency ${getUrgencyClass(ticket.urgencia)}">${ticket.urgencia}</span></td>
+      <td class="cell-protocolo">${ticket.protocolo}</td>
+      <td>${ticket.unidade}</td>
+      ${visibleColumns.category ? `<td>${ticket.categoria}</td>` : ''}
+      ${visibleColumns.description ? `<td style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${ticket.descricao}</td>` : ''}
+      <td><span class="cell-status ${getStatusClass(ticket.status)}">${ticket.status}</span></td>
+      ${visibleColumns.technician ? `<td>${ticket.tecnico || '<span style="color:var(--text-muted)">—</span>'}</td>` : ''}
+      ${visibleColumns.inventory ? `<td>${ticket.inventario || '<span style="color:var(--text-muted)">—</span>'}</td>` : ''}
+      ${visibleColumns.requester ? `<td>${ticket.solicitante}</td>` : ''}
+      <td><span style="font-family:var(--font-mono);font-size:var(--font-size-xs);color:var(--text-secondary)">${ticket.tempo}</span></td>
+      <td>
+        <div class="cell-actions">
+          <button class="action-btn view" data-action="view" data-id="${ticket.id}" aria-label="Ver detalhes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+          <button class="action-btn status" data-action="status" data-id="${ticket.id}" aria-label="Alterar status"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></button>
+          <button class="action-btn reply" data-action="reply" data-id="${ticket.id}" aria-label="Responder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>
+          <button class="action-btn attachment" data-action="attachment" data-id="${ticket.id}" aria-label="Anexos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05a9 9 0 0 1-12.88 0"/><path d="M13.38 6.72a4 4 0 0 0-5.76 0"/><path d="M20.47 16.02a15 15 0 0 1-19.94 0"/><path d="M12.53 11.02a10 10 0 0 1-11.74 0"/></svg></button>
+          <button class="action-btn delete" data-action="delete" data-id="${ticket.id}" aria-label="Excluir"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+        </div>
+      </td>
+    `;
+    
+    tr.addEventListener('click', (e) => {
+      if (!e.target.closest('.action-btn') && !e.target.closest('input[type="checkbox"]')) {
+        openModal(ticket.id);
+      }
+    });
+    
+    tr.querySelector('input[type="checkbox"]').addEventListener('change', (e) => {
+      e.stopPropagation();
+      const id = parseInt(e.target.dataset.id, 10);
+      if (e.target.checked) selectedTickets.add(id);
+      else selectedTickets.delete(id);
+      tr.classList.toggle('selected', e.target.checked);
+      updateSelectAllCheckbox();
+      updateSelectionUI();
+    });
+    
+    tr.querySelectorAll('.action-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const action = btn.dataset.action;
+        const id = parseInt(btn.dataset.id, 10);
+        handleAction(action, id);
+      });
+    });
+    
+    tbody.appendChild(tr);
+    
+    const card = createTicketCard(ticket, visibleColumns);
+    cardsContainer.appendChild(card);
+  });
+  
+  updateSelectAllCheckbox();
+}
+
+function createTicketCard(ticket, visibleColumns) {
+  const card = document.createElement('div');
+  card.className = 'table-card';
+  card.dataset.id = ticket.id;
+  card.style.cursor = 'pointer';
+  
+  card.innerHTML = `
+    <div class="table-card-header">
+      <span class="table-card-protocolo">${ticket.protocolo}</span>
+      <div>
+        <span class="cell-urgency ${getUrgencyClass(ticket.urgencia)}">${ticket.urgencia}</span>
+        <span class="cell-status ${getStatusClass(ticket.status)}" style="margin-left: 8px;">${ticket.status}</span>
+      </div>
+    </div>
+    <div class="table-card-fields">
+      <div class="table-card-field">
+        <span class="table-card-field-label">Unidade</span>
+        <span class="table-card-field-value">${ticket.unidade}</span>
+      </div>
+      ${visibleColumns.category ? `
+      <div class="table-card-field">
+        <span class="table-card-field-label">Categoria</span>
+        <span class="table-card-field-value">${ticket.categoria}</span>
+      </div>` : ''}
+      ${visibleColumns.description ? `
+      <div class="table-card-field" style="grid-column: 1 / -1;">
+        <span class="table-card-field-label">Descrição</span>
+        <span class="table-card-field-value">${ticket.descricao}</span>
+      </div>` : ''}
+      <div class="table-card-field">
+        <span class="table-card-field-label">Técnico</span>
+        <span class="table-card-field-value">${ticket.tecnico || '—'}</span>
+      </div>
+      ${visibleColumns.inventory ? `
+      <div class="table-card-field">
+        <span class="table-card-field-label">Inventário</span>
+        <span class="table-card-field-value">${ticket.inventario || '—'}</span>
+      </div>` : ''}
+      ${visibleColumns.requester ? `
+      <div class="table-card-field">
+        <span class="table-card-field-label">Solicitante</span>
+        <span class="table-card-field-value">${ticket.solicitante}</span>
+      </div>` : ''}
+      <div class="table-card-field">
+        <span class="table-card-field-label">Tempo</span>
+        <span class="table-card-field-value">${ticket.tempo}</span>
+      </div>
+    </div>
+    <div class="table-card-actions">
+      <button class="action-btn view" data-action="view" data-id="${ticket.id}" aria-label="Ver detalhes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+      <button class="action-btn status" data-action="status" data-id="${ticket.id}" aria-label="Alterar status"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></button>
+      <button class="action-btn reply" data-action="reply" data-id="${ticket.id}" aria-label="Responder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>
+      <button class="action-btn attachment" data-action="attachment" data-id="${ticket.id}" aria-label="Anexos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05a9 9 0 0 1-12.88 0"/><path d="M13.38 6.72a4 4 0 0 0-5.76 0"/></svg></button>
+      <button class="action-btn delete" data-action="delete" data-id="${ticket.id}" aria-label="Excluir"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+    </div>
+  `;
+  
+  card.addEventListener('click', (e) => {
+    if (!e.target.closest('.action-btn')) {
+      openModal(ticket.id);
+    }
+  });
+  
+  card.querySelectorAll('.action-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const action = btn.dataset.action;
+      const id = parseInt(btn.dataset.id, 10);
+      handleAction(action, id);
+    });
+  });
+  
+  return card;
+}
+
+function updateSelectAllCheckbox() {
+  const checkboxes = document.querySelectorAll('#table-body input[type="checkbox"]');
+  const checkedCount = document.querySelectorAll('#table-body input[type="checkbox"]:checked').length;
+  const selectAll = document.getElementById('select-all');
+  selectAll.checked = checkedCount === checkboxes.length && checkboxes.length > 0;
+  selectAll.indeterminate = checkedCount > 0 && checkedCount < checkboxes.length;
+}
+
+function handleAction(action, id) {
+  const ticket = allTickets.find(t => t.id === id);
+  if (!ticket) return;
+  
+  switch (action) {
+    case 'view':
+      openModal(id);
+      break;
+    case 'status':
+      showStatusModal(id);
+      break;
+    case 'reply':
+      openModal(id);
+      setTimeout(() => switchModalTab('chat'), 100);
+      break;
+    case 'attachment':
+      showToast('Anexos: funcionalidade em desenvolvimento');
+      break;
+    case 'delete':
+      if (confirm(`Excluir chamado ${ticket.protocolo}?`)) {
+        allTickets = allTickets.filter(t => t.id !== id);
+        filteredTickets = filteredTickets.filter(t => t.id !== id);
+        selectedTickets.delete(id);
+        renderKPIs();
+        renderTable();
+        renderSidebarStats();
+        showToast('Chamado excluído');
+      }
+      break;
+  }
+}
+
+function showStatusModal(id) {
+  const ticket = allTickets.find(t => t.id === id);
+  if (!ticket) return;
+  
+  const newStatus = prompt(`Alterar status de ${ticket.protocolo} (atual: ${ticket.status}):\n${STATUS_OPTIONS.join(', ')}`, ticket.status);
+  if (newStatus && STATUS_OPTIONS.includes(newStatus)) {
+    ticket.status = newStatus;
+    ticket.updatedAt = new Date().toISOString();
+    renderKPIs();
+    renderTable();
+    renderSidebarStats();
+    showToast(`Status alterado para ${newStatus}`);
+  }
+}
+
+function openModal(id) {
+  currentTicketId = id;
+  const ticket = allTickets.find(t => t.id === id);
+  if (!ticket) return;
+  
+  renderModalDetails(ticket);
+  renderChatMessages(id);
+  
+  document.getElementById('chat-protocolo').textContent = ticket.protocolo;
+  document.getElementById('chat-dev-id').textContent = DEV_CHAT_ID;
+  document.getElementById('modal-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  
+  document.getElementById('chat-input').focus();
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+  currentTicketId = null;
+}
+
+function switchModalTab(tab) {
+  document.querySelectorAll('.modal-tab-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelectorAll('.modal-tab-panel').forEach(panel => panel.classList.remove('active'));
+  
+  document.getElementById(`modal-tab-${tab}`).classList.add('active');
+  document.getElementById(`modal-${tab}`).classList.add('active');
+}
+
+function renderModalDetails(ticket) {
+  const grid = document.getElementById('detail-grid');
+  const fields = [
+    { label: 'Protocolo', value: ticket.protocolo, mono: true },
+    { label: 'Status', value: `<span class="cell-status ${getStatusClass(ticket.status)}">${ticket.status}</span>`, html: true },
+    { label: 'Urgência', value: `<span class="cell-urgency ${getUrgencyClass(ticket.urgencia)}">${ticket.urgencia}</span>`, html: true },
+    { label: 'Unidade', value: ticket.unidade },
+    { label: 'Categoria', value: ticket.categoria },
+    { label: 'Técnico', value: ticket.tecnico || '—' },
+    { label: 'Inventário', value: ticket.inventario || '—' },
+    { label: 'Solicitante', value: ticket.solicitante },
+    { label: 'Tempo Aberto', value: ticket.tempo, mono: true },
+    { label: 'Criado em', value: new Date(ticket.createdAt).toLocaleString('pt-BR'), mono: true },
+    { label: 'Atualizado em', value: new Date(ticket.updatedAt).toLocaleString('pt-BR'), mono: true },
+    { label: 'Descrição', value: ticket.descricao, fullWidth: true, longText: true }
+  ];
+  
+  grid.innerHTML = fields.map(f => `
+    <div class="detail-field${f.fullWidth ? ' full-width' : ''}">
+      <span class="detail-label">${f.label}</span>
+      <div class="detail-value${f.longText ? ' long-text' : ''}${f.mono ? '' : ''}" ${f.html ? `style="font-family:inherit"` : ''}>${f.value}</div>
+    </div>
+  `).join('');
+}
+
+function renderChatMessages(ticketId) {
+  const container = document.getElementById('chat-messages');
+  const key = `chat_${ticketId}`;
+  const messages = JSON.parse(localStorage.getItem(key) || '[]');
+  
+  container.innerHTML = messages.map(msg => `
+    <div class="chat-message ${msg.own ? 'own' : 'other'}">
+      <div class="chat-message-bubble">${escapeHtml(msg.text)}</div>
+      <div class="chat-message-meta">${msg.time} ${msg.own ? '✓' : ''}</div>
+    </div>
+  `).join('');
+  
+  if (messages.length === 0) {
+    container.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: var(--spacing-lg); font-size: var(--font-size-sm);">Nenhuma mensagem ainda. Inicie a conversa.</div>`;
+  }
+  
+  container.scrollTop = container.scrollHeight;
+}
+
+function sendChatMessage() {
+  const input = document.getElementById('chat-input');
+  const text = input.value.trim();
+  if (!text || !currentTicketId) return;
+  
+  const key = `chat_${currentTicketId}`;
+  const messages = JSON.parse(localStorage.getItem(key) || '[]');
+  const now = new Date();
+  
+  messages.push({
+    text,
+    own: true,
+    time: now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+    timestamp: now.toISOString()
+  });
+  
+  localStorage.setItem(key, JSON.stringify(messages));
+  input.value = '';
+  renderChatMessages(currentTicketId);
+}
+
+function renderSidebarStats() {
+  const total = filteredTickets.length;
+  const avgHours = total > 0 ? Math.round(filteredTickets.reduce((sum, t) => sum + t.horas, 0) / total) : 0;
+  const resolved = filteredTickets.filter(t => t.status === 'Resolvidos').length;
+  const resolutionRate = total > 0 ? Math.round((resolved / total) * 100) : 0;
+  
+  const topCategory = getTopCategory(filteredTickets);
+  const topTech = getTopTechnician(filteredTickets);
+  
+  document.getElementById('stat-total').textContent = total;
+  document.getElementById('stat-avg-time').textContent = `${avgHours}h`;
+  document.getElementById('stat-resolution-rate').textContent = `${resolutionRate}%`;
+  document.getElementById('stat-top-category').textContent = topCategory || '—';
+  document.getElementById('stat-top-tech').textContent = topTech || '—';
+  
+  renderTopCategories(filteredTickets);
+  renderTechLoad(filteredTickets);
+  renderTrendSparkline(filteredTickets);
+}
+
+function renderKanban() {
+  const board = document.getElementById('kanban-board');
+  board.innerHTML = '';
+  
+  STATUS_OPTIONS.forEach(status => {
+    const tickets = filteredTickets.filter(t => t.status === status);
+    const column = document.createElement('div');
+    column.className = 'kanban-column';
+    column.dataset.status = status;
+    
+    column.innerHTML = `
+      <div class="kanban-column-header">
+        <div class="kanban-column-title">
+          <span>${status}</span>
+          <span class="kanban-column-count">${tickets.length}</span>
+        </div>
+      </div>
+      <div class="kanban-cards" data-status="${status}"></div>
+    `;
+    
+    board.appendChild(column);
+    const cardsContainer = column.querySelector('.kanban-cards');
+    
+    tickets.forEach(ticket => {
+      const card = createKanbanCard(ticket);
+      cardsContainer.appendChild(card);
+    });
+  });
+  
+  setupKanbanDragAndDrop();
+}
+
+function createKanbanCard(ticket) {
+  const card = document.createElement('div');
+  card.className = 'kanban-card';
+  card.dataset.id = ticket.id;
+  card.draggable = true;
+  
+  card.innerHTML = `
+    <div class="kanban-card-header">
+      <span class="kanban-card-protocolo">${ticket.protocolo}</span>
+      <span class="cell-urgency ${getUrgencyClass(ticket.urgencia)}">${ticket.urgencia}</span>
+    </div>
+    <div class="kanban-card-body">${ticket.descricao}</div>
+    <div class="kanban-card-footer">
+      <span>${ticket.unidade}</span>
+      <span>${ticket.tecnico || 'Sem técnico'}</span>
+    </div>
+  `;
+  
+  card.addEventListener('click', (e) => {
+    if (!e.target.closest('.action-btn')) {
+      openModal(ticket.id);
+    }
+  });
+  
+  return card;
+}
+
+function setupKanbanDragAndDrop() {
+  let draggedCard = null;
+  
+  document.querySelectorAll('.kanban-card').forEach(card => {
+    card.addEventListener('dragstart', (e) => {
+      draggedCard = card;
+      card.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    
+    card.addEventListener('dragend', () => {
+      card.classList.remove('dragging');
+      draggedCard = null;
+      document.querySelectorAll('.kanban-cards').forEach(c => c.classList.remove('drag-over'));
+    });
+  });
+  
+  document.querySelectorAll('.kanban-cards').forEach(column => {
+    column.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      column.classList.add('drag-over');
+      
+      const afterElement = getDragAfterElement(column, e.clientY);
+      const draggable = document.querySelector('.kanban-card.dragging');
+      if (afterElement == null) {
+        column.appendChild(draggable);
+      } else {
+        column.insertBefore(draggable, afterElement);
+      }
+    });
+    
+    column.addEventListener('dragleave', () => {
+      column.classList.remove('drag-over');
+    });
+    
+    column.addEventListener('drop', (e) => {
+      e.preventDefault();
+      column.classList.remove('drag-over');
+      
+      if (draggedCard) {
+        const newStatus = column.dataset.status;
+        const ticketId = parseInt(draggedCard.dataset.id, 10);
+        const ticket = allTickets.find(t => t.id === ticketId);
+        
+        if (ticket && ticket.status !== newStatus) {
+          ticket.status = newStatus;
+          ticket.updatedAt = new Date().toISOString();
+          renderKPIs();
+          renderTable();
+          renderKanban();
+          renderGrouped();
+          renderSidebarStats();
+          showToast(`Chamado movido para ${newStatus}`);
+        }
+      }
+    });
+  });
+}
+
+function getDragAfterElement(container, y) {
+  const draggableElements = [...container.querySelectorAll('.kanban-card:not(.dragging)')];
+  
+  return draggableElements.reduce((closest, child) => {
+    const box = child.getBoundingClientRect();
+    const offset = y - box.top - box.height / 2;
+    
+    if (offset < 0 && offset > closest.offset) {
+      return { offset: offset, element: child };
+    } else {
+      return closest;
+    }
+  }, { offset: Number.NEGATIVE_INFINITY }).element;
+}
+
+function renderGrouped() {
+  const container = document.getElementById('grouped-view');
+  container.innerHTML = '';
+  
+  const categories = [...new Set(filteredTickets.map(t => t.categoria))].sort();
+  
+  categories.forEach(category => {
+    const catTickets = filteredTickets.filter(t => t.categoria === category);
+    const units = [...new Set(catTickets.map(t => t.unidade))].sort();
+    
+    const categoryEl = document.createElement('div');
+    categoryEl.className = 'group-category';
+    
+    categoryEl.innerHTML = `
+      <div class="group-category-header">
+        <div class="group-category-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+            <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+            <line x1="12" y1="22.08" x2="12" y2="12"/>
+          </svg>
+          ${category}
+          <span class="group-category-count">${catTickets.length}</span>
+        </div>
+        <svg class="group-category-toggle" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </div>
+      <div class="group-category-content"></div>
+    `;
+    
+    container.appendChild(categoryEl);
+    const contentEl = categoryEl.querySelector('.group-category-content');
+    const headerEl = categoryEl.querySelector('.group-category-header');
+    
+    headerEl.addEventListener('click', () => {
+      categoryEl.classList.toggle('expanded');
+    });
+    
+    units.forEach(unit => {
+      const unitTickets = catTickets.filter(t => t.unidade === unit);
+      const unitEl = document.createElement('div');
+      unitEl.className = 'group-unit';
+      
+      unitEl.innerHTML = `
+        <div class="group-unit-header">
+          <span>${unit}</span>
+          <span class="group-unit-count">${unitTickets.length} chamados</span>
+        </div>
+        <div class="group-tickets"></div>
+      `;
+      
+      contentEl.appendChild(unitEl);
+      const ticketsEl = unitEl.querySelector('.group-tickets');
+      
+      unitTickets.forEach(ticket => {
+        const ticketEl = document.createElement('div');
+        ticketEl.className = 'group-ticket';
+        ticketEl.dataset.id = ticket.id;
+        
+        ticketEl.innerHTML = `
+          <span class="group-ticket-protocolo">${ticket.protocolo}</span>
+          <span class="cell-status ${getStatusClass(ticket.status)}" style="font-size: var(--font-size-xs);">${ticket.status}</span>
+          <span class="group-ticket-title">${ticket.descricao}</span>
+        `;
+        
+        ticketEl.addEventListener('click', () => openModal(ticket.id));
+        ticketsEl.appendChild(ticketEl);
+      });
+    });
+  });
+}
+
+function getTopCategory(tickets) {
+  const counts = {};
+  tickets.forEach(t => counts[t.categoria] = (counts[t.categoria] || 0) + 1);
+  return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0];
+}
+
+function getTopTechnician(tickets) {
+  const counts = {};
+  tickets.forEach(t => {
+    if (t.tecnico) counts[t.tecnico] = (counts[t.tecnico] || 0) + 1;
+  });
+  return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0];
+}
+
+function renderTopCategories(tickets) {
+  const container = document.getElementById('top-categories-list');
+  const counts = {};
+  tickets.forEach(t => counts[t.categoria] = (counts[t.categoria] || 0) + 1);
+  const top5 = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  
+  container.innerHTML = top5.map(([cat, count]) => `
+    <div class="stat-item">
+      <span class="stat-label">${cat}</span>
+      <span class="stat-value">${count}</span>
+    </div>
+  `).join('');
+}
+
+function renderTechLoad(tickets) {
+  const container = document.getElementById('tech-load-list');
+  const counts = {};
+  tickets.forEach(t => {
+    if (t.tecnico) counts[t.tecnico] = (counts[t.tecnico] || 0) + 1;
+  });
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  
+  container.innerHTML = sorted.map(([tech, count]) => `
+    <div class="stat-item" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+      <span class="stat-label">${tech}</span>
+      <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+        <div style="flex: 1; height: 6px; background: var(--bg-tertiary); border-radius: 3px; overflow: hidden;">
+          <div style="width: ${(count / sorted[0][1]) * 100}%; height: 100%; background: var(--accent-primary); border-radius: 3px;"></div>
+        </div>
+        <span class="stat-value">${count}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderTrendSparkline(tickets) {
+  const container = document.getElementById('trend-sparkline');
+  const now = new Date();
+  const days = 7;
+  const data = [];
+  
+  for (let i = days - 1; i >= 0; i--) {
+    const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+    const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+    const count = allTickets.filter(t => {
+      const created = new Date(t.createdAt);
+      return created >= dayStart && created < dayEnd;
+    }).length;
+    data.push(count);
+  }
+  
+  const max = Math.max(...data, 1);
+  const width = 280;
+  const height = 50;
+  const stepX = width / (data.length - 1);
+  
+  const points = data.map((val, i) => {
+    const x = i * stepX;
+    const y = height - (val / max) * (height - 10) - 5;
+    return `${x},${y}`;
+  }).join(' ');
+  
+  container.innerHTML = `
+    <svg class="sparkline" viewBox="0 0 ${width} ${height}" style="width: 100%; height: 100%;">
+      <polyline fill="none" stroke="var(--accent-primary)" stroke-width="2" points="${points}"/>
+      ${data.map((val, i) => `
+        <circle cx="${i * stepX}" cy="${height - (val / max) * (height - 10) - 5}" r="3" fill="var(--accent-primary)"/>
+      `).join('')}
+    </svg>
+  `;
+}
+
+function updateSelectionUI() {
+  const count = selectedTickets.size;
+  const selectionSection = document.getElementById('selection-stats');
+  
+  if (count > 0) {
+    selectionSection.style.display = 'block';
+    document.getElementById('selection-count').textContent = count;
+    
+    const selected = filteredTickets.filter(t => selectedTickets.has(t.id));
+    document.getElementById('sel-abertos').textContent = selected.filter(t => t.status === 'Abertos').length;
+    document.getElementById('sel-andamento').textContent = selected.filter(t => t.status === 'Andamento').length;
+    document.getElementById('sel-comunicado').textContent = selected.filter(t => t.status === 'Comunicado').length;
+    document.getElementById('sel-resolvidos').textContent = selected.filter(t => t.status === 'Resolvidos').length;
+  } else {
+    selectionSection.style.display = 'none';
+  }
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.classList.remove('active');
+    btn.setAttribute('aria-selected', 'false');
+  });
+  document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
+  
+  document.getElementById(`tab-${tab}`).classList.add('active');
+  document.getElementById(`tab-${tab}`).setAttribute('aria-selected', 'true');
+  document.getElementById(`panel-${tab}`).classList.add('active');
+  
+  if (tab === 'kanban') {
+    renderKanban();
+  } else if (tab === 'grouped') {
+    renderGrouped();
+  }
+}
+
+function saveCurrentView() {
+  const name = prompt('Nome para esta visão:');
+  if (!name) return;
+  
+  const views = JSON.parse(localStorage.getItem('savedViews') || '[]');
+  views.push({
+    name,
+    filters: { ...filterState },
+    columns: { ...columnVisibility },
+    timestamp: Date.now()
+  });
+  
+  localStorage.setItem('savedViews', JSON.stringify(views));
+  renderSavedViews();
+  showToast('Visão salva com sucesso');
+}
+
+function renderSavedViews() {
+  const container = document.getElementById('saved-views-list');
+  const views = JSON.parse(localStorage.getItem('savedViews') || '[]');
+  
+  if (views.length === 0) {
+    container.innerHTML = '<div class="no-saved-views">Nenhuma visão salva ainda</div>';
+    return;
+  }
+  
+  container.innerHTML = views.map((view, index) => `
+    <div class="saved-view-item" data-index="${index}">
+      <span class="view-name">${escapeHtml(view.name)}</span>
+      <div class="view-actions">
+        <button class="view-action-btn apply" data-index="${index}" aria-label="Aplicar visão" title="Aplicar"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>
+        <button class="view-action-btn delete" data-index="${index}" aria-label="Excluir visão" title="Excluir"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+      </div>
+    </div>
+  `).join('');
+  
+  container.querySelectorAll('.view-action-btn.apply').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      applySavedView(parseInt(btn.dataset.index, 10));
+    });
+  });
+  
+  container.querySelectorAll('.view-action-btn.delete').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteSavedView(parseInt(btn.dataset.index, 10));
+    });
+  });
+  
+  container.querySelectorAll('.saved-view-item .view-name').forEach((el, index) => {
+    el.addEventListener('click', () => applySavedView(index));
+  });
+}
+
+function applySavedView(index) {
+  const views = JSON.parse(localStorage.getItem('savedViews') || '[]');
+  const view = views[index];
+  if (!view) return;
+  
+  Object.assign(filterState, view.filters);
+  Object.assign(columnVisibility, view.columns);
+  
+  document.querySelectorAll('#column-toggle-menu input[type="checkbox"]:not(:disabled)').forEach(cb => {
+    const key = cb.id.replace('col-', '');
+    cb.checked = columnVisibility[key];
+  });
+  
+  syncFiltersToUI();
+  applyFilters();
+  showToast(`Visão "${view.name}" aplicada`);
+}
+
+function deleteSavedView(index) {
+  if (!confirm('Excluir esta visão salva?')) return;
+  
+  const views = JSON.parse(localStorage.getItem('savedViews') || '[]');
+  views.splice(index, 1);
+  localStorage.setItem('savedViews', JSON.stringify(views));
+  renderSavedViews();
+  showToast('Visão excluída');
+}
+
+function batchChangeStatus() {
+  if (selectedTickets.size === 0) return;
+  
+  const newStatus = prompt(`Alterar status de ${selectedTickets.size} chamados selecionados:\n${STATUS_OPTIONS.join(', ')}`);
+  if (!newStatus || !STATUS_OPTIONS.includes(newStatus)) return;
+  
+  let count = 0;
+  selectedTickets.forEach(id => {
+    const ticket = allTickets.find(t => t.id === id);
+    if (ticket) {
+      ticket.status = newStatus;
+      ticket.updatedAt = new Date().toISOString();
+      count++;
+    }
+  });
+  
+  selectedTickets.clear();
+  renderKPIs();
+  renderTable();
+  renderKanban();
+  renderGrouped();
+  renderSidebarStats();
+  updateSelectionUI();
+  showToast(`${count} chamados alterados para ${newStatus}`);
+}
+
+function batchReply() {
+  if (selectedTickets.size === 0) return;
+  
+  const message = prompt(`Responder em lote para ${selectedTickets.size} chamados:`);
+  if (!message) return;
+  
+  let count = 0;
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  
+  selectedTickets.forEach(id => {
+    const key = `chat_${id}`;
+    const messages = JSON.parse(localStorage.getItem(key) || '[]');
+    messages.push({
+      text: `[Resposta em lote] ${message}`,
+      own: true,
+      time: timeStr,
+      timestamp: now.toISOString()
+    });
+    localStorage.setItem(key, JSON.stringify(messages));
+    count++;
+  });
+  
+  showToast(`Resposta enviada para ${count} chamados`);
+}
+
+function batchDelete() {
+  if (selectedTickets.size === 0) return;
+  
+  if (!confirm(`Excluir ${selectedTickets.size} chamados selecionados?`)) return;
+  
+  let count = 0;
+  selectedTickets.forEach(id => {
+    const index = allTickets.findIndex(t => t.id === id);
+    if (index !== -1) {
+      allTickets.splice(index, 1);
+      count++;
+    }
+  });
+  
+  filteredTickets = filteredTickets.filter(t => !selectedTickets.has(t.id));
+  selectedTickets.clear();
+  
+  renderKPIs();
+  renderTable();
+  renderKanban();
+  renderGrouped();
+  renderSidebarStats();
+  updateSelectionUI();
+  showToast(`${count} chamados excluídos`);
+}
+
+function exportData() {
+  const data = filteredTickets.map(t => ({
+    Protocolo: t.protocolo,
+    Unidade: t.unidade,
+    Categoria: t.categoria,
+    Descrição: t.descricao,
+    Status: t.status,
+    Urgência: t.urgencia,
+    Técnico: t.tecnico || '',
+    Inventário: t.inventario || '',
+    Solicitante: t.solicitante,
+    Tempo: t.tempo,
+    Criado: new Date(t.createdAt).toLocaleString('pt-BR')
+  }));
+  
+  const csv = [Object.keys(data[0]).join(';'), ...data.map(row => Object.values(row).map(v => `"${v}"`).join(';'))].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `chamados_${new Date().toISOString().split('T')[0]}.csv`;
+  link.click();
+  showToast('Exportação concluída');
+}
+
+function showToast(message) {
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.style.cssText = `
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-sm) var(--spacing-md);
+    color: var(--text-primary);
+    font-size: var(--font-size-sm);
+    box-shadow: var(--shadow-lg);
+    animation: slideIn 0.3s ease;
+  `;
+  toast.textContent = message;
+  container.appendChild(toast);
+  
+  setTimeout(() => {
+    toast.style.animation = 'slideOut 0.3s ease';
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+document.addEventListener('DOMContentLoaded', init);
+
+const style = document.createElement('style');
+style.textContent = `
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(100%); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes slideOut {
+    from { opacity: 1; transform: translateX(0); }
+    to { opacity: 0; transform: translateX(100%); }
+  }
+`;
+document.head.appendChild(style);
+</script>
+</body>
+</html>

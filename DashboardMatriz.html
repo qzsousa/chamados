@@ -1,0 +1,1380 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://www.gstatic.com/charts/loader.js"></script>
+  <?!= include('Estilo'); ?>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    /* ============================================================
+       TORRE DE CONTROLE — painel de chamados URE Leste 3
+    ============================================================ */
+    :root{
+      --bg:#090b0f;
+      --surface:#12151b;
+      --surface-2:#171b23;
+      --surface-3:#1c212b;
+      --border:#232833;
+      --border-soft:#1a1f28;
+      --text:#e7ebf1;
+      --muted:#7c8494;
+      --muted-2:#565e6d;
+      --amber:#ff9142;
+      --amber-dim:#4a3320;
+      --blue:#5b9dff;
+      --blue-dim:#1c2c46;
+      --mint:#34d399;
+      --mint-dim:#173229;
+      --red:#ff5470;
+      --red-dim:#3a1620;
+      --mono:'JetBrains Mono', ui-monospace, monospace;
+      --sans:'Inter', system-ui, -apple-system, sans-serif;
+    }
+    *{ margin:0; padding:0; box-sizing:border-box; }
+    html,body{ background:var(--bg); }
+    body{
+      font-family:var(--sans);
+      color:var(--text);
+      line-height:1.5;
+      background:
+        radial-gradient(ellipse 900px 500px at 15% -10%, rgba(91,157,255,0.08), transparent 60%),
+        radial-gradient(ellipse 700px 500px at 100% 0%, rgba(255,145,66,0.06), transparent 55%),
+        var(--bg);
+      min-height:100vh;
+    }
+    ::-webkit-scrollbar{ width:7px; height:7px; }
+    ::-webkit-scrollbar-track{ background:var(--surface); }
+    ::-webkit-scrollbar-thumb{ background:#333a47; border-radius:8px; }
+    ::-webkit-scrollbar-thumb:hover{ background:#454e5f; }
+
+    .ticker-wrap{
+      background:#000103;
+      border-bottom:1px solid var(--border-soft);
+      overflow:hidden; height:30px; display:flex; align-items:center;
+      position:relative;
+    }
+    .ticker-wrap::before{
+      content:"AO VIVO"; flex:0 0 auto; font-family:var(--mono); font-size:10px; font-weight:700;
+      letter-spacing:0.12em; color:var(--amber); padding:0 14px; border-right:1px solid var(--border-soft);
+      display:flex; align-items:center; gap:6px; height:100%; background:#000103; z-index:2;
+    }
+    .ticker-track{
+      display:inline-flex; gap:44px; padding-left:100%;
+      animation: rolar 42s linear infinite;
+      font-family:var(--mono); font-size:11.5px; color:var(--muted);
+      white-space:nowrap;
+    }
+    .ticker-track span b{ color:var(--blue); font-weight:600; }
+    @keyframes rolar{ from{ transform:translateX(0); } to{ transform:translateX(-100%); } }
+
+    .header{
+      display:flex; justify-content:space-between; align-items:center;
+      padding:16px 26px; border-bottom:1px solid var(--border-soft);
+      background:linear-gradient(180deg, rgba(255,255,255,0.015), transparent);
+    }
+    .header-left{ display:flex; align-items:center; gap:12px; }
+    .header h1{ font-size:19px; font-weight:800; letter-spacing:-0.3px; }
+    .header h1 small{
+      display:block; font-size:11px; font-weight:500; color:var(--muted-2); letter-spacing:0.04em;
+      margin-top:1px; text-transform:uppercase;
+    }
+    .header-right{ display:flex; align-items:center; gap:14px; }
+    .pulso-status{ display:flex; align-items:center; gap:7px; font-family:var(--mono); font-size:11.5px; color:var(--muted); }
+    .pulso-dot{
+      width:8px; height:8px; border-radius:50%; background:var(--mint);
+      box-shadow:0 0 0 0 rgba(52,211,153,0.5); animation:pulso-anel 2s infinite;
+    }
+    @keyframes pulso-anel{
+      0%{ box-shadow:0 0 0 0 rgba(52,211,153,0.45); }
+      70%{ box-shadow:0 0 0 7px rgba(52,211,153,0); }
+      100%{ box-shadow:0 0 0 0 rgba(52,211,153,0); }
+    }
+    .relogio{ font-family:var(--mono); font-size:12.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
+    .icon-btn{
+      background:var(--surface-2); border:1px solid var(--border); color:var(--muted);
+      width:34px; height:34px; border-radius:8px; display:flex; align-items:center; justify-content:center;
+      cursor:pointer; font-size:15px; transition:all 0.15s;
+    }
+    .icon-btn:hover{ background:var(--surface-3); border-color:#3a4252; color:var(--text); transform:translateY(-1px); }
+    .icon-btn.ativo{ color:var(--amber); border-color:var(--amber); background:var(--amber-dim); }
+
+    .container{ padding:18px 26px 40px; max-width:1680px; margin:0 auto; }
+
+    .alerta-critico{
+      display:none; background:linear-gradient(90deg, var(--red-dim), rgba(255,84,112,0.02));
+      border:1px solid #4a1e28; border-left:4px solid var(--red);
+      border-radius:10px; padding:13px 18px; margin-bottom:20px;
+    }
+    .alerta-critico.pisca{ animation:pulse-alerta 2s ease-in-out infinite; }
+    @keyframes pulse-alerta{ 0%,100%{ box-shadow:0 0 0 0 rgba(255,84,112,0.28); } 50%{ box-shadow:0 0 0 8px rgba(255,84,112,0); } }
+    .alerta-titulo{
+      font-family:var(--mono); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em;
+      color:#ffb3c0; margin-bottom:9px; display:flex; align-items:center; gap:8px;
+    }
+    .lista-alerta{ display:flex; gap:9px; flex-wrap:wrap; }
+    .chip-alerta{
+      background:rgba(255,255,255,0.04); border:1px solid #4a2530; padding:6px 13px; border-radius:8px;
+      font-size:12.5px; cursor:pointer; transition:0.15s; color:var(--text); font-family:var(--sans);
+    }
+    .chip-alerta:hover{ background:rgba(255,255,255,0.09); border-color:var(--red); }
+    .chip-alerta .tempo{ color:var(--red); margin-left:8px; font-family:var(--mono); font-size:11px; }
+
+    /* ===== KPIS ===== */
+    .kpis{
+      display:grid;
+      grid-template-columns:repeat(5,1fr);
+      gap:12px;
+      margin-bottom:22px;
+    }
+    .kpi{
+      background:var(--surface);
+      border-radius:10px;
+      padding:14px 16px;
+      border:1px solid var(--border-soft);
+      transition:border-color 0.2s, transform 0.2s;
+      display:flex;
+      align-items:center;
+      gap:12px;
+    }
+    .kpi:hover{ transform:translateY(-2px); border-color:#333a47; }
+    .kpi .icon{
+      width:36px;
+      height:36px;
+      border-radius:8px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background:var(--surface-2);
+      flex-shrink:0;
+    }
+    .kpi .icon svg{
+      width:20px;
+      height:20px;
+      stroke:var(--acc);
+      fill:none;
+      stroke-width:2;
+    }
+    .kpi .info{ flex:1; min-width:0; }
+    .kpi .num{
+      font-family:var(--mono);
+      font-size:24px;
+      font-weight:700;
+      letter-spacing:-0.3px;
+      color:var(--text);
+      line-height:1.2;
+    }
+    .kpi .label{
+      font-size:10px;
+      font-weight:600;
+      text-transform:uppercase;
+      letter-spacing:0.06em;
+      color:var(--muted-2);
+    }
+    .kpi.aberto{ --acc:#f1c40f; }
+    .kpi.andamento{ --acc:var(--blue); }
+    .kpi.comunicado{ --acc:var(--amber); }
+    .kpi.resolvido{ --acc:var(--mint); }
+    .kpi.alta{ --acc:var(--red); }
+
+    /* ===== GRÁFICOS ===== */
+    .charts-grid{
+      display:grid;
+      grid-template-columns:1fr 2fr;
+      gap:16px;
+      margin-bottom:22px;
+    }
+    .charts-left{
+      display:flex;
+      flex-direction:column;
+      gap:16px;
+    }
+    .chart-box{
+      background:var(--surface);
+      border:1px solid var(--border);
+      border-radius:11px;
+      padding:14px 16px 6px;
+      flex:1;
+    }
+    .chart-box .titulo-chart{
+      font-size:10.5px;
+      color:var(--muted-2);
+      text-transform:uppercase;
+      letter-spacing:0.08em;
+      font-weight:700;
+      margin-bottom:4px;
+      display:flex;
+      align-items:center;
+      gap:6px;
+    }
+    .chart-box .titulo-chart::before{
+      content:"◆";
+      color:var(--acc2,var(--blue));
+      font-size:8px;
+    }
+    .chart-box.barras .titulo-chart::before{
+      content:"▦";
+    }
+
+    /* ===== FILTROS E AÇÕES ===== */
+    .barra-acoes{
+      display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;
+    }
+    .filtros{ display:flex; gap:7px; flex-wrap:wrap; }
+    .filtros input, .filtros select{
+      background:var(--surface-2); border:1px solid var(--border); color:var(--text);
+      padding:7px 11px; border-radius:7px; font-size:12px; font-family:var(--sans); outline:none; transition:border 0.15s;
+    }
+    .filtros input:focus, .filtros select:focus{ border-color:var(--blue); }
+    .filtros input::placeholder{ color:var(--muted-2); }
+    .acoes-lote{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .acoes-lote button{
+      background:var(--surface-2); border:1px solid var(--border); color:#b6bccb; padding:7px 15px;
+      border-radius:7px; cursor:pointer; font-size:12px; font-family:var(--sans); font-weight:500; transition:0.15s;
+    }
+    .acoes-lote button:hover{ background:var(--surface-3); color:var(--text); }
+    .acoes-lote button.primario{ background:var(--blue); border-color:var(--blue); color:#06101f; font-weight:700; }
+    .acoes-lote button.primario:hover{ background:#72adff; }
+    .acoes-lote button.danger{ background:var(--red-dim); border-color:#4a1e28; color:#ffb3c0; }
+    .acoes-lote button.danger:hover{ background:#4a1e28; }
+
+    .fila-header{ display:flex; justify-content:space-between; align-items:baseline; font-size:12px; color:var(--muted); margin-bottom:8px; }
+    .fila-header .titulo-fila{ font-weight:700; color:var(--text); text-transform:uppercase; font-size:11px; letter-spacing:0.06em; }
+    .contador-fila{ color:var(--blue); font-weight:700; font-family:var(--mono); }
+
+    /* ===== TABELA ===== */
+    .fila-container{ background:var(--surface); border:1px solid var(--border); border-radius:11px; overflow:hidden; }
+    .tabela-header{
+      display:flex; align-items:center; gap:10px; padding:9px 16px 9px 12px; background:var(--surface-2);
+      border-bottom:1px solid var(--border); font-size:10.5px; font-weight:700; text-transform:uppercase;
+      letter-spacing:0.06em; color:var(--muted-2);
+    }
+    .tabela-header .col-check{ flex:0 0 28px; }
+    .tabela-header .col-urgencia{ flex:0 0 6px; }
+    .tabela-header .col-unidade{ flex:1.2; }
+    .tabela-header .col-categoria{ flex:0.8; }
+    .tabela-header .col-descricao{ flex:1.6; }
+    .tabela-header .col-tecnico{ flex:0.65; text-align:center; }
+    .tabela-header .col-inventario{ flex:0.65; text-align:center; }
+    .tabela-header .col-status{ flex:0.65; text-align:center; }
+    .tabela-header .col-tempo{ flex:0.55; text-align:right; }
+
+    /* Linha com fundo verde para resolvidos */
+    .linha-resolvido {
+      background: var(--mint-dim) !important;
+      border-left: 3px solid var(--mint);
+    }
+    .linha-resolvido:hover {
+      background: #1a3a2a !important;
+    }
+
+    .linha-chamado{
+      display:flex; align-items:center; gap:10px; padding:9px 16px 9px 0; border-bottom:1px solid var(--border-soft);
+      cursor:pointer; transition:background 0.12s; position:relative;
+    }
+    .linha-chamado:last-child{ border-bottom:none; }
+    .linha-chamado:hover{ background:var(--surface-2); }
+    .linha-chamado .col-check{ flex:0 0 28px; text-align:center; }
+    .linha-chamado .col-check input[type="checkbox"]{ accent-color:var(--blue); width:14px; height:14px; cursor:pointer; }
+
+    .col-urgencia{ flex:0 0 6px; align-self:stretch; }
+    .faixa-urgencia{ width:4px; height:100%; border-radius:3px; display:block; }
+    .faixa-urgencia.alta{ background:var(--red); box-shadow:0 0 8px rgba(255,84,112,0.5); }
+    .faixa-urgencia.media{ background:#f1c40f; }
+    .faixa-urgencia.baixa{ background:var(--mint); }
+
+    .col-unidade{ flex:1.2; font-weight:600; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .col-categoria{ flex:0.8; }
+    .col-categoria .categoria{
+      font-size:10.5px; color:var(--muted); background:var(--surface-2); border:1px solid var(--border-soft);
+      padding:2px 9px; border-radius:20px; font-family:var(--mono);
+    }
+    .col-descricao{ flex:1.6; font-size:12.5px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .col-tecnico{ flex:0.65; text-align:center; }
+    .tecnico-badge{
+      font-size:10.5px; padding:3px 9px; border-radius:6px; font-weight:600; display:inline-block;
+      background:var(--surface-2); color:#c3c9d6; border-left:3px solid var(--muted-2); font-family:var(--mono);
+    }
+    .tecnico-JOSEMIR{ border-left-color:#FF6B6B; } .tecnico-VALDEIR{ border-left-color:#4ECDC4; }
+    .tecnico-GUILHERME{ border-left-color:#FFE66D; } .tecnico-JOÃO{ border-left-color:#A8E6CF; }
+    .tecnico-CAROL{ border-left-color:#FF8A5C; } .tecnico-CHARLES{ border-left-color:#B39BFF; }
+    .tecnico-HEBERT{ border-left-color:#F08A5D; } .tecnico-FABIO{ border-left-color:#FF6FA8; }
+
+    .col-inventario{ flex:0.65; text-align:center; }
+    .inventario-badge{ font-size:10.5px; padding:3px 9px; border-radius:6px; font-weight:600; display:inline-block; }
+    .inventario-concluido{ background:var(--mint-dim); color:var(--mint); }
+    .inventario-andamento{ background:#3a3220; color:#f1c40f; }
+    .inventario-nao-realizado{ background:var(--red-dim); color:var(--red); }
+    .inventario-nao-informado{ background:var(--surface-2); color:var(--muted-2); }
+
+    .col-status{ flex:0.65; text-align:center; }
+    .status-badge{
+      font-size:10.5px;
+      padding:3px 11px;
+      border-radius:20px;
+      font-weight:700;
+      display:inline-block;
+      letter-spacing:0.02em;
+      background:var(--surface-2);
+      color:var(--muted);
+    }
+    .status-aberto{
+      background:#3a3220;
+      color:#f1c40f;
+    }
+    .status-andamento{
+      background:var(--blue-dim);
+      color:var(--blue);
+    }
+    .status-comunicado{
+      background:var(--amber-dim);
+      color:var(--amber);
+    }
+    .status-resolvido{
+      background:var(--mint-dim);
+      color:var(--mint);
+      border:1px solid rgba(52,211,153,0.15);
+    }
+
+    .col-tempo{ flex:0.55; text-align:right; font-size:11.5px; color:var(--muted); font-variant-numeric:tabular-nums; font-family:var(--mono); }
+    .col-tempo .critico{ color:var(--red); font-weight:700; }
+
+    .vazio-tabela{ text-align:center; padding:52px 20px; color:var(--muted); font-size:13px; }
+    .vazio-tabela .icone{ font-size:26px; display:block; margin-bottom:10px; opacity:0.5; }
+
+    /* ===== MODAIS ===== */
+    .modal-overlay{
+      display:none; position:fixed; inset:0; background:rgba(4,5,8,0.72); backdrop-filter:blur(6px);
+      align-items:center; justify-content:center; z-index:200; padding:20px;
+    }
+    .modal{
+      background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:24px 26px;
+      width:560px; max-width:100%; max-height:90vh; overflow-y:auto;
+      animation:modal-entrada 0.18s ease-out;
+    }
+    @keyframes modal-entrada{ from{ opacity:0; transform:translateY(10px) scale(0.98); } to{ opacity:1; transform:translateY(0) scale(1); } }
+    .modal-topo{
+      display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:4px;
+    }
+    .modal h3{
+      font-size:17px; font-weight:700; color:var(--blue); font-family:var(--mono); letter-spacing:-0.2px;
+      display:flex; align-items:center; gap:10px;
+    }
+    .modal .fechar-x{ background:none; border:none; color:var(--muted); font-size:20px; cursor:pointer; padding:0 4px; line-height:1; }
+    .modal .fechar-x:hover{ color:var(--text); }
+
+    .btn-copiar{
+      background:var(--surface-2);
+      border:1px solid var(--border);
+      color:var(--muted);
+      width:32px;
+      height:32px;
+      border-radius:6px;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      cursor:pointer;
+      transition:0.15s;
+      flex-shrink:0;
+    }
+    .btn-copiar:hover{
+      background:var(--surface-3);
+      color:var(--text);
+      border-color:var(--blue);
+    }
+    .btn-copiar svg{
+      width:16px;
+      height:16px;
+      fill:none;
+      stroke:currentColor;
+      stroke-width:2;
+      stroke-linecap:round;
+      stroke-linejoin:round;
+    }
+    .btn-copiar.copiado{
+      border-color:var(--mint);
+      color:var(--mint);
+    }
+
+    .info-grid{ display:grid; grid-template-columns:1fr 1fr; gap:9px 16px; margin:14px 0 16px; }
+    .info-item .k{ font-size:9.5px; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted-2); font-weight:700; }
+    .info-item .v{ font-size:13px; margin-top:3px; word-break:break-word; color:var(--text); }
+    .info-item.full{ grid-column:1 / -1; }
+
+    label.campo{
+      display:block; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em;
+      color:var(--muted-2); margin:15px 0 5px;
+    }
+    .modal select, .modal textarea, .modal input{
+      width:100%; background:var(--surface-2); border:1px solid var(--border); color:var(--text);
+      padding:9px 12px; border-radius:7px; font-family:var(--sans); font-size:13px; outline:none; transition:border 0.15s;
+    }
+    .modal select:focus, .modal textarea:focus, .modal input:focus{ border-color:var(--blue); }
+    .modal textarea{ min-height:80px; resize:vertical; font-family:var(--sans); }
+    .historico{
+      background:#050608; border:1px solid var(--border-soft); border-radius:8px; padding:12px; max-height:150px;
+      overflow-y:auto; font-size:11.5px; white-space:pre-wrap; color:#b0b8c8; font-family:var(--mono); line-height:1.65;
+    }
+    .modal-actions{ display:flex; gap:10px; justify-content:flex-end; margin-top:20px; }
+    .btn-primario{
+      background:var(--blue); border:none; color:#06101f; font-weight:700; padding:9px 26px; border-radius:8px;
+      cursor:pointer; font-family:var(--sans); transition:0.15s;
+    }
+    .btn-primario:hover{ background:#72adff; }
+    .btn-secundario{
+      background:transparent; border:1px solid var(--border); color:#b0b8c8; padding:9px 22px; border-radius:8px;
+      cursor:pointer; font-family:var(--sans); transition:0.15s;
+    }
+    .btn-secundario:hover{ background:var(--surface-2); }
+
+    .toast-wrap{ position:fixed; bottom:22px; right:22px; z-index:400; display:flex; flex-direction:column; gap:8px; }
+    .toast{
+      background:var(--surface-3); border:1px solid var(--border); border-left:3px solid var(--mint);
+      color:var(--text); padding:11px 18px; border-radius:8px; font-size:12.5px; min-width:220px;
+      box-shadow:0 8px 24px rgba(0,0,0,0.4); animation:toast-in 0.2s ease-out;
+    }
+    .toast.erro{ border-left-color:var(--red); }
+    @keyframes toast-in{ from{ opacity:0; transform:translateX(20px); } to{ opacity:1; transform:translateX(0); } }
+
+    @media (max-width:1024px){
+      .kpis{ grid-template-columns:repeat(3,1fr); }
+      .charts-grid{ grid-template-columns:1fr; }
+      .charts-left{ flex-direction:row; flex-wrap:wrap; }
+      .charts-left .chart-box{ flex:1; min-width:200px; }
+    }
+    @media (max-width:768px){
+      .header{ flex-direction:column; align-items:flex-start; gap:10px; }
+      .kpis{ grid-template-columns:1fr 1fr; }
+      .tabela-header, .linha-chamado{ flex-wrap:wrap; gap:4px; }
+      .tabela-header .col-descricao, .linha-chamado .col-descricao{ flex:1 0 100%; white-space:normal; }
+      .barra-acoes{ flex-direction:column; align-items:stretch; }
+      .filtros{ justify-content:center; }
+      .acoes-lote{ justify-content:center; }
+      .info-grid{ grid-template-columns:1fr; }
+    }
+    @media (max-width:480px){
+      .kpis{ grid-template-columns:1fr; }
+      .container{ padding:12px; }
+      .charts-left{ flex-direction:column; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="ticker-wrap">
+    <div class="ticker-track" id="tickerTrack">
+      <span>Carregando atividade recente…</span>
+    </div>
+  </div>
+
+  <header class="header">
+    <div class="header-left">
+      <h1>Sistema de Chamados<small>MATRIZ · URE Leste 3</small></h1>
+    </div>
+    <div class="header-right">
+      <span class="pulso-status"><span class="pulso-dot" id="pulsoDot"></span><span id="statusAtualizacao">sincronizando…</span></span>
+      <span class="relogio" id="relogio"></span>
+      <button class="icon-btn" id="btnSom" onclick="alternarSom()" title="Alertas sonoros">🔔</button>
+      <button class="icon-btn" onclick="exportarCsv()" title="Exportar CSV">⭳</button>
+    </div>
+  </header>
+
+  <div class="container">
+    <div class="alerta-critico" id="alertaAlta">
+      <div class="alerta-titulo">⚠ Alta prioridade em aberto</div>
+      <div class="lista-alerta" id="listaAlerta"></div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="kpis">
+      <div class="kpi aberto">
+        <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg></span>
+        <div class="info"><div class="num" id="kpiAbertos">0</div><div class="label">Abertos</div></div>
+      </div>
+      <div class="kpi andamento">
+        <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></span>
+        <div class="info"><div class="num" id="kpiAndamento">0</div><div class="label">Em andamento</div></div>
+      </div>
+      <div class="kpi comunicado">
+        <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
+        <div class="info"><div class="num" id="kpiComunicado">0</div><div class="label">Comunicado</div></div>
+      </div>
+      <div class="kpi resolvido">
+        <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg></span>
+        <div class="info"><div class="num" id="kpiResolvidos">0</div><div class="label">Encerrados</div></div>
+      </div>
+      <div class="kpi alta">
+        <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></span>
+        <div class="info"><div class="num" id="kpiAlta">0</div><div class="label">Alta prioridade ativa</div></div>
+      </div>
+    </div>
+
+    <!-- GRÁFICOS -->
+    <div class="charts-grid">
+      <div class="charts-left">
+        <div class="chart-box"><div class="titulo-chart">Por status</div><div id="chartStatus"></div></div>
+        <div class="chart-box"><div class="titulo-chart">Por urgência</div><div id="chartUrgencia"></div></div>
+      </div>
+      <div class="chart-box barras"><div class="titulo-chart">Resolvidos por técnico</div><div id="chartTecnicoResolvidos"></div></div>
+    </div>
+
+    <div class="barra-acoes">
+      <div class="filtros">
+        <input type="text" id="filtroUnidade" placeholder="Unidade…">
+        <input type="text" id="filtroCategoria" placeholder="Categoria…">
+        <select id="filtroStatus">
+          <option value="">Todos os status</option>
+          <option value="Aberto">Aberto</option>
+          <option value="Em andamento">Em andamento</option>
+          <option value="Comunicado">Comunicado</option>
+          <option value="Resolvido">Resolvido</option>
+        </select>
+        <select id="filtroUrgencia">
+          <option value="">Toda urgência</option>
+          <option value="Alta (impactando funcionamento da escola)">Alta</option>
+          <option value="Média">Média</option>
+          <option value="Baixa (Pode aguardar)">Baixa</option>
+        </select>
+        <select id="filtroTecnico">
+          <option value="">Todos os técnicos</option>
+        </select>
+        <select id="filtroInventario">
+          <option value="">Todos os inventários</option>
+          <option value="Concluído">✅ Concluído</option>
+          <option value="Em Andamento">⏳ Em Andamento</option>
+          <option value="Não Realizado">❌ Não Realizado</option>
+        </select>
+        <input type="date" id="filtroDataDe" title="De">
+        <input type="date" id="filtroDataAte" title="Até">
+        <button onclick="limparFiltros()" style="padding:7px 14px; background:var(--surface-2); border:1px solid var(--border); color:var(--muted); border-radius:7px; cursor:pointer; font-size:12px;">Limpar filtros</button>
+      </div>
+      <div class="acoes-lote">
+        <button onclick="selecionarTodos()">Selecionar todos</button>
+        <button onclick="desmarcarTodos()">Desmarcar</button>
+        <button class="primario" onclick="abrirModalLote()">Alterar status</button>
+        <button class="danger" onclick="removerSelecionados()">🗑️ Remover selecionados</button>
+        <button class="icon-btn" onclick="recarregarDados()" title="Atualizar dados">🔄</button>
+      </div>
+    </div>
+
+    <div class="fila-header">
+      <span class="titulo-fila">Chamados <span id="contadorFila" class="contador-fila"></span></span>
+      <span style="color:var(--muted-2); font-size:11px;">clique na linha para detalhes</span>
+    </div>
+    <div class="fila-container">
+      <div class="tabela-header">
+        <span class="col-check">#</span>
+        <span class="col-urgencia"></span>
+        <span class="col-unidade">Unidade</span>
+        <span class="col-categoria">Categoria</span>
+        <span class="col-descricao">Descrição</span>
+        <span class="col-tecnico">Técnico</span>
+        <span class="col-inventario">Inventário</span>
+        <span class="col-status">Status</span>
+        <span class="col-tempo">Aberto</span>
+      </div>
+      <div id="filaChamados"></div>
+    </div>
+  </div>
+
+  <div class="toast-wrap" id="toastWrap"></div>
+
+  <!-- MODAL INDIVIDUAL -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+      <div class="modal-topo">
+        <h3>
+          <span id="modalProtocolo"></span>
+          <button class="btn-copiar" id="btnCopiarChamado" onclick="copiarChamado()" title="Copiar chamado">
+            <svg viewBox="0 0 24 24" stroke="currentColor">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+          </button>
+        </h3>
+        <button class="fechar-x" onclick="fecharModal()">✕</button>
+      </div>
+      <div class="info-grid">
+        <div class="info-item"><div class="k">Unidade</div><div class="v" id="modalUnidade"></div></div>
+        <div class="info-item"><div class="k">Solicitante</div><div class="v" id="modalSolicitante"></div></div>
+        <div class="info-item"><div class="k">Cargo</div><div class="v" id="modalCargo"></div></div>
+        <div class="info-item"><div class="k">Tipo</div><div class="v" id="modalTipo"></div></div>
+        <div class="info-item"><div class="k">Urgência</div><div class="v" id="modalUrgencia"></div></div>
+        <div class="info-item"><div class="k">Técnico do setor</div><div class="v" id="modalTecnicoSetor"></div></div>
+        <div class="info-item"><div class="k">Inventário</div><div class="v" id="modalInventario"></div></div>
+        <div class="info-item"><div class="k">Aberto em</div><div class="v" id="modalAbertoEm"></div></div>
+        <div class="info-item full"><div class="k">Descrição</div><div class="v" id="modalDescricao"></div></div>
+      </div>
+
+      <label class="campo" for="modalStatus">Status</label>
+      <select id="modalStatus">
+        <option value="Aberto">Aberto</option>
+        <option value="Em andamento">Em andamento</option>
+        <option value="Comunicado">Comunicado</option>
+        <option value="Resolvido">Resolvido</option>
+      </select>
+
+      <label class="campo" for="modalTecnicoResolucao">Técnico que resolveu</label>
+      <select id="modalTecnicoResolucao" onchange="alternarTecnicoOutro()">
+        <option value="">— selecionar —</option>
+      </select>
+      <input type="text" id="modalTecnicoOutro" placeholder="Digite o nome do técnico" style="display:none; margin-top:8px;">
+
+      <label class="campo">Histórico</label>
+      <div class="historico" id="modalHistorico"></div>
+
+      <label class="campo" for="modalResposta">Responder / atualizar</label>
+      <textarea id="modalResposta" placeholder="Registre aqui uma atualização ou resposta…"></textarea>
+
+      <div class="modal-actions">
+        <button class="btn-secundario" onclick="fecharModal()">Cancelar</button>
+        <button class="btn-primario" onclick="salvarModal()">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL LOTE -->
+  <div class="modal-overlay" id="modalLoteOverlay">
+    <div class="modal">
+      <div class="modal-topo">
+        <h3>Alterar status em lote</h3>
+        <button class="fechar-x" onclick="fecharModalLote()">✕</button>
+      </div>
+      <p style="font-size:13.5px; margin:10px 0; color:var(--muted);">Selecionados: <b style="color:var(--text); font-family:var(--mono);" id="loteContagem">0</b> chamados</p>
+      <label class="campo" for="loteNovoStatus">Novo status</label>
+      <select id="loteNovoStatus">
+        <option value="Aberto">Aberto</option>
+        <option value="Em andamento">Em andamento</option>
+        <option value="Comunicado">Comunicado</option>
+        <option value="Resolvido">Resolvido</option>
+      </select>
+      <label class="campo" for="loteTecnicoResolucao">Técnico que resolveu (opcional)</label>
+      <select id="loteTecnicoResolucao">
+        <option value="">— não informar —</option>
+      </select>
+      <input type="text" id="loteTecnicoOutro" placeholder="Digite o nome do técnico" style="display:none; margin-top:8px;">
+      <label class="campo" for="loteResposta">Resposta / observação (opcional)</label>
+      <textarea id="loteResposta" placeholder="Registre uma observação para todos os chamados selecionados…"></textarea>
+      <div class="modal-actions">
+        <button class="btn-secundario" onclick="fecharModalLote()">Cancelar</button>
+        <button class="btn-primario" onclick="salvarLote()">Alterar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    google.charts.load('current', { packages: ['corechart'] });
+
+    // ===== CORES DO PAINEL =====
+    const COR = {
+      amber:'#ff9142', blue:'#5b9dff', mint:'#34d399', red:'#ff5470', amarelo:'#f1c40f',
+      muted:'#7c8494', mutedSoft:'#565e6d', grid:'#1a1f28'
+    };
+
+    // ===== CONTROLE DE INICIALIZAÇÃO =====
+    let dashboardInicializado = false;
+    let renderizando = false;
+    let idsSelecionados = new Set();
+
+    let todosChamados = [];
+    let chamadoAtual = null;
+    let alertaConhecido = new Set();
+    let somAtivo = localStorage_seguro_get('somAtivo') === 'true';
+
+    let memoriaFallback = {};
+    function localStorage_seguro_get(k) { try { return localStorage.getItem(k); } catch(e) { return memoriaFallback[k]; } }
+    function localStorage_seguro_set(k, v) { try { localStorage.setItem(k, v); } catch(e) { memoriaFallback[k] = v; } }
+
+    function atualizarRelogio() {
+      document.getElementById('relogio').innerText = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'medium' });
+    }
+    setInterval(atualizarRelogio, 1000);
+    atualizarRelogio();
+
+    function toast(msg, tipo) {
+      const wrap = document.getElementById('toastWrap');
+      const el = document.createElement('div');
+      el.className = 'toast' + (tipo === 'erro' ? ' erro' : '');
+      el.innerText = msg;
+      wrap.appendChild(el);
+      setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity 0.3s'; setTimeout(() => el.remove(), 300); }, 3200);
+    }
+
+    function alternarSom() {
+      somAtivo = !somAtivo;
+      localStorage_seguro_set('somAtivo', somAtivo);
+      document.getElementById('btnSom').classList.toggle('ativo', somAtivo);
+      document.getElementById('btnSom').innerText = somAtivo ? '🔔' : '🔕';
+    }
+
+    function tocarAlerta() {
+      if (!somAtivo) return;
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.frequency.value = 880; osc.type = 'sine';
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.start(); osc.stop(ctx.currentTime + 0.25);
+      } catch (e) {}
+    }
+
+    function animarNumero(id, valorFinal) {
+      const el = document.getElementById(id);
+      const valorAtual = parseInt(el.innerText, 10) || 0;
+      if (valorAtual === valorFinal) return;
+      const passos = 14;
+      const incremento = (valorFinal - valorAtual) / passos;
+      let i = 0;
+      clearInterval(el._anim);
+      el._anim = setInterval(() => {
+        i++;
+        const v = Math.round(valorAtual + incremento * i);
+        el.innerText = i >= passos ? valorFinal : v;
+        if (i >= passos) clearInterval(el._anim);
+      }, 18);
+    }
+
+    function recarregarDados() {
+      idsSelecionados = new Set();
+      document.querySelectorAll('.selecionar-chamado:checked').forEach(cb => {
+        idsSelecionados.add(cb.dataset.id);
+      });
+      carregarDados();
+    }
+
+    function limparFiltros() {
+      document.getElementById('filtroUnidade').value = '';
+      document.getElementById('filtroCategoria').value = '';
+      document.getElementById('filtroStatus').value = '';
+      document.getElementById('filtroUrgencia').value = '';
+      document.getElementById('filtroTecnico').value = '';
+      document.getElementById('filtroInventario').value = '';
+      document.getElementById('filtroDataDe').value = '';
+      document.getElementById('filtroDataAte').value = '';
+      renderizarFila(aplicarFiltros(todosChamados));
+    }
+
+    function copiarChamado() {
+      if (!chamadoAtual) { toast('Nenhum chamado selecionado.', 'erro'); return; }
+      const d = chamadoAtual;
+      const texto =
+        `PROTOCOLO: ${d.ID}\n` +
+        `UNIDADE: ${d.Unidade || '—'}\n` +
+        `SOLICITANTE: ${d.Solicitante || '—'}\n` +
+        `CARGO: ${d['Função'] || '—'}\n` +
+        `TIPO: ${d.Tipo || '—'}\n` +
+        `URGÊNCIA: ${d['Urgência'] || '—'}\n` +
+        `STATUS: ${d.Status || '—'}\n` +
+        `TÉCNICO DO SETOR: ${d.TecnicoSetor || '—'}\n` +
+        `INVENTÁRIO: ${d.Inventario || '—'}\n` +
+        `ABERTO EM: ${new Date(d.Timestamp).toLocaleString('pt-BR')}\n` +
+        `DESCRIÇÃO:\n${d.Descrição || '—'}`;
+      navigator.clipboard.writeText(texto).then(() => {
+        const btn = document.getElementById('btnCopiarChamado');
+        btn.classList.add('copiado');
+        toast('Chamado copiado para a área de transferência.');
+        setTimeout(() => btn.classList.remove('copiado'), 2000);
+      }).catch(() => {
+        const textarea = document.createElement('textarea');
+        textarea.value = texto;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        toast('Chamado copiado (fallback).');
+      });
+    }
+
+    // ===== LISTA DE TÉCNICOS (para o gráfico) =====
+    const TECNICOS_PRINCIPAIS = ['CAROL', 'CHARLES', 'FABIO', 'GUILHERME', 'HEBERT', 'JOSEMIR', 'JOÃO', 'VALDEIR'];
+    const TECNICOS_ADICIONAIS = ['FERNANDA', 'JESSICA', 'MATHEUS', 'PABLO'];
+    const TODOS_TECNICOS = [...TECNICOS_PRINCIPAIS, ...TECNICOS_ADICIONAIS];
+
+    // ===== CARREGAR DADOS =====
+    function carregarDados() {
+      if (carregarDados.emExecucao) {
+        console.warn('Carregamento já em andamento. Ignorando.');
+        return;
+      }
+      carregarDados.emExecucao = true;
+      document.getElementById('statusAtualizacao').innerText = 'atualizando…';
+
+      google.script.run
+        .withSuccessHandler(dados => {
+          if (!dados) dados = [];
+          const mapaConteudo = {};
+          dados.forEach(item => {
+            const chave = `${item.Unidade || ''}|${item.Descrição || ''}|${item.Solicitante || ''}|${item.Timestamp || ''}`;
+            if (!mapaConteudo[chave]) mapaConteudo[chave] = item;
+          });
+          const dadosUnicos = Object.values(mapaConteudo);
+          console.log(`Recebidos ${dados.length} chamados, únicos: ${dadosUnicos.length}`);
+          todosChamados = dadosUnicos;
+          window.todosChamados = todosChamados;
+          renderizar(dadosUnicos);
+          montarTicker(dadosUnicos);
+          carregarDados.emExecucao = false;
+          document.getElementById('statusAtualizacao').innerText = 'atualizado agora';
+          document.getElementById('pulsoDot').style.background = '#34d399';
+        })
+        .withFailureHandler(err => {
+          console.error(err);
+          carregarDados.emExecucao = false;
+          document.getElementById('statusAtualizacao').innerText = 'falha na sincronização';
+          document.getElementById('pulsoDot').style.background = '#ff5470';
+          toast('Erro ao carregar dados: ' + err.message, 'erro');
+        })
+        .getChamadosMatriz();
+    }
+    carregarDados.emExecucao = false;
+
+    function renderizar(dados) {
+      const container = document.getElementById('filaChamados');
+      if (!container) {
+        console.warn('Container #filaChamados não encontrado.');
+        return;
+      }
+      animarNumero('kpiAbertos', dados.filter(d => d.Status === 'Aberto').length);
+      animarNumero('kpiAndamento', dados.filter(d => d.Status === 'Em andamento').length);
+      animarNumero('kpiComunicado', dados.filter(d => d.Status === 'Comunicado').length);
+      animarNumero('kpiResolvidos', dados.filter(d => d.Status === 'Resolvido').length);
+      animarNumero('kpiAlta', dados.filter(d => d['Urgência'] && d['Urgência'].startsWith('Alta') && d.Status !== 'Resolvido').length);
+      desenharGraficos(dados);
+      renderizarFila(aplicarFiltros(dados));
+    }
+
+function desenharGraficos(dados) {
+  const optsBase = {
+    backgroundColor: 'transparent',
+    legend: { textStyle: { color: COR.muted, fontSize: 11, fontName: 'Inter' } },
+    titleTextStyle: { color: '#e7ebf1' },
+    chartArea: { width: '90%', height: '74%' },
+    height: 160,
+    fontName: 'Inter'
+  };
+
+  // ===== 1. GRÁFICO DE STATUS (Pizza) =====
+  const statusCount = {};
+  dados.forEach(d => { if (d.Status) statusCount[d.Status] = (statusCount[d.Status] || 0) + 1; });
+  const statusCores = { 'Aberto': '#f1c40f', 'Em andamento': COR.blue, 'Comunicado': COR.amber, 'Resolvido': COR.mint };
+  const dadosStatus = Object.entries(statusCount);
+  const coresStatus = dadosStatus.map(([k]) => statusCores[k] || COR.mutedSoft);
+  new google.visualization.PieChart(document.getElementById('chartStatus'))
+    .draw(google.visualization.arrayToDataTable([['Status', 'Qtd'], ...dadosStatus]), {
+      ...optsBase, colors: coresStatus, pieHole: 0.55,
+      pieSliceTextStyle: { color: '#0a0c10', fontSize: 11, bold: true }
+    });
+
+  // ===== 2. GRÁFICO DE URGÊNCIA (Pizza) =====
+  const urgenciaCount = {};
+  dados.forEach(d => { if (d['Urgência']) {
+    const urg = d['Urgência'].split(' ')[0];
+    urgenciaCount[urg] = (urgenciaCount[urg] || 0) + 1;
+  }});
+  const urgenciaCores = { 'Alta': COR.red, 'Média': '#f1c40f', 'Baixa': COR.mint };
+  const dadosUrgencia = Object.entries(urgenciaCount);
+  const coresUrgencia = dadosUrgencia.map(([k]) => urgenciaCores[k] || COR.mutedSoft);
+  new google.visualization.PieChart(document.getElementById('chartUrgencia'))
+    .draw(google.visualization.arrayToDataTable([['Urgência', 'Qtd'], ...dadosUrgencia]), {
+      ...optsBase, colors: coresUrgencia, pieHole: 0.55,
+      pieSliceTextStyle: { color: '#0a0c10', fontSize: 11, bold: true }
+    });
+
+  // ===== 3. GRÁFICO DE BARRAS: RESOLVIDOS POR TÉCNICO (APENAS PRINCIPAIS) =====
+  // Lista de técnicos que serão exibidos no gráfico (exclui Pablo, Matheus, Fernanda, Jessica)
+  const TECNICOS_PRINCIPAIS = ['CAROL', 'CHARLES', 'FABIO', 'GUILHERME', 'HEBERT', 'JOSEMIR', 'JOÃO', 'VALDEIR'];
+  
+  const resolvidosPorTecnico = {};
+  // Inicializa todos os técnicos principais com zero
+  TECNICOS_PRINCIPAIS.forEach(tec => { resolvidosPorTecnico[tec] = 0; });
+
+  dados.forEach(d => {
+    if (d.Status === 'Resolvido') {
+      // Usa Técnico Resolução se preenchido, senão usa TecnicoSetor
+      let tecnico = (d['Técnico Resolução'] && d['Técnico Resolução'].trim() !== '')
+        ? d['Técnico Resolução'].trim().toUpperCase()
+        : (d.TecnicoSetor ? d.TecnicoSetor.trim().toUpperCase() : null);
+      // Só contabiliza se o técnico estiver na lista principal
+      if (tecnico && TECNICOS_PRINCIPAIS.includes(tecnico)) {
+        resolvidosPorTecnico[tecnico] = (resolvidosPorTecnico[tecnico] || 0) + 1;
+      }
+    }
+  });
+
+  // Ordena por quantidade decrescente
+  const dadosTecnicoResolvidos = Object.entries(resolvidosPorTecnico)
+    .sort((a, b) => b[1] - a[1]);
+
+  // Se não houver dados, mostra mensagem
+  if (dadosTecnicoResolvidos.length === 0) {
+    document.getElementById('chartTecnicoResolvidos').innerHTML = '<div style="color: var(--muted); text-align: center; padding: 40px 0;">Nenhum chamado resolvido ainda.</div>';
+    return;
+  }
+
+  // Desenha o gráfico de colunas com configuração para mostrar os nomes
+  new google.visualization.ColumnChart(document.getElementById('chartTecnicoResolvidos'))
+    .draw(google.visualization.arrayToDataTable([['Técnico', 'Chamados resolvidos'], ...dadosTecnicoResolvidos]), {
+      ...optsBase,
+      height: 220,
+      legend: { position: 'none' },
+      colors: [COR.mint],
+      chartArea: {
+        width: '85%',
+        height: '75%',
+        left: 50,
+        top: 20
+      },
+      hAxis: {
+        textStyle: {
+          color: COR.muted,
+          fontSize: 11,
+          bold: false
+        },
+        gridlines: { color: 'transparent' },
+        showTextEvery: 1,           // força a exibição de todos os rótulos
+        slantedText: true,
+        slantedTextAngle: 45,       // inclina os nomes para evitar sobreposição
+        minTextSpacing: 2
+      },
+      vAxis: {
+        textStyle: {
+          color: COR.mutedSoft,
+          fontSize: 10
+        },
+        gridlines: { color: COR.grid },
+        minValue: 0,
+        format: '0'
+      },
+      bar: {
+        groupWidth: '60%'
+      },
+      annotations: {
+        alwaysOutside: true
+      }
+    });
+}
+
+    // ===== FILTROS =====
+    function aplicarFiltros(dados) {
+      const unidade = document.getElementById('filtroUnidade').value.toLowerCase();
+      const categoria = document.getElementById('filtroCategoria').value.toLowerCase();
+      const status = document.getElementById('filtroStatus').value;
+      const urgencia = document.getElementById('filtroUrgencia').value;
+      const tecnico = document.getElementById('filtroTecnico').value;
+      const inventario = document.getElementById('filtroInventario').value;
+      const dataDe = document.getElementById('filtroDataDe').value;
+      const dataAte = document.getElementById('filtroDataAte').value;
+
+      return dados.filter(d => {
+        const dataChamado = new Date(d.Timestamp);
+        const invStatus = d.Inventario || '';
+        return (!unidade || (d.Unidade && d.Unidade.toLowerCase().includes(unidade))) &&
+          (!categoria || (d.Tipo && d.Tipo.toLowerCase().includes(categoria))) &&
+          (!status || d.Status === status) &&
+          (!urgencia || d['Urgência'] === urgencia) &&
+          (!tecnico || d.TecnicoSetor === tecnico) &&
+          (!inventario || invStatus === inventario) &&
+          (!dataDe || dataChamado >= new Date(dataDe + 'T00:00:00')) &&
+          (!dataAte || dataChamado <= new Date(dataAte + 'T23:59:59'));
+      });
+    }
+
+    // ===== BADGES =====
+    function badgeStatus(s) {
+      if (!s) return 'status-resolvido';
+      const st = String(s).trim().toUpperCase();
+      if (st === 'ABERTO') return 'status-aberto';
+      if (st === 'EM ANDAMENTO') return 'status-andamento';
+      if (st === 'COMUNICADO') return 'status-comunicado';
+      if (st === 'RESOLVIDO') return 'status-resolvido';
+      return 'status-resolvido';
+    }
+
+    function corTecnico(tecnico) {
+      if (!tecnico) return '';
+      const nome = tecnico.toUpperCase().trim();
+      if (nome.includes('JOSEMIR')) return 'tecnico-JOSEMIR';
+      if (nome.includes('VALDEIR')) return 'tecnico-VALDEIR';
+      if (nome.includes('GUILHERME')) return 'tecnico-GUILHERME';
+      if (nome.includes('JOÃO') || nome.includes('JOAO')) return 'tecnico-JOÃO';
+      if (nome.includes('CAROL')) return 'tecnico-CAROL';
+      if (nome.includes('CHARLES')) return 'tecnico-CHARLES';
+      if (nome.includes('HEBERT')) return 'tecnico-HEBERT';
+      if (nome.includes('FABIO')) return 'tecnico-FABIO';
+      return '';
+    }
+
+    function badgeInventario(status) {
+      if (status === 'Concluído') return 'inventario-concluido';
+      if (status === 'Em Andamento') return 'inventario-andamento';
+      if (status === 'Não Realizado') return 'inventario-nao-realizado';
+      return 'inventario-nao-informado';
+    }
+
+    function tempoDecorrido(timestamp) {
+      if (!timestamp) return { texto: '—', critico: false };
+      const ms = Date.now() - new Date(timestamp).getTime();
+      const horas = ms / 3600000;
+      if (horas < 1) return { texto: Math.round(ms / 60000) + ' min', critico: false };
+      if (horas < 24) return { texto: Math.round(horas) + 'h', critico: horas > 4 };
+      return { texto: Math.round(horas / 24) + 'd', critico: true };
+    }
+
+    function truncar(texto, max) {
+      texto = String(texto || '');
+      return texto.length > max ? texto.slice(0, max - 1) + '…' : texto;
+    }
+
+    // ===== RENDERIZAÇÃO DA TABELA =====
+    function renderizarFila(dados) {
+      const container = document.getElementById('filaChamados');
+      if (!container) { console.warn('Container #filaChamados não encontrado.'); return; }
+      if (renderizando) { console.warn('Renderização já em andamento. Ignorando.'); return; }
+      renderizando = true;
+
+      container.innerHTML = '';
+      document.getElementById('contadorFila').innerText = `(${dados.length})`;
+
+      if (dados.length === 0) {
+        container.innerHTML = '<div class="vazio-tabela"><span class="icone">📭</span>Nenhum chamado encontrado com esses filtros.</div>';
+        renderizando = false;
+        return;
+      }
+
+      const ordenados = [...dados].sort((a, b) => new Date(b.Timestamp) - new Date(a.Timestamp));
+
+      const html = ordenados.map((d, index) => {
+        const t = tempoDecorrido(d.Timestamp);
+        const mostrarTempo = d.Status !== 'Resolvido';
+        const classeUrgencia = d['Urgência'] && d['Urgência'].startsWith('Alta') ? 'alta' : d['Urgência'] && d['Urgência'].startsWith('Média') ? 'media' : 'baixa';
+        const tecnicoClasse = corTecnico(d.TecnicoSetor);
+        const invClasse = badgeInventario(d.Inventario);
+        const invLabel = d.Inventario || '—';
+        const statusClasse = badgeStatus(d.Status);
+        const isResolvido = d.Status === 'Resolvido';
+
+        return `
+          <div class="linha-chamado ${isResolvido ? 'linha-resolvido' : ''}" data-id="${d.ID}" data-index="${index}">
+            <span class="col-check"><input type="checkbox" class="selecionar-chamado" data-id="${d.ID}"></span>
+            <span class="col-urgencia"><span class="faixa-urgencia ${classeUrgencia}"></span></span>
+            <span class="col-unidade" title="${d.Unidade}">${truncar(d.Unidade, 30)}</span>
+            <span class="col-categoria"><span class="categoria">${truncar(d.Tipo, 18)}</span></span>
+            <span class="col-descricao" title="${d.Descrição || ''}">${truncar(d.Descrição || '', 50)}</span>
+            <span class="col-tecnico"><span class="tecnico-badge ${tecnicoClasse}">${d.TecnicoSetor || '—'}</span></span>
+            <span class="col-inventario"><span class="inventario-badge ${invClasse}">${invLabel}</span></span>
+            <span class="col-status"><span class="status-badge ${statusClasse}">${d.Status}</span></span>
+            <span class="col-tempo ${t.critico && mostrarTempo ? 'critico' : ''}">${mostrarTempo ? t.texto : '—'}</span>
+          </div>`;
+      }).join('');
+
+      container.innerHTML = html;
+
+      container.querySelectorAll('.selecionar-chamado').forEach(cb => {
+        if (idsSelecionados.has(cb.dataset.id)) cb.checked = true;
+      });
+
+      container.querySelectorAll('.linha-chamado').forEach(el => {
+        const checkbox = el.querySelector('.selecionar-chamado');
+        el.addEventListener('click', (e) => {
+          if (e.target.tagName !== 'INPUT') abrirModal(el.dataset.id);
+        });
+        if (checkbox) {
+          checkbox.addEventListener('click', (e) => {
+            e.stopPropagation();
+            setTimeout(atualizarContagemSelecionados, 50);
+          });
+        }
+      });
+
+      atualizarContagemSelecionados();
+      renderizando = false;
+    }
+
+    // ===== SELEÇÃO E REMOÇÃO =====
+    function selecionarTodos() {
+      document.querySelectorAll('.selecionar-chamado').forEach(cb => {
+        cb.checked = true;
+        idsSelecionados.add(cb.dataset.id);
+      });
+      atualizarContagemSelecionados();
+    }
+    function desmarcarTodos() {
+      document.querySelectorAll('.selecionar-chamado').forEach(cb => {
+        cb.checked = false;
+        idsSelecionados.delete(cb.dataset.id);
+      });
+      atualizarContagemSelecionados();
+    }
+    function atualizarContagemSelecionados() {
+      const checkboxes = document.querySelectorAll('.selecionar-chamado:checked');
+      idsSelecionados = new Set(Array.from(checkboxes).map(cb => cb.dataset.id));
+      const loteContagem = document.getElementById('loteContagem');
+      if (loteContagem) loteContagem.innerText = checkboxes.length;
+    }
+    function obterSelecionados() {
+      return Array.from(document.querySelectorAll('.selecionar-chamado:checked')).map(cb => cb.dataset.id);
+    }
+
+    function removerSelecionados() {
+      const ids = obterSelecionados();
+      if (ids.length === 0) { toast('Selecione pelo menos um chamado para remover.', 'erro'); return; }
+      if (!confirm(`Tem certeza que deseja remover ${ids.length} chamado(s)? Esta ação NÃO pode ser desfeita.`)) return;
+      if (!confirm(`Última chance: remover permanentemente ${ids.length} chamado(s)?`)) return;
+      document.body.style.cursor = 'wait';
+      google.script.run
+        .withSuccessHandler(result => {
+          document.body.style.cursor = 'default';
+          if (result.sucesso) {
+            toast(result.mensagem || `${ids.length} chamado(s) removido(s).`);
+            idsSelecionados = new Set();
+            carregarDados();
+          } else {
+            toast('Erro: ' + (result.mensagem || 'Falha ao remover.'), 'erro');
+          }
+        })
+        .withFailureHandler(err => {
+          document.body.style.cursor = 'default';
+          toast('Erro: ' + err.message, 'erro');
+        })
+        .removerChamadosPorIds(ids);
+    }
+
+    // ===== MODAL LOTE =====
+    function abrirModalLote() {
+      const ids = obterSelecionados();
+      if (ids.length === 0) { toast('Selecione pelo menos um chamado.', 'erro'); return; }
+      document.getElementById('loteContagem').innerText = ids.length;
+      document.getElementById('loteNovoStatus').value = 'Resolvido';
+      document.getElementById('loteResposta').value = '';
+      document.getElementById('loteTecnicoResolucao').value = '';
+      document.getElementById('loteTecnicoOutro').style.display = 'none';
+      document.getElementById('loteTecnicoOutro').value = '';
+      document.getElementById('modalLoteOverlay').style.display = 'flex';
+    }
+    function fecharModalLote() { document.getElementById('modalLoteOverlay').style.display = 'none'; }
+    function salvarLote() {
+      const ids = obterSelecionados();
+      if (ids.length === 0) { toast('Nenhum chamado selecionado.', 'erro'); return; }
+      const novoStatus = document.getElementById('loteNovoStatus').value;
+      let tecnico = document.getElementById('loteTecnicoResolucao').value;
+      if (tecnico === 'Outro') tecnico = document.getElementById('loteTecnicoOutro').value.trim();
+      const resposta = document.getElementById('loteResposta').value.trim();
+      const responsavel = prompt('Seu nome (responsável pela alteração):');
+      if (!responsavel) return;
+      const payload = { ids, novoStatus, tecnicoResolucao: tecnico, resposta, responsavel };
+      google.script.run
+        .withSuccessHandler(() => { fecharModalLote(); toast(`${ids.length} chamado(s) atualizado(s).`); carregarDados(); })
+        .withFailureHandler(err => toast('Erro: ' + err.message, 'erro'))
+        .atualizarChamadosEmLote(payload);
+    }
+
+    // ===== TICKER =====
+    function montarTicker(dados) {
+      const recentes = [...dados].sort((a, b) => new Date(b['Última Atualização']) - new Date(a['Última Atualização'])).slice(0, 12);
+      const track = document.getElementById('tickerTrack');
+      track.innerHTML = recentes.map(d => `<span><b>${d.ID}</b> · ${d.Unidade} · ${d.Status}</span>`).join('');
+    }
+
+    // ===== MODAL INDIVIDUAL =====
+    function abrirModal(protocolo) {
+      chamadoAtual = todosChamados.find(c => c.ID === protocolo);
+      if (!chamadoAtual) return;
+
+      document.getElementById('modalProtocolo').innerText = chamadoAtual.ID;
+      document.getElementById('modalUnidade').innerText = chamadoAtual.Unidade;
+      document.getElementById('modalSolicitante').innerText = chamadoAtual.Solicitante;
+      document.getElementById('modalCargo').innerText = chamadoAtual['Função'] || '—';
+      document.getElementById('modalTipo').innerText = chamadoAtual.Tipo;
+      document.getElementById('modalUrgencia').innerText = chamadoAtual['Urgência'];
+      document.getElementById('modalTecnicoSetor').innerText = chamadoAtual.TecnicoSetor || '— não mapeado —';
+      document.getElementById('modalInventario').innerText = chamadoAtual.Inventario || 'Não informado';
+      document.getElementById('modalAbertoEm').innerText = new Date(chamadoAtual.Timestamp).toLocaleString('pt-BR');
+      document.getElementById('modalDescricao').innerText = chamadoAtual.Descrição;
+      document.getElementById('modalStatus').value = chamadoAtual.Status;
+      document.getElementById('modalHistorico').innerText = chamadoAtual.Histórico || 'Sem histórico ainda.';
+      document.getElementById('modalResposta').value = '';
+
+      const selectTecnico = document.getElementById('modalTecnicoResolucao');
+      const tecnicosAdicionais = ['FERNANDA', 'JESSICA', 'MATHEUS', 'PABLO'];
+      const opcoesAtuais = Array.from(selectTecnico.options).map(o => o.value);
+      tecnicosAdicionais.forEach(nome => {
+        if (!opcoesAtuais.includes(nome)) {
+          const opt = document.createElement('option');
+          opt.value = nome;
+          opt.text = nome;
+          selectTecnico.appendChild(opt);
+        }
+      });
+
+      const tecnicoSetor = chamadoAtual.TecnicoSetor || '';
+      const opcoes = selectTecnico.options;
+      for (let i = 0; i < opcoes.length; i++) {
+        const opt = opcoes[i];
+        opt.text = opt.text.replace(/^★\s*/, '');
+        if (opt.value === tecnicoSetor && tecnicoSetor) opt.text = `★ ${opt.text}`;
+      }
+
+      const opcaoSetor = [...opcoes].find(o => o.value === tecnicoSetor);
+      if (opcaoSetor) {
+        selectTecnico.value = tecnicoSetor;
+        document.getElementById('modalTecnicoOutro').style.display = 'none';
+        document.getElementById('modalTecnicoOutro').value = '';
+      } else {
+        const tecnicoAtual = chamadoAtual['Técnico Resolução'] || '';
+        const existeNaLista = [...opcoes].some(o => o.value === tecnicoAtual);
+        if (tecnicoAtual && !existeNaLista) {
+          selectTecnico.value = 'Outro';
+          document.getElementById('modalTecnicoOutro').style.display = 'block';
+          document.getElementById('modalTecnicoOutro').value = tecnicoAtual;
+        } else {
+          selectTecnico.value = tecnicoAtual || '';
+          document.getElementById('modalTecnicoOutro').style.display = 'none';
+          document.getElementById('modalTecnicoOutro').value = '';
+        }
+      }
+
+      document.getElementById('modalOverlay').style.display = 'flex';
+    }
+
+    function alternarTecnicoOutro() {
+      const valor = document.getElementById('modalTecnicoResolucao').value;
+      document.getElementById('modalTecnicoOutro').style.display = valor === 'Outro' ? 'block' : 'none';
+    }
+    function fecharModal() { document.getElementById('modalOverlay').style.display = 'none'; chamadoAtual = null; }
+    function salvarModal() {
+      const novoStatus = document.getElementById('modalStatus').value;
+      const resposta = document.getElementById('modalResposta').value.trim();
+      let tecnicoResolucao = document.getElementById('modalTecnicoResolucao').value;
+      if (tecnicoResolucao === 'Outro') tecnicoResolucao = document.getElementById('modalTecnicoOutro').value.trim();
+      const responsavel = prompt('Seu nome (responsável pela alteração):');
+      if (!responsavel) return;
+      const tarefas = [];
+      if (novoStatus !== chamadoAtual.Status || tecnicoResolucao !== (chamadoAtual['Técnico Resolução'] || '')) {
+        tarefas.push(new Promise((res, rej) => {
+          google.script.run.withSuccessHandler(res).withFailureHandler(rej)
+            .atualizarStatusChamado(chamadoAtual.ID, novoStatus, responsavel, tecnicoResolucao);
+        }));
+      }
+      if (resposta) {
+        tarefas.push(new Promise((res, rej) => {
+          google.script.run.withSuccessHandler(res).withFailureHandler(rej)
+            .responderChamado(chamadoAtual.ID, resposta, responsavel);
+        }));
+      }
+      if (tarefas.length === 0) { fecharModal(); return; }
+      Promise.all(tarefas).then(() => { fecharModal(); toast('Chamado atualizado.'); carregarDados(); })
+        .catch(err => toast('Erro: ' + err.message, 'erro'));
+    }
+
+    // ===== CARREGAR TÉCNICOS =====
+    function carregarTecnicos() {
+      google.script.run
+        .withSuccessHandler(lista => {
+          if (!lista) lista = [];
+          const tecnicosExtras = ['FERNANDA', 'JESSICA', 'MATHEUS', 'PABLO'];
+          const todosTecnicos = [...lista, ...tecnicosExtras];
+          const selectFiltro = document.getElementById('filtroTecnico');
+          const selectModal = document.getElementById('modalTecnicoResolucao');
+          const selectLote = document.getElementById('loteTecnicoResolucao');
+
+          selectFiltro.innerHTML = '<option value="">Todos os técnicos</option>';
+          selectModal.innerHTML = '<option value="">— selecionar —</option>';
+          selectLote.innerHTML = '<option value="">— não informar —</option>';
+
+          todosTecnicos.forEach(nome => {
+            selectFiltro.innerHTML += `<option value="${nome}">${nome}</option>`;
+            selectModal.innerHTML += `<option value="${nome}" data-tecnico="${nome}">${nome}</option>`;
+            selectLote.innerHTML += `<option value="${nome}">${nome}</option>`;
+          });
+          selectModal.innerHTML += `<option value="Outro" data-tecnico="outro">Outro (digitar)</option>`;
+          selectLote.innerHTML += `<option value="Outro">Outro (digitar)</option>`;
+        })
+        .withFailureHandler(err => console.error('Falha ao carregar técnicos:', err))
+        .getTecnicos();
+    }
+
+    // ===== ALERTA ALTA PRIORIDADE =====
+    function verificarAltaPrioridade() {
+      google.script.run
+        .withSuccessHandler(lista => {
+          if (!lista) lista = [];
+          const alerta = document.getElementById('alertaAlta');
+          const container = document.getElementById('listaAlerta');
+          const idsAtuais = new Set(lista.map(c => c.ID));
+          const temNovo = [...idsAtuais].some(id => !alertaConhecido.has(id));
+          if (temNovo && alertaConhecido.size > 0) tocarAlerta();
+          alertaConhecido = idsAtuais;
+          if (lista.length > 0) {
+            alerta.style.display = 'block';
+            alerta.classList.add('pisca');
+            container.innerHTML = '';
+            lista.forEach(c => {
+              const t = tempoDecorrido(c.Timestamp);
+              const chip = document.createElement('div');
+              chip.className = 'chip-alerta';
+              chip.innerHTML = `${c.Unidade} · ${c.ID}<span class="tempo">há ${t.texto}</span>`;
+              chip.onclick = () => abrirModal(c.ID);
+              container.appendChild(chip);
+            });
+          } else {
+            alerta.style.display = 'none';
+            alerta.classList.remove('pisca');
+          }
+        })
+        .getChamadosAltaPrioridadeAbertos();
+    }
+
+    // ===== EXPORTAR CSV =====
+    function exportarCsv() {
+      const linhas = [['Protocolo','Unidade','Solicitante','Cargo','Tipo','Descrição','Urgência','Status','Técnico Setor','Inventário','Aberto em'].join(';')];
+      todosChamados.forEach(d => {
+        linhas.push([
+          d.ID, d.Unidade, d.Solicitante, d['Função'] || '',
+          d.Tipo, (d.Descrição||'').replace(/;/g,','),
+          d['Urgência'], d.Status, d.TecnicoSetor || '',
+          d.Inventario || '',
+          new Date(d.Timestamp).toLocaleString('pt-BR')
+        ].join(';'));
+      });
+      const blob = new Blob([linhas.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `chamados_${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast('CSV exportado.');
+    }
+
+    // ===== EVENTOS =====
+    ['filtroUnidade','filtroCategoria','filtroStatus','filtroUrgencia','filtroTecnico','filtroInventario','filtroDataDe','filtroDataAte'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.addEventListener('input', () => renderizarFila(aplicarFiltros(todosChamados)));
+        el.addEventListener('change', () => renderizarFila(aplicarFiltros(todosChamados)));
+      }
+    });
+
+    document.getElementById('modalLoteOverlay').addEventListener('click', e => { if (e.target.id === 'modalLoteOverlay') fecharModalLote(); });
+    document.getElementById('modalOverlay').addEventListener('click', e => { if (e.target.id === 'modalOverlay') fecharModal(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') { fecharModal(); fecharModalLote(); } });
+
+    document.getElementById('btnSom').classList.toggle('ativo', somAtivo);
+    document.getElementById('btnSom').innerText = somAtivo ? '🔔' : '🔕';
+
+    // ===== INICIALIZAÇÃO =====
+    google.charts.setOnLoadCallback(() => {
+      if (dashboardInicializado) { console.warn('Dashboard já inicializado. Ignorando.'); return; }
+      dashboardInicializado = true;
+      console.log('Inicializando dashboard...');
+      carregarDados();
+      carregarTecnicos();
+      verificarAltaPrioridade();
+      setInterval(carregarDados, 60000);
+      setInterval(verificarAltaPrioridade, 15000);
+    });
+  </script>
+</body>
+</html>
