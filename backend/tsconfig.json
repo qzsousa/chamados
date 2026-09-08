@@ -5,7 +5,7 @@
     "moduleResolution": "NodeNext",
     "lib": ["ES2022"],
     "outDir": "./dist",
-    "rootDir": "..",
+    "rootDir": ".",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -14,12 +14,11 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "baseUrl": "..",
     "paths": {
-      "@/*": ["backend/src/*"],
-      "@shared/*": ["shared/types/*"]
+      "@/*": ["./src/*"],
+      "@shared/*": ["../shared/types/*"]
     }
   },
-  "include": ["backend/src/**/*", "../shared/types/**/*", "prisma/**/*"],
+  "include": ["src/**/*", "../shared/types/**/*", "prisma/**/*"],
   "exclude": ["node_modules", "dist", "**/*.test.ts"]
 }
