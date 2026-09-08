@@ -100,7 +100,7 @@ export function requireFilialAccess(req: AuthenticatedRequest, res: Response, ne
     return
   }
 
-  const filialParam = req.params.filial || req.query.filial || req.body.filial
+  const filialParam = (req.params.filial as string) || (req.query.filial as string) || (req.body?.filial as string)
 
   if (filialParam && filialParam !== req.userRecord.filial) {
     res.status(403).json({ error: 'FORBIDDEN', message: 'Acesso negado a esta filial' })

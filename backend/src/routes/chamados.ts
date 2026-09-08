@@ -28,9 +28,9 @@ router.post('/', async (req, res) => {
     const tecnicoSetor = getTecnicoSetor(data.unidade)
     const inventarioStatus = await getInventarioStatus(data.unidade)
 
-    let anexoUrl = data.anexoUrl || null
+    let anexoUrl: string | null = null
     if (data.anexoBase64 && data.anexoNome) {
-      anexoUrl = await salvarAnexo(data.anexoBase64, data.anexoNome, data.anexoTipo, protocolo)
+      anexoUrl = await salvarAnexo(data.anexoBase64, data.anexoNome, data.anexoTipo || '', protocolo)
     }
 
     const chamado = await prisma.chamado.create({

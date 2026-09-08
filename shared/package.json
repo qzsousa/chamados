@@ -4,6 +4,7 @@
   "main": "api.ts",
   "types": "api.ts",
   "dependencies": {
+    "typescript": "^7.0.2",
     "zod": "^3.22.0"
   }
 }

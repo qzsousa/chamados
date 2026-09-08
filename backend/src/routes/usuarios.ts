@@ -106,17 +106,9 @@ router.patch('/:id', authMiddleware, requireRole('ADMIN'), async (req: Authentic
       return res.status(404).json({ error: 'NOT_FOUND', message: 'Usuário não encontrado' })
     }
 
-    if (data.email && data.email !== user.email) {
-      const existing = await prisma.usuario.findUnique({ where: { email: data.email.toLowerCase() } })
-      if (existing) {
-        return res.status(409).json({ error: 'VALIDATION_ERROR', message: 'Email já cadastrado' })
-      }
-    }
-
     const updated = await prisma.usuario.update({
       where: { id: req.params.id },
       data: {
-        email: data.email?.toLowerCase(),
         nome: data.nome,
         nivel: data.nivel,
         filial: data.filial,
