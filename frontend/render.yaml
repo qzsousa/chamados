@@ -3,7 +3,7 @@ services:
     name: sci-chamados-frontend
     env: static
     plan: free
-    buildCommand: npm ci && npm run build
+    buildCommand: npm install && npm run build
     staticPublishPath: ./dist
     routes:
       - type: rewrite
