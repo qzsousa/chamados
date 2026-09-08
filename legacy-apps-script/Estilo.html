@@ -1,0 +1,71 @@
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600;700&display=swap');
+
+  :root {
+    --bg: #17181c;
+    --panel: #212227;
+    --panel-2: #292a30;
+    --border: #34363d;
+    --text: #e8e9ec;
+    --text-dim: #8b8d96;
+    --teal: #2dd4bf;
+    --teal-dim: #164e47;
+    --amber: #f5a623;
+    --amber-dim: #4a3110;
+    --rose: #e2434d;
+    --rose-dim: #4a1a1e;
+    --blue: #5b9cf6;
+    --blue-dim: #16294a;
+    --radius: 10px;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--text);
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  a { color: inherit; }
+  button {
+    font-family: inherit; cursor: pointer; border: none; border-radius: 8px;
+    font-size: 13px; font-weight: 600; padding: 10px 18px;
+    transition: transform 0.08s ease, opacity 0.15s ease;
+  }
+  button:active { transform: scale(0.97); }
+  button:focus-visible, input:focus-visible, select:focus-visible, [tabindex]:focus-visible {
+    outline: 2px solid var(--teal); outline-offset: 2px;
+  }
+  .btn-primario { background: var(--teal); color: #072a25; }
+  .btn-primario:hover { opacity: 0.9; }
+  .btn-secundario { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
+  .btn-secundario:hover { background: #33343b; }
+
+  input, select, textarea {
+    font-family: inherit; background: var(--panel-2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 13px;
+  }
+  input::placeholder { color: var(--text-dim); }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.03em;
+  }
+  .badge-alta   { background: var(--rose-dim);  color: #ffb3b8; }
+  .badge-media  { background: var(--amber-dim); color: #ffd28a; }
+  .badge-baixa  { background: var(--teal-dim);  color: #8ef0e2; }
+  .badge-aberto     { background: var(--amber-dim); color: #ffd28a; }
+  .badge-andamento  { background: var(--blue-dim);  color: #adcaff; }
+  .badge-resolvido  { background: var(--teal-dim);  color: #8ef0e2; }
+  .badge-comunicado { background: var(--orange-dim); color: #EA580C; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>

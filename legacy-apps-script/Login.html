@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #090b0f;
+      color: #e7ebf1;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(ellipse 700px 500px at 50% 40%, rgba(91,157,255,0.08), transparent 60%), #090b0f;
+    }
+    .login-container {
+      background: #12151b;
+      border: 1px solid #232833;
+      border-radius: 16px;
+      padding: 40px 36px;
+      width: 400px;
+      max-width: 100%;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.5);
+    }
+    .login-container .logo {
+      font-size: 28px;
+      margin-bottom: 4px;
+    }
+    .login-container h1 {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 4px;
+      letter-spacing: -0.3px;
+    }
+    .login-container .subtitle {
+      color: #7c8494;
+      font-size: 14px;
+      margin-bottom: 28px;
+    }
+    .form-group {
+      margin-bottom: 16px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #7c8494;
+      margin-bottom: 4px;
+    }
+    .form-group input {
+      width: 100%;
+      padding: 10px 14px;
+      background: #171b23;
+      border: 1px solid #232833;
+      border-radius: 8px;
+      color: #e7ebf1;
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      transition: border 0.15s;
+    }
+    .form-group input:focus {
+      border-color: #5b9dff;
+    }
+    .form-group input:disabled {
+      opacity: 0.5;
+    }
+    .btn {
+      width: 100%;
+      padding: 11px;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      transition: 0.15s;
+      font-family: inherit;
+    }
+    .btn-primary {
+      background: #5b9dff;
+      color: #06101f;
+    }
+    .btn-primary:hover {
+      background: #72adff;
+    }
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid #232833;
+      color: #b0b8c8;
+    }
+    .btn-secondary:hover {
+      background: #1a1c24;
+    }
+    .mensagem {
+      margin-top: 12px;
+      font-size: 13px;
+      text-align: center;
+      min-height: 20px;
+    }
+    .mensagem.erro {
+      color: #ff5470;
+    }
+    .mensagem.sucesso {
+      color: #34d399;
+    }
+    .passo {
+      display: none;
+    }
+    .passo.ativo {
+      display: block;
+    }
+    .voltar {
+      background: none;
+      border: none;
+      color: #7c8494;
+      cursor: pointer;
+      font-size: 13px;
+      font-family: inherit;
+      padding: 0;
+    }
+    .voltar:hover {
+      color: #e7ebf1;
+    }
+    .footer {
+      margin-top: 20px;
+      font-size: 12px;
+      color: #565e6d;
+      text-align: center;
+    }
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid #1a1c24;
+      border-top: 2px solid #5b9dff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <div class="logo"><img src="https://i.ibb.co/3yBdJq67/IMG-9095.png" alt="Logo URE" height="100px"></div>
+    <h1>Sistema de Chamados</h1>
+    <div class="subtitle">URE Leste 3 · Acesso seguro</div>
+
+    <!-- PASSO 1: Solicitar e-mail -->
+    <div id="passoEmail" class="passo ativo">
+      <div class="form-group">
+        <label for="email">E-mail institucional</label>
+        <input type="email" id="email" placeholder="seu.email@educacao.sp.gov.br" autocomplete="email">
+      </div>
+      <button class="btn btn-primary" id="btnSolicitarOTP" onclick="solicitarOTP()">
+        Enviar código
+      </button>
+      <div id="mensagem" class="mensagem"></div>
+      <div class="footer">Você receberá um código por e-mail.</div>
+    </div>
+
+    <!-- PASSO 2: Inserir código OTP -->
+    <div id="passoOTP" class="passo">
+      <button class="voltar" onclick="voltarEmail()">← Voltar</button>
+      <div class="form-group" style="margin-top:16px;">
+        <label for="codigo">Código de 6 dígitos</label>
+        <input type="text" id="codigo" placeholder="Ex: 123456" maxlength="6" autocomplete="one-time-code" inputmode="numeric">
+      </div>
+      <button class="btn btn-primary" id="btnVerificarOTP" onclick="verificarOTP()">
+        Verificar
+      </button>
+      <div id="mensagemOTP" class="mensagem"></div>
+      <div class="footer">O código é válido por 10 minutos.</div>
+    </div>
+  </div>
+
+  <script>
+    let emailAtual = '';
+
+    function solicitarOTP() {
+      const email = document.getElementById('email').value.trim();
+      if (!email) {
+        mostrarMensagem('Digite seu e-mail.', 'erro');
+        return;
+      }
+      const btn = document.getElementById('btnSolicitarOTP');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Enviando…';
+
+      google.script.run
+        .withSuccessHandler(result => {
+          btn.disabled = false;
+          btn.textContent = 'Enviar código';
+          if (result.sucesso) {
+            emailAtual = email;
+            document.getElementById('email').value = email;
+            mostrarMensagem(result.mensagem, 'sucesso');
+            document.getElementById('passoEmail').classList.remove('ativo');
+            document.getElementById('passoOTP').classList.add('ativo');
+            document.getElementById('codigo').focus();
+          } else {
+            mostrarMensagem(result.mensagem, 'erro');
+          }
+        })
+        .withFailureHandler(err => {
+          btn.disabled = false;
+          btn.textContent = 'Enviar código';
+          mostrarMensagem('Erro: ' + err.message, 'erro');
+        })
+        .solicitarOTP(email);
+    }
+
+    function verificarOTP() {
+  const codigo = document.getElementById('codigo').value.trim();
+  if (!codigo || codigo.length < 6) {
+    mostrarMensagemOTP('Digite o código de 6 dígitos.', 'erro');
+    return;
+  }
+  const btn = document.getElementById('btnVerificarOTP');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Verificando…';
+
+  google.script.run
+    .withSuccessHandler(result => {
+      btn.disabled = false;
+      btn.textContent = 'Verificar';
+      if (result.sucesso) {
+  sessionStorage.setItem('token', result.token);
+  sessionStorage.setItem('nivel', result.nivel);
+  sessionStorage.setItem('filial', result.filial);
+  sessionStorage.setItem('nome', result.nome);
+
+  const urlBase = 'https://script.google.com/macros/s/AKfycbxN3062WjzpRCSF5tJ-rNjavgfvgXvEFrvckgJeDbRPC22rS9VVuYeQJkULPk01aKpG/exec';
+  const urlFinal = urlBase + '?pagina=filtrado&token=' + result.token;
+
+  top.location.href = urlFinal; // navega o frame de cima, não o iframe interno
+      } else {
+        mostrarMensagemOTP(result.mensagem, 'erro');
+      }
+    })
+    .withFailureHandler(err => {
+      btn.disabled = false;
+      btn.textContent = 'Verificar';
+      mostrarMensagemOTP('Erro: ' + err.message, 'erro');
+    })
+    .verificarOTP(emailAtual, codigo);
+}
+
+    function voltarEmail() {
+      document.getElementById('passoOTP').classList.remove('ativo');
+      document.getElementById('passoEmail').classList.add('ativo');
+      document.getElementById('mensagemOTP').textContent = '';
+      document.getElementById('codigo').value = '';
+    }
+
+    function mostrarMensagem(msg, tipo) {
+      const el = document.getElementById('mensagem');
+      el.textContent = msg;
+      el.className = 'mensagem ' + (tipo || '');
+    }
+    function mostrarMensagemOTP(msg, tipo) {
+      const el = document.getElementById('mensagemOTP');
+      el.textContent = msg;
+      el.className = 'mensagem ' + (tipo || '');
+    }
+
+    // Enter nos campos
+    document.getElementById('email').addEventListener('keydown', e => {
+      if (e.key === 'Enter') solicitarOTP();
+    });
+    document.getElementById('codigo').addEventListener('keydown', e => {
+      if (e.key === 'Enter') verificarOTP();
+    });
+    function carregarDados() {
+  if (carregarDados.emExecucao) return;
+  carregarDados.emExecucao = true;
+
+  const token = new URLSearchParams(window.location.search).get('token') || sessionStorage.getItem('token');
+  if (!token) {
+    console.warn('Token não encontrado, redirecionando para login...');
+    window.location.href = window.location.origin + window.location.pathname + '?pagina=login';
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(dados => {
+      // ... renderização
+    })
+    .withFailureHandler(err => {
+      console.error(err);
+    })
+    .getChamadosFiltrados(token);
+}
+  </script>
+</body>
+</html>

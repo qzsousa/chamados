@@ -1,0 +1,9 @@
+{
+  "name": "@sci-chamados/shared-types",
+  "version": "1.0.0",
+  "main": "api.ts",
+  "types": "api.ts",
+  "dependencies": {
+    "zod": "^3.22.0"
+  }
+}

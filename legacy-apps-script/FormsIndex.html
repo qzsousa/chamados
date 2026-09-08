@@ -1,0 +1,1270 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atende Leste 3 — URE Leste 3</title>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --azul-900:#0B3D6B;--azul-700:#134E8C;--azul-500:#1E7FC7;--azul-100:#E7F1FA;
+  --tinta:#16222E;--tinta-suave:#5A6B7A;--linha:#DDE6EE;--fundo:#F5F8FB;--branco:#FFFFFF;
+  --ambar:#C9711A;--ambar-bg:#FDF1E4;
+  --verde:#1E7A4C;--verde-bg:#E8F5EE;
+  --vermelho:#B3261E;--vermelho-bg:#FBEAEA;
+  --raio:14px;--raio-sm:8px;
+  --sombra:0 1px 2px rgba(16,38,63,.06), 0 8px 24px -12px rgba(16,38,63,.18);
+  --cor-cat:#1E7FC7;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{font-family:"Public Sans",-apple-system,Segoe UI,Roboto,sans-serif;background:var(--fundo);color:var(--tinta);line-height:1.5;-webkit-font-smoothing:antialiased;}
+.app{min-height:100vh;display:flex;flex-direction:column;}
+
+/* topbar */
+.topbar{background:var(--branco);border-bottom:1px solid var(--linha);padding:14px 20px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100;}
+.topbar svg{flex:none;color:var(--azul-900);}
+.topbar-org{display:flex;flex-direction:column;line-height:1.2;}
+.topbar-org small{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--tinta-suave);font-weight:600;}
+.topbar-org strong{font-size:14px;font-weight:700;color:var(--azul-900);}
+
+/* layout */
+main{flex:1;width:100%;max-width:720px;margin:0 auto;padding:28px 20px 60px;}
+
+/* views */
+.view{display:none;}
+.view.active{display:block;animation:subir .25s ease both;}
+@keyframes subir{from{opacity:0;transform:translateY(7px);}to{opacity:1;transform:translateY(0);}}
+
+/* home */
+.eyebrow{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--azul-500);margin:0 0 6px;}
+h1.hero{font-size:28px;font-weight:800;margin:0 0 8px;letter-spacing:-.01em;}
+.hero-sub{font-size:14.5px;color:var(--tinta-suave);margin:0 0 26px;max-width:52ch;}
+.grid-cat{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:28px;}
+@media(max-width:520px){.grid-cat{grid-template-columns:1fr;}}
+.card-cat{text-align:left;background:var(--branco);border:1px solid var(--linha);border-left:4px solid var(--cor-cat);border-radius:var(--raio);padding:18px;cursor:pointer;box-shadow:var(--sombra);transition:transform .13s,box-shadow .13s;display:flex;flex-direction:column;gap:7px;font-family:inherit;color:inherit;}
+.card-cat:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(16,38,63,.16);}
+.card-cat svg{color:var(--cor-cat);}
+.card-cat h3{margin:0;font-size:15px;font-weight:700;}
+.card-cat p{margin:0;font-size:12.5px;color:var(--tinta-suave);}
+.card-cat .lnk{font-size:12.5px;font-weight:700;color:var(--cor-cat);margin-top:4px;}
+
+/* contato */
+.contato{background:var(--azul-900);color:#EAF2FA;border-radius:var(--raio);padding:18px 20px;display:flex;flex-wrap:wrap;justify-content:space-between;gap:14px;align-items:center;}
+.contato h4{margin:0 0 2px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#9FC3E8;font-weight:700;}
+.contato p{margin:0;font-size:14px;font-weight:600;}
+.contato .sub{font-size:12px;font-weight:400;color:#BFDAF2;margin-top:2px;}
+.contato-acoes{display:flex;gap:8px;flex-wrap:wrap;}
+.btn-c{border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.07);color:#fff;padding:8px 14px;border-radius:999px;font-size:13px;font-weight:600;text-decoration:none;cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-family:inherit;}
+.btn-c:hover{background:rgba(255,255,255,.16);}
+
+/* form header */
+.fheader{display:flex;align-items:center;gap:0;margin-bottom:20px;}
+.voltar{display:inline-flex;align-items:center;gap:6px;background:none;border:none;cursor:pointer;color:var(--azul-700);font-weight:600;font-size:13px;padding:0;font-family:inherit;}
+.badge{margin-left:14px;padding:4px 12px;border-radius:999px;background:var(--azul-100);color:var(--azul-700);font-size:12px;font-weight:700;}
+.vtitulo{font-size:20px;font-weight:800;margin:0 0 4px;}
+.vsub{font-size:13.5px;color:var(--tinta-suave);margin:0 0 20px;}
+
+/* question blocks */
+.qb{background:var(--branco);border:1px solid var(--linha);border-radius:var(--raio);padding:20px;margin-bottom:12px;box-shadow:var(--sombra);animation:subir .22s ease both;}
+.qt{font-size:14.5px;font-weight:700;margin:0 0 12px;color:var(--tinta);}
+.qs{font-size:13px;color:var(--tinta-suave);margin:-8px 0 12px;}
+
+/* option buttons */
+.ops{display:flex;flex-direction:column;gap:8px;}
+.op{display:flex;align-items:center;gap:10px;background:var(--branco);border:1.5px solid var(--linha);border-radius:var(--raio-sm);padding:11px 14px;cursor:pointer;font-family:inherit;font-size:13.5px;font-weight:600;color:var(--tinta);text-align:left;transition:border-color .1s,background .1s;width:100%;}
+.op:hover{border-color:var(--cor-cat);background:var(--azul-100);}
+.op.sel{border-color:var(--cor-cat);background:#EBF4FC;color:var(--azul-900);}
+.radio{width:17px;height:17px;border-radius:50%;border:2px solid var(--linha);flex:none;display:flex;align-items:center;justify-content:center;background:var(--branco);transition:all .1s;}
+.op.sel .radio{border-color:var(--cor-cat);background:var(--cor-cat);}
+.op.sel .radio::after{content:'';width:6px;height:6px;border-radius:50%;background:#fff;}
+
+/* alertas */
+.al{border-radius:var(--raio-sm);padding:13px 15px;font-size:13.5px;line-height:1.55;display:flex;gap:10px;align-items:flex-start;margin-top:12px;}
+.al p{margin:0 0 6px;}.al p:last-child{margin:0;}
+.al svg{flex:none;margin-top:2px;}
+.al-info{background:var(--azul-100);color:var(--azul-900);border:1px solid #C0DCF0;}
+.al-aviso{background:var(--ambar-bg);color:#7A3F0A;border:1px solid #F0CA80;}
+.al-ok{background:var(--verde-bg);color:#14532D;border:1px solid #A3D9BF;}
+.al-erro{background:var(--vermelho-bg);color:var(--vermelho);border:1px solid #F0B0AA;}
+
+/* botões dentro de alerta */
+.btn-al{display:inline-flex;align-items:center;gap:6px;margin-top:10px;padding:9px 14px;background:var(--azul-700);color:#fff;border:none;border-radius:999px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;text-decoration:none;}
+.btn-al:hover{background:var(--azul-900);}
+.btn-al.out{background:none;color:var(--azul-700);border:1.5px solid var(--azul-700);}
+.btn-al.out:hover{background:var(--azul-100);}
+
+/* select */
+.qsel{width:100%;border:1.5px solid var(--linha);border-radius:var(--raio-sm);padding:10px 12px;font-size:14px;font-family:inherit;color:var(--tinta);background:var(--branco);}
+.qsel:focus{outline:none;border-color:var(--azul-500);box-shadow:0 0 0 3px var(--azul-100);}
+
+/* garantia links */
+.g-links{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
+.g-link{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:var(--verde);color:#fff;border-radius:999px;font-size:13px;font-weight:700;text-decoration:none;}
+.g-link:hover{filter:brightness(1.1);}
+
+/* tipo físico */
+.tfgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px;}
+@media(max-width:520px){.tfgrid{grid-template-columns:repeat(2,1fr);}}
+.tfbtn{padding:10px 6px;border:1.5px solid var(--linha);border-radius:var(--raio-sm);background:var(--branco);cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:700;color:var(--tinta);text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px;}
+.tfbtn:hover{border-color:var(--cor-cat);background:var(--azul-100);}
+.tfbtn.sel{border-color:var(--cor-cat);background:#EBF4FC;color:var(--azul-900);}
+.tfbtn svg{color:var(--tinta-suave);}
+.tfbtn.sel svg{color:var(--cor-cat);}
+
+/* extra campos */
+.excs{display:flex;flex-direction:column;gap:10px;margin-top:12px;}
+.exc label{display:block;font-size:12.5px;font-weight:700;margin-bottom:4px;}
+.exc input,.exc textarea{width:100%;border:1.5px solid var(--linha);border-radius:var(--raio-sm);padding:9px 12px;font-size:13.5px;font-family:inherit;color:var(--tinta);}
+.exc input:focus,.exc textarea:focus{outline:none;border-color:var(--azul-500);box-shadow:0 0 0 3px var(--azul-100);}
+.exc textarea{resize:vertical;min-height:70px;}
+
+/* locais */
+.locais-ta{width:100%;border:1.5px solid var(--linha);border-radius:var(--raio-sm);padding:10px 12px;font-size:13.5px;font-family:inherit;color:var(--tinta);resize:vertical;min-height:70px;margin-top:10px;}
+.locais-ta:focus{outline:none;border-color:var(--azul-500);box-shadow:0 0 0 3px var(--azul-100);}
+
+/* botão avançar */
+.btn-av{display:none;width:100%;margin-top:14px;padding:13px;border:none;border-radius:var(--raio-sm);background:var(--cor-cat);color:#fff;font-family:inherit;font-size:14.5px;font-weight:700;cursor:pointer;}
+.btn-av.on{display:block;animation:subir .2s ease both;}
+.btn-av:hover{filter:brightness(1.1);}
+
+/* id view */
+.resumo{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:18px;}
+.tag{padding:4px 12px;border-radius:999px;background:var(--azul-100);color:var(--azul-900);font-size:12px;font-weight:700;}
+.cartao{background:var(--branco);border:1px solid var(--linha);border-radius:var(--raio);padding:22px;box-shadow:var(--sombra);margin-bottom:14px;}
+.campo{margin-bottom:16px;}
+.campo label{display:block;font-size:13px;font-weight:700;margin-bottom:5px;}
+.campo label .opc{font-weight:400;color:var(--tinta-suave);}
+.campo input,.campo select,.campo textarea{width:100%;border:1.5px solid var(--linha);border-radius:var(--raio-sm);padding:10px 12px;font-size:14px;font-family:inherit;color:var(--tinta);background:var(--branco);}
+.campo input:focus,.campo select:focus,.campo textarea:focus{outline:none;border-color:var(--azul-500);box-shadow:0 0 0 3px var(--azul-100);}
+.campo textarea{resize:vertical;min-height:90px;}
+.campo .etxt{display:none;color:var(--vermelho);font-size:12px;margin-top:4px;font-weight:600;}
+.campo.inv input,.campo.inv select,.campo.inv textarea{border-color:var(--vermelho);}
+.campo.inv .etxt{display:block;}
+.l2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+@media(max-width:520px){.l2{grid-template-columns:1fr;}}
+
+/* urgência */
+.urgs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+@media(max-width:520px){.urgs{grid-template-columns:1fr;}}
+.urg{border:1.5px solid var(--linha);border-radius:var(--raio-sm);padding:10px;text-align:center;cursor:pointer;font-size:13px;font-weight:700;color:var(--tinta-suave);font-family:inherit;background:var(--branco);}
+.urg[data-v="Baixa"].sel{border-color:var(--verde);background:var(--verde-bg);color:var(--verde);}
+.urg[data-v="Média"].sel{border-color:var(--ambar);background:var(--ambar-bg);color:var(--ambar);}
+.urg[data-v="Alta"].sel{border-color:var(--vermelho);background:var(--vermelho-bg);color:var(--vermelho);}
+
+/* acoes */
+.acoes{display:flex;justify-content:space-between;align-items:center;margin-top:22px;}
+.btn{border:none;border-radius:999px;padding:12px 22px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;}
+.btn-pri{background:var(--azul-700);color:#fff;}
+.btn-pri:hover{background:var(--azul-900);}
+.btn-pri:disabled{background:#9FB8CC;cursor:progress;}
+.btn-sec{background:none;color:var(--azul-700);border:1.5px solid var(--linha);}
+.btn-sec:hover{background:var(--azul-100);}
+
+/* sucesso */
+.suc{text-align:center;padding:44px 10px;}
+.suc .selo{width:66px;height:66px;border-radius:50%;background:var(--verde-bg);color:var(--verde);display:flex;align-items:center;justify-content:center;margin:0 auto 18px;}
+.suc h2{font-size:22px;margin:0 0 8px;}
+.suc p{color:var(--tinta-suave);font-size:14.5px;margin:0 0 4px;}
+.protocolo{display:inline-block;margin:16px 0 24px;padding:10px 20px;border-radius:var(--raio-sm);background:var(--azul-100);color:var(--azul-900);font-weight:800;font-size:20px;letter-spacing:.03em;}
+
+/* ============================================================
+   MODAL TESTE DE VELOCIDADE
+   ============================================================ */
+.modal-overlay{
+  display:none;position:fixed;inset:0;
+  background:rgba(0,0,0,.55);z-index:999;
+  align-items:center;justify-content:center;
+  padding:16px;
+}
+.modal-overlay.aberto{display:flex;}
+.modal-box{
+  background:#fff;border-radius:var(--raio);overflow:hidden;
+  width:min(96vw,860px);height:min(88vh,580px);
+  display:flex;flex-direction:column;
+  box-shadow:0 24px 64px rgba(0,0,0,.38);
+  animation:subir .22s ease both;
+}
+.modal-topo{
+  padding:14px 18px;display:flex;justify-content:space-between;align-items:center;
+  border-bottom:1px solid var(--linha);background:var(--branco);flex:none;
+}
+.modal-topo-info strong{font-size:14px;font-weight:700;display:block;}
+.modal-topo-info small{font-size:12px;color:var(--tinta-suave);}
+.modal-fechar{
+  background:none;border:none;font-size:22px;cursor:pointer;
+  color:var(--tinta-suave);padding:0 4px;line-height:1;
+}
+.modal-fechar:hover{color:var(--tinta);}
+.modal-box iframe{flex:1;border:none;width:100%;}
+
+footer{text-align:center;padding:16px;font-size:12px;color:var(--tinta-suave);border-top:1px solid var(--linha);background:var(--branco);}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <img src="https://i.ibb.co/3yBdJq67/IMG-9095.png" alt="Logo URE" width="50px" height="50px">
+  <div class="topbar-org">
+    <small>Governo do Estado de São Paulo</small>
+    <strong>Atende Leste 3 — Unidade Regional de Ensino Leste 3</strong>
+  </div>
+</div>
+
+<main>
+
+<!-- ======================================================== HOME -->
+<section class="view active" id="view-home">
+  <p class="eyebrow">Central de Atendimento — SETEC</p>
+  <h1 class="hero">Como podemos ajudar?</h1>
+  <p class="hero-sub">Selecione o tipo de problema abaixo. O chamado será encaminhado automaticamente à equipe do SETEC.</p>
+  <div class="grid-cat" id="grid-cat"></div>
+  <div style="margin-top:16px;">
+    <button class="btn-c" onclick="abrirListaEquipamentos()" style="width:100%; justify-content:center;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6M9 13h6M9 17h4"/></svg>
+      Ver Catálogo de Equipamentos
+    </button>
+  </div>
+  <div class="contato">
+    <div>
+      <h4>Fale com o SETEC</h4>
+      <p id="c-nome">—</p>
+      <p class="sub" id="c-sub">—</p>
+    </div>
+    <div class="contato-acoes">
+      <a class="btn-c" id="c-tel" href="#">📞 Ligar</a>
+      <button class="btn-c" id="c-copiar" type="button">Copiar e-mail</button>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================== QUESTIONS -->
+<section class="view" id="view-q">
+  <div class="fheader">
+    <button class="voltar" type="button" onclick="voltarHome()">← Voltar</button>
+    <span class="badge" id="q-badge">—</span>
+  </div>
+  <h2 class="vtitulo" id="q-titulo">—</h2>
+  <p class="vsub">Responda as perguntas para detalhar o chamado.</p>
+
+  <!-- ========================= REDE -->
+  <div class="cat-qs" id="qs-rede" style="display:none">
+    <div class="qb">
+      <div class="qt">Qual é o problema de rede?</div>
+      <div class="ops">
+        <button class="op" data-g="rede" data-v="lentidao" onclick="sRede('lentidao')">
+          <span class="radio"></span>Lentidão
+        </button>
+        <button class="op" data-g="rede" data-v="queda-total" onclick="sRede('queda-total')">
+          <span class="radio"></span>Queda total de internet
+        </button>
+        <button class="op" data-g="rede" data-v="wifi-salas" onclick="sRede('wifi-salas')">
+          <span class="radio"></span>Queda de Wi-Fi em salas ou locais específicos
+        </button>
+        <button class="op" data-g="rede" data-v="pontos" onclick="sRede('pontos')">
+          <span class="radio"></span>Solicitação de Pontos de Rede
+        </button>
+      </div>
+    </div>
+
+    <!-- LENTIDÃO -->
+    <div class="qb" id="q-lentidao" style="display:none">
+      <div class="qt">Teste de velocidade</div>
+      <div class="al al-info">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        <div>
+          <p>Antes de abrir o chamado, faça o <strong>teste de velocidade</strong> da internet da escola.</p>
+          <p>Após o teste, <strong>tire uma print do resultado</strong> e anexe ao chamado na próxima etapa.</p>
+          <button class="btn-al" onclick="abrirTeste()" type="button">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            Fazer Teste de Velocidade
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- QUEDA TOTAL -->
+    <div class="qb" id="q-queda" style="display:none">
+      <div class="qt">A escola possui energia elétrica agora?</div>
+      <div class="ops">
+        <button class="op" data-g="energia" data-v="sim" onclick="sEnergia('sim')">
+          <span class="radio"></span>Sim, há energia na escola
+        </button>
+        <button class="op" data-g="energia" data-v="nao" onclick="sEnergia('nao')">
+          <span class="radio"></span>Não, está sem energia no momento
+        </button>
+      </div>
+      <div id="q-sem-energia" style="display:none">
+        <div class="al al-aviso" style="margin-top:12px">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <div>
+            <p><strong>Aguarde o retorno da energia.</strong></p>
+            <p>A rede de internet se estabiliza automaticamente quando a energia voltar. Se após o retorno a internet não normalizar, abra um chamado.</p>
+            <button class="btn-al out" style="margin-top:8px" onclick="voltarHome()" type="button">← Voltar ao início</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- WIFI EM SALAS -->
+    <div class="qb" id="q-wifi-salas" style="display:none">
+      <div class="qt">Quais salas ou locais estão sem conexão?</div>
+      <div class="qs">Detalhe os locais afetados para agilizar o atendimento.</div>
+      <textarea class="locais-ta" id="locais-ta" placeholder="Ex.: Sala 5, Sala 7, Quadra, Laboratório de Informática, Secretaria..." oninput="chkLocais()"></textarea>
+    </div>
+
+    <!-- PONTOS DE REDE -->
+    <div class="qb" id="q-pontos" style="display:none">
+      <div class="qt">Pontos de Rede — Anexo obrigatório</div>
+      <div class="al al-aviso">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <div>
+          <p>Para solicitações de novos pontos de rede, é <strong>obrigatório</strong> anexar <strong>fotos das salas e locais</strong> onde os pontos são necessários.</p>
+          <p>Você poderá adicionar o(s) anexo(s) na próxima etapa.</p>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-av" id="av-rede" onclick="irParaId()" type="button">Continuar →</button>
+  </div>
+
+  <!-- ========================= EQUIPAMENTO -->
+  <div class="cat-qs" id="qs-equip" style="display:none">
+    <div class="qb">
+      <div class="qt">Qual é o tipo de problema no equipamento?</div>
+      <div class="ops">
+        <button class="op" data-g="equip" data-v="wifi" onclick="sEquip('wifi')"><span class="radio"></span>Wi-Fi (equipamento não conecta à rede)</button>
+        <button class="op" data-g="equip" data-v="fisico" onclick="sEquip('fisico')"><span class="radio"></span>Manutenção — Problemas Físicos</button>
+        <button class="op" data-g="equip" data-v="software" onclick="sEquip('software')"><span class="radio"></span>Manutenção — Problemas de Software</button>
+        <button class="op" data-g="equip" data-v="formatacao" onclick="sEquip('formatacao')"><span class="radio"></span>Formatação</button>
+        <button class="op" data-g="equip" data-v="sistema" onclick="sEquip('sistema')"><span class="radio"></span>Sistema (login, configuração, perfil)</button>
+      </div>
+    </div>
+
+    <!-- FILTROS DE EQUIPAMENTO (Cascata: Categoria → Marca → Modelo) -->
+    <div class="qb" id="q-equip-filtros" style="display:none">
+      <div class="qt">Selecione o equipamento</div>
+      <div class="qs">Use os filtros abaixo para encontrar o equipamento exato.</div>
+      <div class="excs">
+        <div class="exc">
+          <label>Categoria *</label>
+          <select class="qsel" id="sel-categoria" onchange="onCategoriaChange()" disabled>
+            <option value="">Carregando categorias...</option>
+          </select>
+        </div>
+        <div class="exc">
+          <label>Marca *</label>
+          <select class="qsel" id="sel-marca" onchange="onMarcaChange()" disabled>
+            <option value="">— Selecione uma categoria primeiro —</option>
+          </select>
+        </div>
+        <div class="exc">
+          <label>Modelo *</label>
+          <select class="qsel" id="sel-modelo" onchange="onModeloSelect()" disabled>
+            <option value="">— Selecione uma marca primeiro —</option>
+          </select>
+        </div>
+      </div>
+      <div id="equip-resultado" class="al al-info" style="display:none; margin-top:12px;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        <div>
+          <p id="equip-resultado-texto"></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- GARANTIA -->
+    <div class="qb" id="q-garantia" style="display:none">
+      <div class="qt">Este modelo está em garantia</div>
+      <div class="al al-ok">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        <div>
+          <p>Este modelo <strong>possui garantia ativa</strong>. Abra o chamado diretamente com o fornecedor:</p>
+          <div class="g-links" id="g-links"></div>
+          <p style="margin-top:10px;font-size:12.5px;color:#5A6B7A">Após abrir com o fornecedor, você pode continuar para registrar aqui também (controle interno do SETEC).</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- TIPO FÍSICO (sem garantia) -->
+    <div class="qb" id="q-fisico" style="display:none">
+      <div class="qt">Qual é o tipo de problema físico?</div>
+      <div class="tfgrid">
+        <button class="tfbtn" data-v="Bateria" onclick="sFisico('Bateria')" type="button">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="1" y="6" width="18" height="12" rx="2"/><line x1="23" y1="13" x2="23" y2="11"/></svg>Bateria
+        </button>
+        <button class="tfbtn" data-v="Teclado" onclick="sFisico('Teclado')" type="button">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"/></svg>Teclado
+        </button>
+        <button class="tfbtn" data-v="Tela" onclick="sFisico('Tela')" type="button">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Tela
+        </button>
+        <button class="tfbtn" data-v="Som" onclick="sFisico('Som')" type="button">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>Som
+        </button>
+        <button class="tfbtn" data-v="Câmera" onclick="sFisico('Câmera')" type="button">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>Câmera
+        </button>
+        <button class="tfbtn" data-v="Outro" onclick="sFisico('Outro')" type="button">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>Outro
+        </button>
+      </div>
+    </div>
+
+    <button class="btn-av" id="av-equip" onclick="irParaId()" type="button">Continuar →</button>
+  </div>
+
+  <!-- ========================= SISTEMA -->
+  <div class="cat-qs" id="qs-sistema" style="display:none">
+    <div class="qb">
+      <div class="qt">Qual sistema está com problema?</div>
+      <select class="qsel" id="sel-sistema" onchange="onSistema()">
+        <option value="">— Selecione o sistema —</option>
+      </select>
+    </div>
+
+    <!-- PORTALNET extra -->
+    <div class="qb" id="q-portalnet" style="display:none">
+      <div class="qt">Informações para o PortalNet</div>
+      <div class="qs">Preencha os dados do servidor para processar a solicitação.</div>
+      <div class="excs">
+        <div class="exc"><label>RG *</label><input type="text" id="pn-rg" placeholder="Número do RG" oninput="chkSistema()"></div>
+        <div class="exc"><label>Nome completo *</label><input type="text" id="pn-nome" placeholder="Nome completo do servidor" oninput="chkSistema()"></div>
+        <div class="exc"><label>Atribuições / Transferência *</label>
+          <textarea id="pn-atrib" placeholder="Ex.: Transferir de E.E. X para E.E. Y — atribuição de Coordenador Pedagógico..." oninput="chkSistema()"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-av" id="av-sistema" onclick="irParaId()" type="button">Continuar →</button>
+  </div>
+
+  <!-- ========================= EMAIL -->
+  <div class="cat-qs" id="qs-email" style="display:none">
+    <div class="qb">
+      <div class="qt">Informações para o chamado de e-mail</div>
+      <div class="qs">Todos os campos são obrigatórios para processar o chamado.</div>
+      <div class="al al-info" style="margin-bottom:12px">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        <div><p>Chamados de e-mail <strong>sem estas informações não poderão ser processados</strong>. Preencha com atenção.</p></div>
+      </div>
+      <div class="excs">
+        <div class="exc"><label>CIE *</label><input type="text" id="em-cie" placeholder="Código CIE da escola" oninput="chkEmail()"></div>
+        <div class="exc"><label>Nome da Escola / Diretoria de Ensino *</label><input type="text" id="em-escola" placeholder="Ex.: E.E. Nome da Escola / DE Leste 3" oninput="chkEmail()"></div>
+        <div class="exc"><label>Login *</label><input type="text" id="em-login" placeholder="Login do usuário (sem @educacao.sp.gov.br)" oninput="chkEmail()"></div>
+        <div class="exc"><label>E-mail *</label><input type="email" id="em-email" placeholder="login@educacao.sp.gov.br" oninput="chkEmail()"></div>
+      </div>
+    </div>
+    <button class="btn-av" id="av-email" onclick="irParaId()" type="button">Continuar →</button>
+  </div>
+
+</section>
+
+<!-- ======================================================== IDENTIFICAÇÃO -->
+<section class="view" id="view-id">
+  <div class="fheader">
+    <button class="voltar" type="button" onclick="voltarQ()">← Voltar</button>
+    <span class="badge" id="id-badge">—</span>
+  </div>
+  <h2 class="vtitulo">Identificação</h2>
+  <p class="vsub">Informe seus dados para concluir o chamado.</p>
+
+  <div class="resumo" id="id-resumo"></div>
+
+  <div class="cartao">
+    <div class="campo" id="c-nome">
+      <label for="id-nome">Nome completo *</label>
+      <input id="id-nome" type="text" autocomplete="name" placeholder="Seu nome completo">
+      <div class="etxt">Informe seu nome completo.</div>
+    </div>
+    <div class="l2">
+      <div class="campo" id="c-cargo">
+        <label for="id-cargo">Cargo / Função *</label>
+        <select id="id-cargo"><option value="">— Cargo —</option></select>
+        <div class="etxt">Selecione seu cargo.</div>
+      </div>
+      <div class="campo" id="c-email">
+        <label for="id-email">E-mail institucional *</label>
+        <input id="id-email" type="email" autocomplete="email" placeholder="nome@educacao.sp.gov.br">
+        <div class="etxt">Informe um e-mail válido.</div>
+      </div>
+    </div>
+    <div class="campo" id="c-escola">
+      <label for="id-escola">Escola / Unidade *</label>
+      <select id="id-escola"><option value="">— Escola —</option></select>
+      <div class="etxt">Selecione a escola.</div>
+    </div>
+  </div>
+
+  <div class="cartao">
+    <div class="campo">
+      <label for="id-desc">Descrição adicional <span class="opc">(opcional)</span></label>
+      <textarea id="id-desc" placeholder="Adicione qualquer informação que possa ajudar na resolução..."></textarea>
+    </div>
+    <div class="campo" id="c-urg">
+      <label>Urgência *</label>
+      <div class="urgs">
+        <button type="button" class="urg" data-v="Baixa" onclick="sUrg('Baixa')">Baixa</button>
+        <button type="button" class="urg" data-v="Média" onclick="sUrg('Média')">Média</button>
+        <button type="button" class="urg" data-v="Alta" onclick="sUrg('Alta')">Alta<br><small style="font-weight:400;font-size:11px">(impacta o funcionamento)</small></button>
+      </div>
+      <div class="etxt">Selecione a urgência.</div>
+    </div>
+    <div class="campo" id="c-anexo">
+      <label for="id-anexo">Anexo <span class="opc" id="anexo-opc">(opcional — print ou foto do problema)</span></label>
+      <input id="id-anexo" type="file" accept="image/*,.pdf">
+      <div class="etxt" id="anexo-etxt">Foto obrigatória para esta solicitação.</div>
+    </div>
+  </div>
+
+  <div class="acoes">
+    <button class="btn btn-sec" type="button" onclick="voltarQ()">← Voltar</button>
+    <button class="btn btn-pri" type="button" id="btn-enviar" onclick="enviar()">Enviar chamado</button>
+  </div>
+</section>
+
+<!-- ======================================================== SUCESSO -->
+<section class="view" id="view-suc">
+  <div class="suc">
+    <div class="selo">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 12l5 5L20 6"/></svg>
+    </div>
+    <h2>Chamado registrado!</h2>
+    <p>Seu protocolo é:</p>
+    <div class="protocolo" id="num-prot">—</div>
+    <p>Guarde este número. A equipe do SETEC foi notificada e entrará em contato com a sua unidade.</p>
+    <div style="margin-top:24px">
+      <button class="btn btn-pri" onclick="voltarHome()" type="button">Abrir outro chamado</button>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================== LISTA DE EQUIPAMENTOS -->
+<section class="view" id="view-equip-list">
+  <div class="fheader">
+    <button class="voltar" type="button" onclick="voltarHome()">← Voltar</button>
+    <span class="badge" id="equip-list-badge">Lista de Equipamentos</span>
+  </div>
+  <h2 class="vtitulo">Catálogo de Equipamentos</h2>
+  <p class="vsub">Visualize todos os equipamentos cadastrados. Use os filtros para refinar a busca.</p>
+
+  <div class="qb">
+    <div class="qt">Filtros</div>
+    <div class="excs">
+      <div class="exc">
+        <label>Categoria</label>
+        <select class="qsel" id="list-sel-categoria" onchange="aplicarFiltrosLista()">
+          <option value="">Todas as categorias</option>
+        </select>
+      </div>
+      <div class="exc">
+        <label>Marca</label>
+        <select class="qsel" id="list-sel-marca" onchange="aplicarFiltrosLista()" disabled>
+          <option value="">Todas as marcas</option>
+        </select>
+      </div>
+      <div class="exc">
+        <label>Modelo</label>
+        <select class="qsel" id="list-sel-modelo" onchange="aplicarFiltrosLista()" disabled>
+          <option value="">Todos os modelos</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-top:12px;">
+      <button class="btn btn-sec" onclick="limparFiltrosLista()">Limpar filtros</button>
+      <span id="list-contador" style="margin-left:12px; color:var(--tinta-suave); font-size:13px;"></span>
+    </div>
+  </div>
+
+  <div class="qb" style="padding-top:12px;">
+    <div id="equip-lista-container" style="max-height:500px; overflow-y:auto;">
+      <table style="width:100%; border-collapse:collapse; font-size:13px;">
+        <thead>
+          <tr style="position:sticky; top:0; background:var(--branco); border-bottom:2px solid var(--linha);">
+            <th style="text-align:left; padding:10px 12px; font-weight:700; color:var(--tinta-suave);">Categoria</th>
+            <th style="text-align:left; padding:10px 12px; font-weight:700; color:var(--tinta-suave);">Marca</th>
+            <th style="text-align:left; padding:10px 12px; font-weight:700; color:var(--tinta-suave);">Modelo</th>
+          </tr>
+        </thead>
+        <tbody id="equip-lista-tbody">
+          <tr><td colspan="3" style="padding:24px; text-align:center; color:var(--tinta-suave);">Carregando equipamentos...</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div id="equip-lista-vazio" style="display:none; text-align:center; padding:24px; color:var(--tinta-suave);">
+      Nenhum equipamento encontrado com os filtros atuais.
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- ======================================================== MODAL TESTE DE VELOCIDADE -->
+<div class="modal-overlay" id="modal-teste" onclick="fecharTeste(event)">
+  <div class="modal-box">
+    <div class="modal-topo">
+      <div class="modal-topo-info">
+        <strong>🌐 Teste de Velocidade</strong>
+        <small>Ao terminar, tire um print do resultado e feche esta janela</small>
+      </div>
+      <button class="modal-fechar" onclick="fecharModal()" type="button" title="Fechar">✕</button>
+    </div>
+    <iframe id="iframe-teste" src="" loading="lazy" allow="fullscreen"></iframe>
+  </div>
+</div>
+
+<footer>SETEC · Unidade Regional de Ensino Leste 3 · Governo do Estado de São Paulo</footer>
+</div>
+
+<script>
+const CFG = {
+  contato: {
+    nome: 'Jessica Moraes - Chefe de Seção SETEC',
+    unidade: 'URE Leste 3',
+    telefone: '(11) 2523-7010',
+    telefoneLink: '1125237010',
+    email: 'lt3.setec@educacao.sp.gov.br'
+  },
+  cargos: [
+    'Diretor', 'Vice-diretor', 'Coordenador',
+    'Gerente de Organização Escolar', 'Agente de Organização Escolar',
+    'Professor', 'Estagiário (Proati)'
+  ],
+  escolas: [
+    "E.E. ADHEMAR ANTONIO PRADO","E.E. ALCIDES BOSCOLO","E.E. ANDRÉ NUNES JUNIOR",
+    "E.E. ANTONIETA DE SOUZA ALCÂNTARA  / CHARLOTTE MARIA SHAW MASON",
+    "E.E. AQUILINO RIBEIRO  / MARIA TEREZA SIMÕES DE ALMEIDA PROFESSORA",
+    "E.E. ANÍSIO TEIXEIRA","E.E. ANTONIO CARLOS BRASILEIRO DE ALMEIDA JOBIM - TOM JOBIM",
+    "E.E. BARRO BRANCO II / LEÔNIDAS DA SILVA","E.E. BELIZE / BENJAMIN SAMUEL BLOOM",
+    "E.E. BERNADIM RIBEIRO","E.E. BRENO ROSSI, MAESTRO",
+    "E.E. CÂNDIDO PROCÓPIO F. CAMARGO","E.E. CARLOS HENRIQUE LIBERALLI",
+    "E.E. CARMELINDA M. PEREIRA  / LIMA BARRETO","E.E. CESAR DONATO CALABREZ /LEILA DINIZ",
+    "E.E. CLAUDIA DUTRA VIANA / ROSA PARKS","E.E. COHAB CARRÃOZINHO",
+    "E.E. COHAB ITAQUERA IV","E.E. DÉCIO FERRAZ ALVIM / FLORIANO PEIXOTO",
+    "E.E. ERNESTINA DEL B. TRAMA","E.E. ESTHER FIGUEIREDO FERRAZ",
+    "E.E. FABIO AGAZZI","E.E. FADLO HAIDAR",
+    "E.E. FERNANDO MAURO P. ROCHA, DEPUTADO","E.E. FERNANDO PESSOA",
+    "E.E. FRANCISCO DE ASSIS P. CORRÊA","E.E. FREDERICO MARIANO",
+    "E.E. GERALDINO DOS SANTOS, DEPUTADO  / JOSUÉ DE CASTRO","E.E. GUERRA JUNQUEIRO",
+    "E.E. HAYDEÉ HIDALGO","E.E. HUMBERTO BAPTISTELLI","E.E. HUMBERTO DANTAS",
+    "E.E. INDIANA ZUYCHER S. DE JESUS","E.E. ISAAC SCHIRAIBER",
+    "E.E. JARDIM DOM ANGÉLICO","E.E. JARDIM IGUATEMI","E.E. JARDIM LIMOEIRO III",
+    "E.E. JARDIM PEDRA BRANCA / PATRÍCIA GALVÃO - PAGU","E.E. JARDIM WILMA FLOR",
+    "E.E. JOÃO CASTELLANO","E.E. JOAQUIM SILVÉRIO G. DOS REIS",
+    "E.E. JORGE LUIS BORGES","E.E. JUAN CARLOS ONETTI","E.E. LUIS VAZ DE CAMÕES",
+    "E.E. LUIZ ROSANOVA",
+    "E.E. MARCOS ANTONIO COSTA  / HERBERT JOSÉ DE SOUZA - BETINHO",
+    "E.E. MARIA ANTONIETA FERRAZ BIBLIOTECARIA",
+    "E.E. MARIA DE LOURDES A. A. PACHECO / CHIQUINHA GONZAGA",
+    "E.E. MARIUMA BUAZAR MAUAD","E.E. MOACYR AMARAL DOS SANTOS",
+    "E.E. MOZART TAVARES DE LIMA","E.E. OSWALDO GAGLIARDI","E.E. PAULO ROLIM ROSA",
+    "E.E. PAULO SARASATE GOVERNADOR","E.E. PEDRO TAQUES",
+    "E.E. RECANTO VERDE SOL  / DJANIRA","E.E. RITA PINTO DE ARAUJO",
+    "E.E. ROCCA DORDALL","E.E. ROQUE THEOPHILO","E.E. RUY DE MELLO JUNQUEIRA",
+    "E.E. SALIM FARAH MALUF","E.E. SALVADOR ALLENDE GOSSENS","E.E. SATURNINO PEREIRA",
+    "E.E. SEBASTIÃO FARIAS ZIMBRES","E.E. SERGIO ESTANISTLAU DE CAMARGO",
+    "E.E. SERGIO ROCHA KIEHL","E.E. SILVANA EVANGELISTA","E.E. SIMÃO MATHIAS",
+    "E.E. SUMIE IWATA","E.E. VILA BELA","E.E. YERVANT KISSAJIKIAN","E.E. ZÍPORA RUBISTEIN"
+  ],
+  modelos: [
+    // { nome: 'Multilaser M11W SE', garantia: true, links: [{ label: 'Suporte Multilaser', url: 'https://suporte.multilaser.com.br' }] },
+    // { nome: 'Positivo Motion C41TC' },
+  ],
+  sistemas: ['PortalNet'],
+
+  // ============================================================
+  // URL do teste de velocidade que abre no modal
+  // Troque aqui para qualquer outro site que aceite iframe:
+  //   OpenSpeedTest : 'https://openspeedtest.com/Get-Speed-Test-Widget.php'
+  //   Cloudflare    : 'https://speed.cloudflare.com'
+  //   LibreSpeed    : 'https://librespeed.org'  (open source, self-hostável)
+  // ============================================================
+  testeVelocidadeUrl: 'https://www.brasilbandalarga.com.br/',
+};
+
+const PORTALNET = 'PortalNet';
+
+/* ================================================================
+   CATEGORIAS
+   ================================================================ */
+const CATS = [
+  { id:'rede',    cor:'#1E7FC7', titulo:'Problema de Rede',
+    desc:'Lentidão, queda de internet, Wi-Fi instável ou solicitação de pontos de rede.',
+    ic:'<path d="M5 12.5a10 10 0 0 1 14 0"/><path d="M8 15.5a6 6 0 0 1 8 0"/><circle cx="12" cy="19" r=".8" fill="currentColor" stroke="none"/>' },
+  { id:'equip',   cor:'#1E7A4C', titulo:'Problema de Equipamento',
+    desc:'Notebook, tablet ou impressora com problema físico, de software, Wi-Fi ou formatação.',
+    ic:'<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>' },
+  { id:'sistema', cor:'#7A4FB5', titulo:'Problema em Sistema',
+    desc:'Erros em sistemas como PortalNet e outros sistemas educacionais.',
+    ic:'<circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 3"/>' },
+  { id:'email',   cor:'#C9711A', titulo:'Problema no E-mail',
+    desc:'Sem acesso, senha bloqueada ou problemas de login.',
+    ic:'<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 7l10 7 10-7"/>' },
+];
+
+/* ================================================================
+   ESTADO
+   ================================================================ */
+const ST = {
+  cat:null, redeTipo:null, energia:null, locais:'',
+  equipTipo:null, modelo:null, tipoFisico:null,
+  sistema:null, urgencia:null, anexoObrig:false
+};
+
+/* ================================================================
+   EQUIPAMENTOS — Estado e Cache
+   ================================================================ */
+const EQUIP = {
+  dados: [],
+  carregado: false,
+  carregando: false,
+  promessa: null
+};
+
+function getEquipamentos() {
+  return EQUIP.dados;
+}
+
+function getCategorias() {
+  return [...new Set(EQUIP.dados.map(e => e.categoria))].sort();
+}
+
+function getMarcas(categoria) {
+  return [...new Set(EQUIP.dados.filter(e => e.categoria === categoria).map(e => e.marca))].sort();
+}
+
+function getModelos(categoria, marca) {
+  return [...new Set(EQUIP.dados.filter(e => e.categoria === categoria && e.marca === marca).map(e => e.modelo))].sort();
+}
+
+function getEquipamentosFiltrados(categoria, marca, modelo) {
+  return EQUIP.dados.filter(e => {
+    const matchCat = !categoria || e.categoria === categoria;
+    const matchMarca = !marca || e.marca === marca;
+    const matchModelo = !modelo || e.modelo === modelo;
+    return matchCat && matchMarca && matchModelo;
+  });
+}
+
+async function carregarEquipamentos() {
+  if (EQUIP.carregado) return EQUIP.dados;
+  if (EQUIP.carregando) {
+    return new Promise(resolve => {
+      const check = setInterval(() => {
+        if (EQUIP.carregado) {
+          clearInterval(check);
+          resolve(EQUIP.dados);
+        }
+      }, 50);
+    });
+  }
+  EQUIP.carregando = true;
+  try {
+    const dados = await new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .getEquipamentos();
+    });
+    EQUIP.dados = dados || [];
+    EQUIP.carregado = true;
+    EQUIP.carregando = false;
+    return EQUIP.dados;
+  } catch (e) {
+    console.error('Erro ao carregar equipamentos:', e);
+    EQUIP.carregando = false;
+    EQUIP.dados = [];
+    return [];
+  }
+}
+
+function popularSelect(selectId, opcoes, placeholder, desabilitado = false) {
+  const sel = $(selectId);
+  sel.innerHTML = '';
+  sel.add(new Option(placeholder, ''));
+  opcoes.forEach(opt => sel.add(new Option(opt, opt)));
+  sel.disabled = desabilitado || opcoes.length === 0;
+  if (opcoes.length === 0 && placeholder) {
+    sel.innerHTML = '';
+    sel.add(new Option(placeholder, ''));
+    sel.disabled = true;
+  }
+}
+
+function onCategoriaChange() {
+  const categoria = $('sel-categoria').value;
+  ST.modelo = null;
+  $('sel-marca').value = '';
+  $('sel-modelo').value = '';
+  hide('equip-resultado');
+  $('av-equip').className = 'btn-av';
+
+  if (!categoria) {
+    popularSelect('sel-marca', [], '— Selecione uma categoria primeiro —', true);
+    popularSelect('sel-modelo', [], '— Selecione uma marca primeiro —', true);
+    return;
+  }
+
+  const marcas = getMarcas(categoria);
+  popularSelect('sel-marca', marcas, '— Selecione a marca —', marcas.length === 0);
+  popularSelect('sel-modelo', [], '— Selecione uma marca primeiro —', true);
+  atualizarResultadoEquip();
+}
+
+function onMarcaChange() {
+  const categoria = $('sel-categoria').value;
+  const marca = $('sel-marca').value;
+  ST.modelo = null;
+  $('sel-modelo').value = '';
+  hide('equip-resultado');
+  $('av-equip').className = 'btn-av';
+
+  if (!marca) {
+    popularSelect('sel-modelo', [], '— Selecione uma marca primeiro —', true);
+    return;
+  }
+
+  const modelos = getModelos(categoria, marca);
+  popularSelect('sel-modelo', modelos, '— Selecione o modelo —', modelos.length === 0);
+  atualizarResultadoEquip();
+}
+
+function onModeloSelect() {
+  const modelo = $('sel-modelo').value;
+  const categoria = $('sel-categoria').value;
+  const marca = $('sel-marca').value;
+
+  if (!modelo) {
+    ST.modelo = null;
+    hide('equip-resultado');
+    $('av-equip').className = 'btn-av';
+    return;
+  }
+
+  const equip = EQUIP.dados.find(e => e.categoria === categoria && e.marca === marca && e.modelo === modelo);
+  ST.modelo = equip ? { nome: equip.modelo, id: equip.id, categoria: equip.categoria, marca: equip.marca, garantia: false } : { nome: modelo };
+
+  atualizarResultadoEquip();
+  $('av-equip').className = 'btn-av on';
+}
+
+function atualizarResultadoEquip() {
+  const categoria = $('sel-categoria').value;
+  const marca = $('sel-marca').value;
+  const modelo = $('sel-modelo').value;
+
+  const filtrados = getEquipamentosFiltrados(categoria, marca, modelo);
+  const el = $('equip-resultado');
+  const txt = $('equip-resultado-texto');
+
+  if (filtrados.length === 0) {
+    txt.innerHTML = '<strong>Nenhum equipamento encontrado</strong> com os filtros selecionados.';
+    el.className = 'al al-aviso';
+    show('equip-resultado');
+  } else if (modelo) {
+    const eq = filtrados[0];
+    txt.innerHTML = `Equipamento selecionado: <strong>${eq.categoria} / ${eq.marca} / ${eq.modelo}</strong> (ID: ${eq.id})`;
+    el.className = 'al al-ok';
+    show('equip-resultado');
+  } else if (marca) {
+    txt.innerHTML = `${filtrados.length} modelo(s) encontrado(s) para <strong>${categoria} / ${marca}</strong>. Selecione um modelo.`;
+    el.className = 'al al-info';
+    show('equip-resultado');
+  } else if (categoria) {
+    txt.innerHTML = `${filtrados.length} equipamento(s) na categoria <strong>${categoria}</strong>. Selecione uma marca.`;
+    el.className = 'al al-info';
+    show('equip-resultado');
+  } else {
+    hide('equip-resultado');
+  }
+}
+
+async function inicializarEquipamentos() {
+  if (EQUIP.carregado) {
+    popularSelect('sel-categoria', getCategorias(), '— Selecione a categoria —');
+    popularSelect('list-sel-categoria', getCategorias(), 'Todas as categorias');
+    popularSelect('list-sel-marca', [], 'Todas as marcas', true);
+    popularSelect('list-sel-modelo', [], 'Todos os modelos', true);
+    return;
+  }
+  await carregarEquipamentos();
+  popularSelect('sel-categoria', getCategorias(), '— Selecione a categoria —');
+  popularSelect('list-sel-categoria', getCategorias(), 'Todas as categorias');
+  popularSelect('list-sel-marca', [], 'Todas as marcas', true);
+  popularSelect('list-sel-modelo', [], 'Todos os modelos', true);
+  renderizarListaEquipamentos();
+}
+
+function renderizarListaEquipamentos() {
+  const categoria = $('list-sel-categoria').value;
+  const marca = $('list-sel-marca').value;
+  const modelo = $('list-sel-modelo').value;
+  const filtrados = getEquipamentosFiltrados(categoria, marca, modelo);
+  const tbody = $('equip-lista-tbody');
+  const vazio = $('equip-lista-vazio');
+  const contador = $('list-contador');
+
+  contador.textContent = `${filtrados.length} equipamento(s)`;
+
+  if (filtrados.length === 0) {
+    tbody.innerHTML = '';
+    tbody.style.display = 'none';
+    vazio.style.display = 'block';
+    return;
+  }
+
+  tbody.style.display = '';
+  vazio.style.display = 'none';
+  tbody.innerHTML = filtrados.map(e => `
+    <tr style="border-bottom:1px solid var(--linha);">
+      <td style="padding:10px 12px;">${e.categoria}</td>
+      <td style="padding:10px 12px;">${e.marca}</td>
+      <td style="padding:10px 12px; font-weight:600;">${e.modelo}</td>
+    </tr>
+  `).join('');
+}
+
+function aplicarFiltrosLista() {
+  const categoria = $('list-sel-categoria').value;
+  const marca = $('list-sel-marca').value;
+
+  // Atualizar dropdown de marcas baseado na categoria
+  if (categoria) {
+    const marcas = getMarcas(categoria);
+    popularSelect('list-sel-marca', marcas, 'Todas as marcas', marcas.length === 0);
+  } else {
+    popularSelect('list-sel-marca', [], 'Todas as marcas', true);
+  }
+
+  // Atualizar dropdown de modelos baseado na categoria e marca
+  if (categoria && marca) {
+    const modelos = getModelos(categoria, marca);
+    popularSelect('list-sel-modelo', modelos, 'Todos os modelos', modelos.length === 0);
+  } else {
+    popularSelect('list-sel-modelo', [], 'Todos os modelos', true);
+  }
+
+  renderizarListaEquipamentos();
+}
+
+function limparFiltrosLista() {
+  $('list-sel-categoria').value = '';
+  popularSelect('list-sel-marca', [], 'Todas as marcas', true);
+  popularSelect('list-sel-modelo', [], 'Todos os modelos', true);
+  renderizarListaEquipamentos();
+}
+
+/* ================================================================
+   UTILITÁRIOS
+   ================================================================ */
+const $=id=>document.getElementById(id);
+function show(id){ $(id).style.display=''; }
+function hide(id){ $(id).style.display='none'; }
+function anim(id){ const e=$(id); e.style.display=''; e.style.animation='none'; e.offsetHeight; e.style.animation=''; }
+function view(id){ document.querySelectorAll('.view').forEach(v=>v.classList.remove('active')); $(id).classList.add('active'); window.scrollTo({top:0,behavior:'smooth'}); }
+function sGrupo(g,v){ document.querySelectorAll(`[data-g="${g}"]`).forEach(b=>b.classList.toggle('sel',b.dataset.v===v)); }
+function vcampo(id,ok){ $(id).classList.toggle('inv',!ok); return ok; }
+
+/* ================================================================
+   INICIALIZAÇÃO
+   ================================================================ */
+(function init(){
+  $('c-nome').textContent = CFG.contato.nome + ' — ' + CFG.contato.unidade;
+  $('c-sub').textContent  = CFG.contato.telefone + ' · ' + CFG.contato.email;
+  $('c-tel').href         = 'tel:' + CFG.contato.telefoneLink;
+  $('c-copiar').onclick   = function(){ navigator.clipboard.writeText(CFG.contato.email); this.textContent='✓ Copiado!'; setTimeout(()=>this.textContent='Copiar e-mail',2000); };
+
+  $('grid-cat').innerHTML = CATS.map(c=>`
+    <button type="button" class="card-cat" style="--cor-cat:${c.cor}" onclick="abrirCat('${c.id}')">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">${c.ic}</svg>
+      <h3>${c.titulo}</h3><p>${c.desc}</p>
+      <span class="lnk">Abrir chamado →</span>
+    </button>`).join('');
+
+  CFG.cargos.forEach(c=>$('id-cargo').add(new Option(c,c)));
+  CFG.escolas.forEach(e=>$('id-escola').add(new Option(e,e)));
+
+  const ss=$('sel-sistema');
+  if(CFG.sistemas.length===0) ss.add(new Option('(lista de sistemas não configurada)',''));
+  CFG.sistemas.forEach(s=>ss.add(new Option(s,s)));
+
+  inicializarEquipamentos();
+})();
+
+/* ================================================================
+   MODAL TESTE DE VELOCIDADE
+   ================================================================ */
+function abrirTeste(){
+  $('iframe-teste').src = CFG.testeVelocidadeUrl;
+  $('modal-teste').classList.add('aberto');
+  document.body.style.overflow = 'hidden';
+}
+function fecharModal(){
+  $('modal-teste').classList.remove('aberto');
+  $('iframe-teste').src = '';
+  document.body.style.overflow = '';
+}
+function fecharTeste(e){
+  if(e.target === $('modal-teste')) fecharModal();
+}
+// Fecha com Esc
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') fecharModal(); });
+
+/* ================================================================
+   DEBUG - Execute no console do navegador (F12)
+   ================================================================ */
+async function debugEquipamentos() {
+  console.log('=== DEBUG EQUIPAMENTOS ===');
+  console.log('EQUIP.carregado:', EQUIP.carregado);
+  console.log('EQUIP.carregando:', EQUIP.carregando);
+  console.log('EQUIP.dados.length:', EQUIP.dados.length);
+  
+  if (EQUIP.dados.length > 0) {
+    console.log('Primeiros 3:', EQUIP.dados.slice(0, 3));
+    console.log('Categorias:', getCategorias());
+  } else {
+    console.log('Tentando carregar...');
+    await carregarEquipamentos();
+    console.log('Após carregar:', EQUIP.dados.length);
+    if (EQUIP.dados.length > 0) {
+      console.log('Primeiros 3:', EQUIP.dados.slice(0, 3));
+      console.log('Categorias:', getCategorias());
+    }
+  }
+}
+
+/* ================================================================
+   NAVEGAÇÃO
+   ================================================================ */
+function voltarHome(){ document.documentElement.style.removeProperty('--cor-cat'); view('view-home'); }
+function voltarQ(){ view('view-q'); }
+
+function abrirListaEquipamentos(){
+  view('view-equip-list');
+  renderizarListaEquipamentos();
+}
+
+function abrirCat(id){
+  const cat=CATS.find(c=>c.id===id); ST.cat=cat;
+  document.documentElement.style.setProperty('--cor-cat', cat.cor);
+  $('q-badge').textContent = cat.titulo;
+  $('q-titulo').textContent = cat.titulo;
+  document.querySelectorAll('.cat-qs').forEach(e=>e.style.display='none');
+  resetCat(id);
+  show('qs-'+id);
+  view('view-q');
+}
+
+function resetCat(id){
+  if(id==='rede'){
+    ST.redeTipo=null; ST.energia=null; ST.locais='';
+    ['rede','energia'].forEach(g=>document.querySelectorAll(`[data-g="${g}"]`).forEach(b=>b.classList.remove('sel')));
+    ['q-lentidao','q-queda','q-wifi-salas','q-pontos','q-sem-energia'].forEach(hide);
+    $('locais-ta').value=''; $('av-rede').className='btn-av';
+  }
+  if(id==='equip'){
+    ST.equipTipo=null; ST.modelo=null; ST.tipoFisico=null;
+    document.querySelectorAll('[data-g="equip"]').forEach(b=>b.classList.remove('sel'));
+    ['q-equip-filtros','q-garantia','q-fisico'].forEach(hide);
+    $('sel-categoria').value='';
+    $('sel-marca').value='';
+    $('sel-modelo').value='';
+    $('av-equip').className='btn-av';
+    hide('equip-resultado');
+    document.querySelectorAll('.tfbtn').forEach(b=>b.classList.remove('sel'));
+  }
+  if(id==='sistema'){
+    ST.sistema=null; $('sel-sistema').value=''; hide('q-portalnet');
+    ['pn-rg','pn-nome','pn-atrib'].forEach(id=>$(id).value='');
+    $('av-sistema').className='btn-av';
+  }
+  if(id==='email'){
+    ['em-cie','em-escola','em-login','em-email'].forEach(id=>$(id).value='');
+    $('av-email').className='btn-av';
+  }
+}
+
+function irParaId(){
+  $('id-badge').textContent = ST.cat.titulo;
+  $('id-resumo').innerHTML  = mkResumo().map(t=>`<span class="tag">${t}</span>`).join('');
+  ST.urgencia = null;
+  document.querySelectorAll('.urg').forEach(b=>b.classList.remove('sel'));
+  ['c-nome','c-cargo','c-email','c-escola','c-urg','c-anexo'].forEach(id=>$(id).classList.remove('inv'));
+  if(ST.cat.id==='email'){
+    $('id-desc').value=`CIE: ${$('em-cie').value.trim()}\nNome da Escola / DE: ${$('em-escola').value.trim()}\nLogin: ${$('em-login').value.trim()}\nE-mail: ${$('em-email').value.trim()}`;
+  } else {
+    $('id-desc').value='';
+  }
+  ST.anexoObrig = (ST.cat.id==='rede' && ST.redeTipo==='pontos');
+  $('anexo-opc').textContent = ST.anexoObrig ? '(obrigatório — fotos dos locais)' : '(opcional — print ou foto do problema)';
+  $('anexo-opc').style.color = ST.anexoObrig ? 'var(--vermelho)' : '';
+  $('id-anexo').value='';
+  view('view-id');
+}
+
+function mkResumo(){
+  const t=[ST.cat.titulo];
+  if(ST.cat.id==='rede'){ const m={lentidao:'Lentidão','queda-total':'Queda Total','wifi-salas':'Queda Wi-Fi em Salas',pontos:'Pontos de Rede'}; if(ST.redeTipo) t.push(m[ST.redeTipo]); }
+  if(ST.cat.id==='equip'){ const m={wifi:'Wi-Fi',fisico:'Problema Físico',software:'Problema Software',formatacao:'Formatação',sistema:'Sistema'}; if(ST.equipTipo) t.push(m[ST.equipTipo]); if(ST.modelo) t.push(ST.modelo.nome); if(ST.tipoFisico) t.push(ST.tipoFisico); }
+  if(ST.cat.id==='sistema' && ST.sistema) t.push(ST.sistema);
+  if(ST.cat.id==='email') t.push('E-mail Institucional');
+  return t;
+}
+
+/* ================================================================
+   LÓGICA — REDE
+   ================================================================ */
+function sRede(v){
+  ST.redeTipo=v; ST.energia=null; sGrupo('rede',v);
+  ['q-lentidao','q-queda','q-wifi-salas','q-pontos','q-sem-energia'].forEach(hide);
+  document.querySelectorAll('[data-g="energia"]').forEach(b=>b.classList.remove('sel'));
+  $('av-rede').className='btn-av';
+  if(v==='lentidao'){ anim('q-lentidao'); $('av-rede').className='btn-av on'; }
+  if(v==='queda-total'){ anim('q-queda'); }
+  if(v==='wifi-salas'){ anim('q-wifi-salas'); chkLocais(); }
+  if(v==='pontos'){ anim('q-pontos'); $('av-rede').className='btn-av on'; }
+}
+function sEnergia(v){
+  ST.energia=v; sGrupo('energia',v); hide('q-sem-energia'); $('av-rede').className='btn-av';
+  if(v==='nao') anim('q-sem-energia');
+  if(v==='sim') $('av-rede').className='btn-av on';
+}
+function chkLocais(){ ST.locais=$('locais-ta').value.trim(); $('av-rede').className='btn-av'+(ST.locais.length>=3?' on':''); }
+
+/* ================================================================
+   LÓGICA — EQUIPAMENTO
+   ================================================================ */
+function sEquip(v){
+  ST.equipTipo=v; ST.modelo=null; ST.tipoFisico=null; sGrupo('equip',v);
+  ['q-equip-filtros','q-garantia','q-fisico'].forEach(hide);
+  $('sel-categoria').value='';
+  $('sel-marca').value='';
+  $('sel-modelo').value='';
+  $('av-equip').className='btn-av';
+  hide('equip-resultado');
+  document.querySelectorAll('.tfbtn').forEach(b=>b.classList.remove('sel'));
+  anim('q-equip-filtros');
+}
+function sFisico(v){
+  ST.tipoFisico=v;
+  document.querySelectorAll('.tfbtn').forEach(b=>b.classList.toggle('sel',b.dataset.v===v));
+  $('av-equip').className='btn-av on';
+}
+
+/* ================================================================
+   LÓGICA — SISTEMA
+   ================================================================ */
+function onSistema(){
+  const v=$('sel-sistema').value; ST.sistema=v; hide('q-portalnet');
+  ['pn-rg','pn-nome','pn-atrib'].forEach(id=>$(id).value='');
+  $('av-sistema').className='btn-av';
+  if(!v) return;
+  if(v===PORTALNET){ anim('q-portalnet'); }
+  else { $('av-sistema').className='btn-av on'; }
+}
+function chkSistema(){
+  if(ST.sistema===PORTALNET){
+    const ok=$('pn-rg').value.trim()&&$('pn-nome').value.trim()&&$('pn-atrib').value.trim();
+    $('av-sistema').className='btn-av'+(ok?' on':'');
+  }
+}
+
+/* ================================================================
+   LÓGICA — EMAIL
+   ================================================================ */
+function chkEmail(){
+  const ok=$('em-cie').value.trim()&&$('em-escola').value.trim()&&$('em-login').value.trim()&&$('em-email').value.trim();
+  $('av-email').className='btn-av'+(ok?' on':'');
+}
+
+/* ================================================================
+   URGÊNCIA
+   ================================================================ */
+function sUrg(v){
+  ST.urgencia=v;
+  document.querySelectorAll('.urg').forEach(b=>b.classList.toggle('sel',b.dataset.v===v));
+  $('c-urg').classList.remove('inv');
+}
+
+/* ================================================================
+   ENVIO
+   ================================================================ */
+function enviar(){
+  const nome=$('id-nome').value.trim(), cargo=$('id-cargo').value,
+        email=$('id-email').value.trim(), escola=$('id-escola').value,
+        anexo=$('id-anexo').files[0];
+  let ok=true;
+  ok=vcampo('c-nome',nome.length>2)&&ok;
+  ok=vcampo('c-cargo',cargo!=='')&&ok;
+  ok=vcampo('c-email',/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))&&ok;
+  ok=vcampo('c-escola',escola!=='')&&ok;
+  ok=vcampo('c-urg',ST.urgencia!==null)&&ok;
+  if(ST.anexoObrig&&!anexo){ $('c-anexo').classList.add('inv'); ok=false; } else $('c-anexo').classList.remove('inv');
+  if(!ok) return;
+
+  const btn=$('btn-enviar'); btn.disabled=true; btn.textContent='Enviando...';
+
+  const payload={
+    tipo:       mkTipo(),
+    descricao:  mkDesc($('id-desc').value.trim()),
+    solicitante:nome,
+    funcao:     cargo,
+    emailSolic: email,
+    unidade:    escola,
+    urgencia:   ST.urgencia
+  };
+
+  function despachar(b64,nArq,tArq){
+    Object.assign(payload,{anexoBase64:b64,anexoNome:nArq,anexoTipo:tArq});
+    if(typeof google!=='undefined'&&google.script&&google.script.run){
+      google.script.run
+        .withSuccessHandler(p=>{btn.disabled=false;btn.textContent='Enviar chamado';mostrarSuc(p);})
+        .withFailureHandler(e=>{btn.disabled=false;btn.textContent='Enviar chamado';alert('Erro ao enviar: '+e.message);})
+        .criarChamado(payload);
+    } else {
+      setTimeout(()=>{btn.disabled=false;btn.textContent='Enviar chamado';mostrarSuc('PRV-'+Math.floor(Math.random()*9000+1000));},700);
+    }
+  }
+
+  if(anexo){ const r=new FileReader(); r.onload=()=>despachar(r.result.split(',')[1],anexo.name,anexo.type); r.readAsDataURL(anexo); }
+  else despachar(null,null,null);
+}
+
+function mkTipo(){
+  const id=ST.cat.id;
+  if(id==='rede'){ const m={lentidao:'Rede - Lentidão','queda-total':'Rede - Queda Total','wifi-salas':'Rede - Queda Wi-Fi em Salas',pontos:'Rede - Pontos de Rede'}; return m[ST.redeTipo]||'Problema de Rede'; }
+  if(id==='equip'){ const m={wifi:'Equip. - Wi-Fi',fisico:'Equip. - Manutenção Física',software:'Equip. - Manutenção Software',formatacao:'Equip. - Formatação',sistema:'Equip. - Sistema'}; let t=m[ST.equipTipo]||'Problema de Equipamento'; if(ST.tipoFisico) t+=` (${ST.tipoFisico})`; return t; }
+  if(id==='sistema') return 'Sistema - '+(ST.sistema||'');
+  if(id==='email')   return 'E-mail Institucional';
+  return ST.cat.titulo;
+}
+
+function mkDesc(extra){
+  const L=[];
+  if(ST.cat.id==='rede'){
+    if(ST.redeTipo==='lentidao')    L.push('[Lentidão] Print do teste de velocidade anexado.');
+    if(ST.redeTipo==='queda-total') L.push('[Queda Total] Escola com energia elétrica no momento.');
+    if(ST.redeTipo==='wifi-salas')  L.push(`[Locais sem Wi-Fi]\n${ST.locais}`);
+    if(ST.redeTipo==='pontos')      L.push('[Pontos de Rede] Fotos dos locais solicitados em anexo.');
+  }
+  if(ST.cat.id==='equip'){
+    if(ST.modelo)     L.push(`[Modelo] ${ST.modelo.nome}`);
+    if(ST.tipoFisico) L.push(`[Tipo físico] ${ST.tipoFisico}`);
+    if(ST.modelo&&ST.modelo.garantia) L.push('[Garantia] Chamado aberto também com o fornecedor.');
+  }
+  if(ST.cat.id==='sistema'&&ST.sistema===PORTALNET){
+    L.push(`[PortalNet]\nRG: ${$('pn-rg').value.trim()}\nNome: ${$('pn-nome').value.trim()}\nAtribuições: ${$('pn-atrib').value.trim()}`);
+  }
+  if(ST.cat.id==='email'){
+    L.push(`CIE: ${$('em-cie').value.trim()}\nNome da Escola / DE: ${$('em-escola').value.trim()}\nLogin: ${$('em-login').value.trim()}\nE-mail: ${$('em-email').value.trim()}`);
+  }
+  if(extra) L.push(extra);
+  return L.join('\n');
+}
+
+function mostrarSuc(p){ $('num-prot').textContent='#'+p; view('view-suc'); }
+</script>
+</body>
+</html>
