@@ -321,4 +321,5 @@ npm run test:e2e
 4. 🔄 Migração de dados
 5. 🔄 Deploy staging
 6. 🔄 Testes E2E completos
-6. 🚀 Deploy produção
+6. 🚀 Deploy produção#   f o r c e   r e b u i l d  
+ 
