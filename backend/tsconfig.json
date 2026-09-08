@@ -14,13 +14,11 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "composite": true,
     "paths": {
       "@/*": ["./src/*"],
       "@shared/*": ["../shared/types/*"]
     }
   },
   "include": ["src/**/*", "prisma/**/*"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts"],
-  "references": [{ "path": "../shared/types" }]
+  "exclude": ["node_modules", "dist", "**/*.test.ts"]
 }
