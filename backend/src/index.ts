@@ -1,0 +1,179 @@
+import 'dotenv/config'
+import express from 'express'
+import cors from 'cors'
+import helmet from 'helmet'
+import cookieParser from 'cookie-parser'
+import rateLimit from 'express-rate-limit'
+import pino from 'pino'
+import * as Sentry from '@sentry/node'
+
+import { env } from './config/env'
+import { prisma } from './config/prisma'
+import { authMiddleware } from './middleware/auth'
+import { errorHandler } from './middleware/errorHandler'
+import { requestLogger } from './middleware/requestLogger'
+
+import authRoutes from './routes/auth'
+import usuarioRoutes from './routes/usuarios'
+import chamadoRoutes from './routes/chamados'
+import escolaRoutes from './routes/escolas'
+import equipamentoRoutes from './routes/equipamentos'
+import inventarioRoutes from './routes/inventario'
+import dashboardRoutes from './routes/dashboard'
+
+const logger = pino({
+  level: env.LOG_LEVEL,
+  transport: env.NODE_ENV === 'development' ? { target: 'pino-pretty' } : undefined
+})
+
+if (env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: env.SENTRY_DSN,
+    environment: env.NODE_ENV,
+    tracesSampleRate: 0.1
+  })
+}
+
+const app = express()
+
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' }
+}))
+
+app.use(cors({
+  origin: [env.FRONTEND_URL, 'http://localhost:5173'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}))
+
+app.use(express.json({ limit: '10mb' }))
+app.use(express.urlencoded({ extended: true }))
+app.use(cookieParser())
+
+const generalLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 100,
+  message: { error: 'RATE_LIMITED', message: 'Muitas requisições, tente novamente em um minuto' },
+  standardHeaders: true,
+  legacyHeaders: false
+})
+
+const authLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: { error: 'RATE_LIMITED', message: 'Muitas tentativas de login, aguarde um minuto' },
+  standardHeaders: true,
+  legacyHeaders: false
+})
+
+const refreshLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: { error: 'RATE_LIMITED', message: 'Muitas tentativas de renovação, aguarde um minuto' },
+  standardHeaders: true,
+  legacyHeaders: false
+})
+
+app.use(generalLimiter)
+app.use(requestLogger(logger))
+
+app.get('/health', async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`
+    res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      database: 'connected',
+      version: process.env.npm_package_version || '1.0.0'
+    })
+  } catch {
+    res.status(503).json({
+      status: 'down',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      database: 'disconnected',
+      version: process.env.npm_package_version || '1.0.0'
+    })
+  }
+})
+
+app.use('/api/auth', authLimiter, authRoutes)
+app.use('/api/auth/refresh', refreshLimiter)
+
+// Public endpoints para cascata do Forms (sem auth)
+app.get('/api/equipamentos/categorias', async (_req, res) => {
+  try {
+    const categorias = await prisma.equipamento.findMany({
+      select: { categoria: true },
+      distinct: ['categoria'],
+      orderBy: { categoria: 'asc' }
+    })
+    return res.json(categorias.map(c => c.categoria))
+  } catch (err) { throw err }
+})
+
+app.get('/api/equipamentos/marcas', async (req, res) => {
+  try {
+    const { categoria } = req.query
+    if (!categoria) return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Parâmetro categoria obrigatório' })
+    const marcas = await prisma.equipamento.findMany({
+      where: { categoria: categoria as string },
+      select: { marca: true },
+      distinct: ['marca'],
+      orderBy: { marca: 'asc' }
+    })
+    return res.json(marcas.map(m => m.marca))
+  } catch (err) { throw err }
+})
+
+app.get('/api/equipamentos/modelos', async (req, res) => {
+  try {
+    const { categoria, marca } = req.query
+    if (!categoria || !marca) return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Parâmetros categoria e marca obrigatórios' })
+    const modelos = await prisma.equipamento.findMany({
+      where: { categoria: categoria as string, marca: marca as string },
+      select: { modelo: true },
+      distinct: ['modelo'],
+      orderBy: { modelo: 'asc' }
+    })
+    return res.json(modelos.map(m => m.modelo))
+  } catch (err) { throw err }
+})
+
+app.use('/api', authMiddleware)
+app.use('/api/usuarios', usuarioRoutes)
+app.use('/api/chamados', chamadoRoutes)
+app.use('/api/escolas', escolaRoutes)
+app.use('/api/equipamentos', equipamentoRoutes)
+app.use('/api/inventario', inventarioRoutes)
+app.use('/api/dashboard', dashboardRoutes)
+
+if (env.SENTRY_DSN) {
+  app.use(Sentry.expressErrorHandler())
+}
+
+app.use(errorHandler(logger))
+
+const server = app.listen(env.PORT, () => {
+  logger.info(`🚀 Server running on port ${env.PORT} (${env.NODE_ENV})`)
+})
+
+process.on('SIGTERM', async () => {
+  logger.info('SIGTERM received, shutting down gracefully')
+  server.close(async () => {
+    await prisma.$disconnect()
+    process.exit(0)
+  })
+})
+
+process.on('SIGINT', async () => {
+  logger.info('SIGINT received, shutting down gracefully')
+  server.close(async () => {
+    await prisma.$disconnect()
+    process.exit(0)
+  })
+})
+
+export { app, logger }

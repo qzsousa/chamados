@@ -1,0 +1,106 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Usuario {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  nome              String
+  senhaHash         String
+  nivel             String   // ADMIN, TECNICO, GESTOR, VISUALIZADOR
+  filial            String
+  status            String   @default("ATIVO") // ATIVO, INATIVO
+  primeiroLogin     Boolean  @default(true)
+  refreshTokenHash  String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  refreshTokens     RefreshToken[]
+
+  @@index([email])
+  @@index([filial])
+  @@index([nivel])
+  @@index([status])
+}
+
+model Escola {
+  id               String   @id @default(cuid())
+  nome             String   @unique
+  nomeNormalizado  String   @unique
+  tecnico          String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  inventario       Inventario?
+
+  @@index([tecnico])
+}
+
+model Chamado {
+  id                 String   @id @default(cuid())
+  protocolo          String   @unique
+  timestamp          DateTime @default(now())
+  unidade            String
+  solicitante        String
+  funcao             String?
+  tipo               String
+  descricao          String
+  urgencia           String
+  anexoUrl           String?
+  status             String   @default("ABERTO") // ABERTO, ANDAMENTO, COMUNICADO, RESOLVIDO
+  responsavel        String?
+  ultimaAtualizacao  DateTime @updatedAt
+  historico          String?
+  tecnicoResolucao   String?
+  tecnicoSetor       String?
+  inventarioStatus   String?  // CONCLUIDO, EM_ANDAMENTO, NAO_REALIZADO, NAO_INFORMADO
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([unidade])
+  @@index([status])
+  @@index([tecnicoSetor])
+  @@index([timestamp])
+  @@index([protocolo])
+  @@index([responsavel])
+}
+
+model Inventario {
+  id        String   @id @default(cuid())
+  escolaId  String   @unique
+  escola    Escola   @relation(fields: [escolaId], references: [id], onDelete: Cascade)
+  status    String   // CONCLUIDO, EM_ANDAMENTO, NAO_REALIZADO, NAO_INFORMADO
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
+model Equipamento {
+  id         String   @id @default(cuid())
+  categoria  String
+  marca      String
+  modelo     String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([categoria, marca, modelo])
+  @@index([categoria])
+  @@index([categoria, marca])
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  usuarioId String
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  expiraEm  DateTime
+  createdAt DateTime @default(now())
+
+  @@index([usuarioId])
+  @@index([expiraEm])
+}

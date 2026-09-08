@@ -2369,50 +2369,11 @@ select:focus-visible {
 <script>
 const DEV_CHAT_ID = 'AKfycbwLsy_Ye7xmm7BoFRC3pFjSwPFohRzDrupw5QZgNF7zZK1S34DanLRe7wMHHR323CgF';
 
-const STATUS_OPTIONS = ['Abertos', 'Andamento', 'Comunicado', 'Resolvidos'];
-const URGENCY_OPTIONS = ['Crítica', 'Alta', 'Média', 'Baixa'];
-const UNIDADES = ['São Paulo', 'Rio de Janeiro', 'Belo Horizonte', 'Porto Alegre', 'Curitiba', 'Brasília', 'Salvador', 'Fortaleza'];
-const CATEGORIAS = ['Hardware', 'Software', 'Rede', 'Segurança', 'Infraestrutura', 'Aplicação', 'Banco de Dados', 'Telecom'];
-const TECNICOS = ['João Silva', 'Maria Santos', 'Pedro Oliveira', 'Ana Costa', 'Carlos Lima', 'Fernanda Rocha', 'Ricardo Alves', 'Juliana Pereira'];
+const STATUS_OPTIONS = ['Aberto', 'Andamento', 'Comunicado', 'Resolvido'];
+const STATUS_OPTIONS_SERVER = ['Aberto', 'Andamento', 'Comunicado', 'Resolvido'];
 
-function generateMockTickets(count = 150) {
-  const tickets = [];
-  const now = new Date();
-  for (let i = 0; i < count; i++) {
-    const createdDaysAgo = Math.floor(Math.random() * 60);
-    const createdAt = new Date(now.getTime() - createdDaysAgo * 24 * 60 * 60 * 1000);
-    const status = STATUS_OPTIONS[Math.floor(Math.random() * STATUS_OPTIONS.length)];
-    const urgency = URGENCY_OPTIONS[Math.floor(Math.random() * URGENCY_OPTIONS.length)];
-    const unidade = UNIDADES[Math.floor(Math.random() * UNIDADES.length)];
-    const categoria = CATEGORIAS[Math.floor(Math.random() * CATEGORIAS.length)];
-    const tecnico = Math.random() > 0.15 ? TECNICOS[Math.floor(Math.random() * TECNICOS.length)] : null;
-    const protocolo = `SCI-${String(10000 + i).padStart(5, '0')}`;
-    const hoursOpen = Math.floor((now - createdAt) / (1000 * 60 * 60));
-    const inventario = Math.random() > 0.3 ? `INV-${Math.floor(Math.random() * 10000).toString().padStart(4, '0')}` : '';
-    const solicitante = `Usuario ${Math.floor(Math.random() * 200) + 1}`;
-    
-    tickets.push({
-      id: i + 1,
-      protocolo,
-      unidade,
-      categoria,
-      descricao: `Chamado ${protocolo}: ${categoria} - ${['Lentidão', 'Erro', 'Falha', 'Solicitação', 'Dúvida', 'Incidente'][Math.floor(Math.random() * 6)]} em ${unidade}`,
-      status,
-      urgencia: urgency,
-      tecnico,
-      inventario,
-      solicitante,
-      tempo: `${hoursOpen}h`,
-      horas: hoursOpen,
-      createdAt: createdAt.toISOString(),
-      updatedAt: new Date(now.getTime() - Math.random() * createdDaysAgo * 24 * 60 * 60 * 1000).toISOString()
-    });
-  }
-  return tickets;
-}
-
-let allTickets = generateMockTickets(200);
-let filteredTickets = [...allTickets];
+let allTickets = [];
+let filteredTickets = [];
 let selectedTickets = new Set();
 let currentTicketId = null;
 let columnVisibility = {
@@ -2433,26 +2394,103 @@ const filterState = {
   dateRange: ''
 };
 
+let alertaConhecido = new Set();
+let dashboardInicializado = false;
+
 function init() {
-  populateFilterOptions();
-  renderKPIs();
-  renderTable();
-  renderSidebarStats();
-  renderSavedViews();
+  if (dashboardInicializado) return;
+  dashboardInicializado = true;
+  
   setupEventListeners();
   updateClock();
   setInterval(updateClock, 1000);
   loadTheme();
+  carregarDados();
+  carregarTecnicos();
+  verificarAltaPrioridade();
+  renderSavedViews();
+  
+  setInterval(carregarDados, 60000);
+  setInterval(verificarAltaPrioridade, 15000);
+}
+
+function carregarDados() {
+  document.body.style.cursor = 'wait';
+  google.script.run
+    .withSuccessHandler(onDadosCarregados)
+    .withFailureHandler(err => {
+      document.body.style.cursor = 'default';
+      toast('Erro ao carregar dados: ' + err.message, 'erro');
+      console.error(err);
+    })
+    .getChamadosMatriz();
+}
+
+function onDadosCarregados(dados) {
+  document.body.style.cursor = 'default';
+  if (!dados) dados = [];
+  
+  allTickets = dados.map((d, index) => ({
+    id: index + 1,
+    protocolo: d.ID,
+    unidade: d.Unidade || '',
+    categoria: d.Tipo || '',
+    descricao: d.Descrição || '',
+    status: d.Status || 'Aberto',
+    urgencia: mapUrgencia(d.Urgência || ''),
+    tecnico: d.TecnicoSetor || null,
+    inventario: d.Inventario || '',
+    solicitante: d.Solicitante || '',
+    funcao: d.Função || '',
+    anexo: d.Anexo || '',
+    responsavel: d.Responsável || '',
+    historico: d.Histórico || '',
+    tecnicoResolucao: d['Técnico Resolução'] || '',
+    timestamp: d.Timestamp,
+    updatedAt: d['Última Atualização'],
+    horas: d.Timestamp ? Math.floor((Date.now() - new Date(d.Timestamp).getTime()) / 3600000) : 0,
+    tempo: d.Timestamp ? formatTempo(d.Timestamp) : '—'
+  }));
+  
+  populateFilterOptions();
+  applyFilters();
+  montarTicker(allTickets);
+}
+
+function mapUrgencia(u) {
+  if (!u) return 'Baixa';
+  const lower = u.toLowerCase();
+  if (lower.includes('alta') || lower.includes('critic')) return 'Crítica';
+  if (lower.includes('média') || lower.includes('media')) return 'Média';
+  if (lower.includes('baixa')) return 'Baixa';
+  return 'Média';
+}
+
+function formatTempo(timestamp) {
+  if (!timestamp) return '—';
+  const ms = Date.now() - new Date(timestamp).getTime();
+  const horas = ms / 3600000;
+  if (horas < 1) return Math.round(ms / 60000) + ' min';
+  if (horas < 24) return Math.round(horas) + 'h';
+  return Math.round(horas / 24) + 'd';
 }
 
 function populateFilterOptions() {
-  const unidades = [...new Set(allTickets.map(t => t.unidade))].sort();
-  const categorias = [...new Set(allTickets.map(t => t.categoria))].sort();
+  const unidades = [...new Set(allTickets.map(t => t.unidade).filter(Boolean))].sort();
+  const categorias = [...new Set(allTickets.map(t => t.categoria).filter(Boolean))].sort();
   const tecnicos = [...new Set(allTickets.map(t => t.tecnico).filter(Boolean))].sort();
   
   const unidadeSelect = document.getElementById('filter-unidade');
   const categoriaSelect = document.getElementById('filter-categoria');
   const tecnicoSelect = document.getElementById('filter-technician');
+  
+  const currentUnidade = unidadeSelect.value;
+  const currentCategoria = categoriaSelect.value;
+  const currentTecnico = tecnicoSelect.value;
+  
+  unidadeSelect.innerHTML = '<option value="">Todas as unidades</option>';
+  categoriasSelect.innerHTML = '<option value="">Todas as categorias</option>';
+  tecnicoSelect.innerHTML = '<option value="">Todos os técnicos</option><option value="sem-tecnico">Sem técnico</option>';
   
   unidades.forEach(u => {
     const opt = document.createElement('option');
@@ -2474,6 +2512,10 @@ function populateFilterOptions() {
     opt.textContent = t;
     tecnicoSelect.appendChild(opt);
   });
+  
+  unidadeSelect.value = currentUnidade;
+  categoriaSelect.value = currentCategoria;
+  tecnicoSelect.value = currentTecnico;
 }
 
 function updateClock() {
