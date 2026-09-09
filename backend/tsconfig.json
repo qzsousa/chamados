@@ -15,8 +15,9 @@
     "declarationMap": true,
     "sourceMap": true,
     "composite": true,
+    "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"],
+      "@/*": ["src/*"],
       "@shared/*": ["../shared/types/dist/*"]
     }
   },
