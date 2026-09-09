@@ -1,8 +1,8 @@
 {
-  "name": "@sci-chamados/shared-types",
+  "name": "@shared/api",
   "version": "1.0.0",
-  "main": "./dist/api.js",
-  "types": "./dist/api.d.ts",
+  "main": "./api.js",
+  "types": "./api.d.ts",
   "scripts": {
     "build": "tsc"
   },

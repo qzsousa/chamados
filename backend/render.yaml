@@ -3,7 +3,12 @@ services:
     name: sci-chamados-api
     env: node
     plan: free
-    buildCommand: cd /opt/render/project/src/shared/types && npm install && npm run build && cd /opt/render/project/src/backend && npm install && npm run build && npx prisma migrate deploy
+    buildCommand: |
+      cd /opt/render/project/src/shared/types && npm install && npm run build
+      cd /opt/render/project/src/backend && npm install
+      cp -r /opt/render/project/src/shared/types/dist /opt/render/project/src/backend/node_modules/@shared
+      echo '{"name":"@shared/api","main":"api.js","types":"api.d.ts"}' > /opt/render/project/src/backend/node_modules/@shared/package.json
+      npm run build && npx prisma migrate deploy
     startCommand: npm run start
     healthCheckPath: /health
     envVars:
