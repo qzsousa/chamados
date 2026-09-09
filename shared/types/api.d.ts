@@ -19,21 +19,21 @@ export declare const UserSchema: z.ZodObject<{
     updatedAt: z.ZodString;
 }, "strip", z.ZodTypeAny, {
     status: "ATIVO" | "INATIVO";
-    id: string;
     email: string;
     nome: string;
     nivel: "ADMIN" | "TECNICO" | "GESTOR" | "VISUALIZADOR";
     filial: string;
+    id: string;
     primeiroLogin: boolean;
     createdAt: string;
     updatedAt: string;
 }, {
     status: "ATIVO" | "INATIVO";
-    id: string;
     email: string;
     nome: string;
     nivel: "ADMIN" | "TECNICO" | "GESTOR" | "VISUALIZADOR";
     filial: string;
+    id: string;
     primeiroLogin: boolean;
     createdAt: string;
     updatedAt: string;
@@ -87,22 +87,22 @@ export declare const UserWithTempPasswordSchema: z.ZodObject<{
     senhaTemporaria: z.ZodString;
 }, "strip", z.ZodTypeAny, {
     status: "ATIVO" | "INATIVO";
-    id: string;
     email: string;
     nome: string;
     nivel: "ADMIN" | "TECNICO" | "GESTOR" | "VISUALIZADOR";
     filial: string;
+    id: string;
     primeiroLogin: boolean;
     createdAt: string;
     updatedAt: string;
     senhaTemporaria: string;
 }, {
     status: "ATIVO" | "INATIVO";
-    id: string;
     email: string;
     nome: string;
     nivel: "ADMIN" | "TECNICO" | "GESTOR" | "VISUALIZADOR";
     filial: string;
+    id: string;
     primeiroLogin: boolean;
     createdAt: string;
     updatedAt: string;
@@ -135,21 +135,21 @@ export declare const LoginResponseSchema: z.ZodObject<{
         updatedAt: z.ZodString;
     }, "strip", z.ZodTypeAny, {
         status: "ATIVO" | "INATIVO";
-        id: string;
         email: string;
         nome: string;
         nivel: "ADMIN" | "TECNICO" | "GESTOR" | "VISUALIZADOR";
         filial: string;
+        id: string;
         primeiroLogin: boolean;
         createdAt: string;
         updatedAt: string;
     }, {
         status: "ATIVO" | "INATIVO";
-        id: string;
         email: string;
         nome: string;
         nivel: "ADMIN" | "TECNICO" | "GESTOR" | "VISUALIZADOR";
         filial: string;
+        id: string;
         primeiroLogin: boolean;
         createdAt: string;
         updatedAt: string;
@@ -161,11 +161,11 @@ export declare const LoginResponseSchema: z.ZodObject<{
     accessToken: string;
     user: {
         status: "ATIVO" | "INATIVO";
-        id: string;
         email: string;
         nome: string;
         nivel: "ADMIN" | "TECNICO" | "GESTOR" | "VISUALIZADOR";
         filial: string;
+        id: string;
         primeiroLogin: boolean;
         createdAt: string;
         updatedAt: string;
@@ -176,11 +176,11 @@ export declare const LoginResponseSchema: z.ZodObject<{
     accessToken: string;
     user: {
         status: "ATIVO" | "INATIVO";
-        id: string;
         email: string;
         nome: string;
         nivel: "ADMIN" | "TECNICO" | "GESTOR" | "VISUALIZADOR";
         filial: string;
+        id: string;
         primeiroLogin: boolean;
         createdAt: string;
         updatedAt: string;
@@ -191,11 +191,11 @@ export declare const ChangePasswordSchema: z.ZodObject<{
     senhaAtual: z.ZodString;
     novaSenha: z.ZodString;
 }, "strip", z.ZodTypeAny, {
-    senhaAtual: string;
     novaSenha: string;
+    senhaAtual: string;
 }, {
-    senhaAtual: string;
     novaSenha: string;
+    senhaAtual: string;
 }>;
 export type ChangePassword = z.infer<typeof ChangePasswordSchema>;
 export declare const GerarSenhaTemporariaSchema: z.ZodObject<{
@@ -243,12 +243,12 @@ export declare const ChamadoSchema: z.ZodObject<{
 }, "strip", z.ZodTypeAny, {
     status: "ABERTO" | "ANDAMENTO" | "COMUNICADO" | "RESOLVIDO";
     id: string;
+    tipo: string;
     protocolo: string;
     timestamp: string;
     unidade: string;
     solicitante: string;
     funcao: string | null;
-    tipo: string;
     descricao: string;
     urgencia: string;
     anexoUrl: string | null;
@@ -261,12 +261,12 @@ export declare const ChamadoSchema: z.ZodObject<{
 }, {
     status: "ABERTO" | "ANDAMENTO" | "COMUNICADO" | "RESOLVIDO";
     id: string;
+    tipo: string;
     protocolo: string;
     timestamp: string;
     unidade: string;
     solicitante: string;
     funcao: string | null;
-    tipo: string;
     descricao: string;
     urgencia: string;
     anexoUrl: string | null;
@@ -289,9 +289,9 @@ export declare const CriarChamadoSchema: z.ZodObject<{
     anexoNome: z.ZodOptional<z.ZodString>;
     anexoTipo: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
+    tipo: string;
     unidade: string;
     solicitante: string;
-    tipo: string;
     descricao: string;
     urgencia: string;
     funcao?: string | undefined;
@@ -299,9 +299,9 @@ export declare const CriarChamadoSchema: z.ZodObject<{
     anexoNome?: string | undefined;
     anexoTipo?: string | undefined;
 }, {
+    tipo: string;
     unidade: string;
     solicitante: string;
-    tipo: string;
     descricao: string;
     urgencia: string;
     funcao?: string | undefined;
@@ -345,23 +345,23 @@ export declare const FiltrosChamadoSchema: z.ZodObject<{
     limit: number;
     status?: "ABERTO" | "ANDAMENTO" | "COMUNICADO" | "RESOLVIDO" | undefined;
     inventario?: "CONCLUIDO" | "EM_ANDAMENTO" | "NAO_REALIZADO" | "NAO_INFORMADO" | undefined;
+    tecnico?: string | undefined;
+    categoria?: string | undefined;
     unidade?: string | undefined;
     urgencia?: string | undefined;
-    categoria?: string | undefined;
-    tecnico?: string | undefined;
     dataDe?: string | undefined;
     dataAte?: string | undefined;
 }, {
     status?: "ABERTO" | "ANDAMENTO" | "COMUNICADO" | "RESOLVIDO" | undefined;
     inventario?: "CONCLUIDO" | "EM_ANDAMENTO" | "NAO_REALIZADO" | "NAO_INFORMADO" | undefined;
-    unidade?: string | undefined;
-    urgencia?: string | undefined;
-    categoria?: string | undefined;
-    tecnico?: string | undefined;
-    dataDe?: string | undefined;
-    dataAte?: string | undefined;
     page?: number | undefined;
     limit?: number | undefined;
+    tecnico?: string | undefined;
+    categoria?: string | undefined;
+    unidade?: string | undefined;
+    urgencia?: string | undefined;
+    dataDe?: string | undefined;
+    dataAte?: string | undefined;
 }>;
 export type FiltrosChamado = z.infer<typeof FiltrosChamadoSchema>;
 export declare const BatchUpdateChamadosSchema: z.ZodObject<{
@@ -441,19 +441,19 @@ export declare const EscolaSchema: z.ZodObject<{
     createdAt: z.ZodString;
     updatedAt: z.ZodString;
 }, "strip", z.ZodTypeAny, {
-    id: string;
     nome: string;
+    id: string;
     createdAt: string;
     updatedAt: string;
-    tecnico: string;
     nomeNormalizado: string;
+    tecnico: string;
 }, {
-    id: string;
     nome: string;
+    id: string;
     createdAt: string;
     updatedAt: string;
-    tecnico: string;
     nomeNormalizado: string;
+    tecnico: string;
 }>;
 export type Escola = z.infer<typeof EscolaSchema>;
 export declare const EscolaCreateSchema: z.ZodObject<{
@@ -515,31 +515,31 @@ export declare const InventarioSchema: z.ZodObject<{
         createdAt: z.ZodString;
         updatedAt: z.ZodString;
     }, "strip", z.ZodTypeAny, {
-        id: string;
         nome: string;
+        id: string;
         createdAt: string;
         updatedAt: string;
-        tecnico: string;
         nomeNormalizado: string;
+        tecnico: string;
     }, {
-        id: string;
         nome: string;
+        id: string;
         createdAt: string;
         updatedAt: string;
-        tecnico: string;
         nomeNormalizado: string;
+        tecnico: string;
     }>;
     status: z.ZodEnum<["CONCLUIDO", "EM_ANDAMENTO", "NAO_REALIZADO", "NAO_INFORMADO"]>;
     updatedAt: z.ZodString;
 }, "strip", z.ZodTypeAny, {
     status: "CONCLUIDO" | "EM_ANDAMENTO" | "NAO_REALIZADO" | "NAO_INFORMADO";
     escola: {
-        id: string;
         nome: string;
+        id: string;
         createdAt: string;
         updatedAt: string;
-        tecnico: string;
         nomeNormalizado: string;
+        tecnico: string;
     };
     id: string;
     updatedAt: string;
@@ -547,12 +547,12 @@ export declare const InventarioSchema: z.ZodObject<{
 }, {
     status: "CONCLUIDO" | "EM_ANDAMENTO" | "NAO_REALIZADO" | "NAO_INFORMADO";
     escola: {
-        id: string;
         nome: string;
+        id: string;
         createdAt: string;
         updatedAt: string;
-        tecnico: string;
         nomeNormalizado: string;
+        tecnico: string;
     };
     id: string;
     updatedAt: string;
@@ -634,12 +634,12 @@ export declare const DashboardMatrizResponseSchema: z.ZodObject<{
     }, "strip", z.ZodTypeAny, {
         status: "ABERTO" | "ANDAMENTO" | "COMUNICADO" | "RESOLVIDO";
         id: string;
+        tipo: string;
         protocolo: string;
         timestamp: string;
         unidade: string;
         solicitante: string;
         funcao: string | null;
-        tipo: string;
         descricao: string;
         urgencia: string;
         anexoUrl: string | null;
@@ -652,12 +652,12 @@ export declare const DashboardMatrizResponseSchema: z.ZodObject<{
     }, {
         status: "ABERTO" | "ANDAMENTO" | "COMUNICADO" | "RESOLVIDO";
         id: string;
+        tipo: string;
         protocolo: string;
         timestamp: string;
         unidade: string;
         solicitante: string;
         funcao: string | null;
-        tipo: string;
         descricao: string;
         urgencia: string;
         anexoUrl: string | null;
@@ -682,23 +682,15 @@ export declare const DashboardMatrizResponseSchema: z.ZodObject<{
         resolvidosPorTecnico: Record<string, number>;
     }>;
 }, "strip", z.ZodTypeAny, {
-    kpis: {
-        total: number;
-        abertos: number;
-        andamento: number;
-        comunicado: number;
-        resolvidos: number;
-        altaPrioridade: number;
-    };
     chamados: {
         status: "ABERTO" | "ANDAMENTO" | "COMUNICADO" | "RESOLVIDO";
         id: string;
+        tipo: string;
         protocolo: string;
         timestamp: string;
         unidade: string;
         solicitante: string;
         funcao: string | null;
-        tipo: string;
         descricao: string;
         urgencia: string;
         anexoUrl: string | null;
@@ -709,29 +701,29 @@ export declare const DashboardMatrizResponseSchema: z.ZodObject<{
         tecnicoSetor: string | null;
         inventarioStatus: "CONCLUIDO" | "EM_ANDAMENTO" | "NAO_REALIZADO" | "NAO_INFORMADO" | null;
     }[];
+    kpis: {
+        total: number;
+        abertos: number;
+        andamento: number;
+        comunicado: number;
+        resolvidos: number;
+        altaPrioridade: number;
+    };
     graficos: {
         porStatus: Record<string, number>;
         porUrgencia: Record<string, number>;
         resolvidosPorTecnico: Record<string, number>;
     };
 }, {
-    kpis: {
-        total: number;
-        abertos: number;
-        andamento: number;
-        comunicado: number;
-        resolvidos: number;
-        altaPrioridade: number;
-    };
     chamados: {
         status: "ABERTO" | "ANDAMENTO" | "COMUNICADO" | "RESOLVIDO";
         id: string;
+        tipo: string;
         protocolo: string;
         timestamp: string;
         unidade: string;
         solicitante: string;
         funcao: string | null;
-        tipo: string;
         descricao: string;
         urgencia: string;
         anexoUrl: string | null;
@@ -742,6 +734,14 @@ export declare const DashboardMatrizResponseSchema: z.ZodObject<{
         tecnicoSetor: string | null;
         inventarioStatus: "CONCLUIDO" | "EM_ANDAMENTO" | "NAO_REALIZADO" | "NAO_INFORMADO" | null;
     }[];
+    kpis: {
+        total: number;
+        abertos: number;
+        andamento: number;
+        comunicado: number;
+        resolvidos: number;
+        altaPrioridade: number;
+    };
     graficos: {
         porStatus: Record<string, number>;
         porUrgencia: Record<string, number>;
@@ -793,12 +793,12 @@ export declare const DashboardFiltradoResponseSchema: z.ZodObject<{
     }, "strip", z.ZodTypeAny, {
         status: "ABERTO" | "ANDAMENTO" | "COMUNICADO" | "RESOLVIDO";
         id: string;
+        tipo: string;
         protocolo: string;
         timestamp: string;
         unidade: string;
         solicitante: string;
         funcao: string | null;
-        tipo: string;
         descricao: string;
         urgencia: string;
         anexoUrl: string | null;
@@ -811,12 +811,12 @@ export declare const DashboardFiltradoResponseSchema: z.ZodObject<{
     }, {
         status: "ABERTO" | "ANDAMENTO" | "COMUNICADO" | "RESOLVIDO";
         id: string;
+        tipo: string;
         protocolo: string;
         timestamp: string;
         unidade: string;
         solicitante: string;
         funcao: string | null;
-        tipo: string;
         descricao: string;
         urgencia: string;
         anexoUrl: string | null;
@@ -868,23 +868,15 @@ export declare const DashboardFiltradoResponseSchema: z.ZodObject<{
         unidade: string;
         tecnicoSetor: string;
     };
-    kpis: {
-        total: number;
-        abertos: number;
-        andamento: number;
-        comunicado: number;
-        resolvidos: number;
-        altaPrioridade: number;
-    };
     chamados: {
         status: "ABERTO" | "ANDAMENTO" | "COMUNICADO" | "RESOLVIDO";
         id: string;
+        tipo: string;
         protocolo: string;
         timestamp: string;
         unidade: string;
         solicitante: string;
         funcao: string | null;
-        tipo: string;
         descricao: string;
         urgencia: string;
         anexoUrl: string | null;
@@ -895,6 +887,14 @@ export declare const DashboardFiltradoResponseSchema: z.ZodObject<{
         tecnicoSetor: string | null;
         inventarioStatus: "CONCLUIDO" | "EM_ANDAMENTO" | "NAO_REALIZADO" | "NAO_INFORMADO" | null;
     }[];
+    kpis: {
+        total: number;
+        abertos: number;
+        andamento: number;
+        comunicado: number;
+        resolvidos: number;
+        altaPrioridade: number;
+    };
     avisos: {
         id: string;
         tipo: string;
@@ -909,23 +909,15 @@ export declare const DashboardFiltradoResponseSchema: z.ZodObject<{
         unidade: string;
         tecnicoSetor: string;
     };
-    kpis: {
-        total: number;
-        abertos: number;
-        andamento: number;
-        comunicado: number;
-        resolvidos: number;
-        altaPrioridade: number;
-    };
     chamados: {
         status: "ABERTO" | "ANDAMENTO" | "COMUNICADO" | "RESOLVIDO";
         id: string;
+        tipo: string;
         protocolo: string;
         timestamp: string;
         unidade: string;
         solicitante: string;
         funcao: string | null;
-        tipo: string;
         descricao: string;
         urgencia: string;
         anexoUrl: string | null;
@@ -936,6 +928,14 @@ export declare const DashboardFiltradoResponseSchema: z.ZodObject<{
         tecnicoSetor: string | null;
         inventarioStatus: "CONCLUIDO" | "EM_ANDAMENTO" | "NAO_REALIZADO" | "NAO_INFORMADO" | null;
     }[];
+    kpis: {
+        total: number;
+        abertos: number;
+        andamento: number;
+        comunicado: number;
+        resolvidos: number;
+        altaPrioridade: number;
+    };
     avisos: {
         id: string;
         tipo: string;
@@ -991,17 +991,17 @@ export declare const HealthResponseSchema: z.ZodObject<{
     database: z.ZodEnum<["connected", "disconnected"]>;
     version: z.ZodString;
 }, "strip", z.ZodTypeAny, {
-    status: "ok" | "degraded" | "down";
+    status: "ok" | "down" | "degraded";
+    version: string;
     timestamp: string;
     uptime: number;
     database: "connected" | "disconnected";
-    version: string;
 }, {
-    status: "ok" | "degraded" | "down";
+    status: "ok" | "down" | "degraded";
+    version: string;
     timestamp: string;
     uptime: number;
     database: "connected" | "disconnected";
-    version: string;
 }>;
 export type HealthResponse = z.infer<typeof HealthResponseSchema>;
 //# sourceMappingURL=api.d.ts.map

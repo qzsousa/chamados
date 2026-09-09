@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import api from '@/api/client'
-import type { User, LoginResponse, LoginRequest, ChangePassword } from '@shared/api'
+import type { User, LoginResponse, LoginRequest, ChangePassword } from '../../../shared/types/api'
 import type { AxiosInstance } from 'axios'
 
 export const useAuthStore = defineStore('auth', () => {

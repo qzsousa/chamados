@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import api from '@/api/client'
-import type { Chamado, FiltrosChamado, CriarChamado, AtualizarStatusChamado, ResponderChamado, BatchUpdateChamados, BatchDeleteChamados, DashboardKPIs, DashboardMatrizResponse, DashboardFiltradoResponse } from '@shared/api'
+import type { Chamado, FiltrosChamado, CriarChamado, AtualizarStatusChamado, ResponderChamado, BatchUpdateChamados, BatchDeleteChamados, DashboardKPIs, DashboardMatrizResponse, DashboardFiltradoResponse } from '../../../shared/types/api'
 
 export const useChamadosStore = defineStore('chamados', () => {
   const lista = ref<Chamado[]>([])

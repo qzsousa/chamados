@@ -16,7 +16,7 @@
     "sourceMap": true,
     "paths": {
       "@/*": ["./src/*"],
-      "@shared/*": ["../shared/types/*"]
+      "@shared/*": ["../shared/types/dist/*"]
     }
   },
   "include": ["src/**/*", "prisma/**/*"],
