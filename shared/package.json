@@ -1,8 +1,11 @@
 {
   "name": "@sci-chamados/shared-types",
   "version": "1.0.0",
-  "main": "api.ts",
-  "types": "api.ts",
+  "main": "./dist/api.js",
+  "types": "./dist/api.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
   "dependencies": {
     "zod": "^3.22.0"
   }
