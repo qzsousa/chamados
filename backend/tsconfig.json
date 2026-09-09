@@ -6,7 +6,6 @@
     "lib": ["ES2022"],
     "outDir": "./dist",
     "rootDir": ".",
-    "rootDirs": [".", "../shared/types"],
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
