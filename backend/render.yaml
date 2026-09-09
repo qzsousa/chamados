@@ -4,8 +4,8 @@ services:
     env: node
     plan: free
     buildCommand: |
-      cd /opt/render/project/src/shared/types && npm install && npx tsc -p tsconfig.json
-      cd /opt/render/project/src/backend && npm install
+      cd /opt/render/project/src/shared/types && npm ci && npx tsc -p tsconfig.json
+      cd /opt/render/project/src/backend && npm ci
       cp -r /opt/render/project/src/shared/types/dist /opt/render/project/src/backend/node_modules/@shared
       echo '{"name":"@shared/api","main":"api.js","types":"api.d.ts"}' > /opt/render/project/src/backend/node_modules/@shared/package.json
       npm run build && npx prisma migrate deploy
