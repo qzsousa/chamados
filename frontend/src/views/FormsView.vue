@@ -68,7 +68,9 @@
             <div class="excs">
               <div class="exc"><label>Categoria *</label><Select id="equip-categoria" v-model="form.categoria" :options="categoriasEquip" placeholder="— Selecione a categoria —" :disabled="!categoriasEquip.length" @update:modelValue="onCategoriaChange" /></div>
               <div class="exc"><label>Marca *</label><Select id="equip-marca" v-model="form.marca" :options="marcasEquip" placeholder="— Selecione a marca —" :disabled="!marcasEquip.length" @update:modelValue="onMarcaChange" /></div>
+              <div v-if="form.marca === OUTRO" class="exc"><label>Marca (personalizada) *</label><Input v-model="customMarca" placeholder="Digite a marca" /></div>
               <div class="exc"><label>Modelo *</label><Select id="equip-modelo" v-model="form.modelo" :options="modelosEquip" placeholder="— Selecione o modelo —" :disabled="!modelosEquip.length" @update:modelValue="onModeloSelect" /></div>
+              <div v-if="form.modelo === OUTRO" class="exc"><label>Modelo (personalizado) *</label><Input v-model="customModelo" placeholder="Digite o modelo" /></div>
             </div>
             <div v-if="equipSelecionado" class="al al-ok"><p>Equipamento: <strong>{{ equipSelecionado.categoria }} / {{ equipSelecionado.marca }} / {{ equipSelecionado.modelo }}</strong></p></div>
           </div>
@@ -149,8 +151,12 @@ const errors = reactive({nome:'',cargo:'',email:'',escola:'',urgencia:'',anexo:'
 const categoriasEquip = ref<Array<{value: string, label: string}>>([])
 const marcasEquip = ref<Array<{value: string, label: string}>>([])
 const modelosEquip = ref<Array<{value: string, label: string}>>([])
+const customMarca = ref('')
+const customModelo = ref('')
 let equipSelecionado: any = null
 let submitting = false
+
+const OUTRO = '__OUTRO__'
 
 async function loadCategorias() {
   try {
@@ -166,6 +172,8 @@ async function loadCategorias() {
 async function onCategoriaChange() {
   form.marca = ''
   form.modelo = ''
+  customMarca.value = ''
+  customModelo.value = ''
   marcasEquip.value = []
   modelosEquip.value = []
   equipSelecionado = null
@@ -174,6 +182,7 @@ async function onCategoriaChange() {
     const res = await fetch(`/api/equipamentos/marcas?categoria=${encodeURIComponent(form.categoria)}`, { cache: 'no-cache' })
     const data = await res.json()
     marcasEquip.value = data.map((m: string) => ({ value: m, label: m }))
+    marcasEquip.value.push({ value: OUTRO, label: 'Outro (digitar manualmente)' })
   } catch (e) {
     console.error('Erro ao carregar marcas:', e)
   }
@@ -181,20 +190,26 @@ async function onCategoriaChange() {
 
 async function onMarcaChange() {
   form.modelo = ''
+  customModelo.value = ''
   modelosEquip.value = []
   equipSelecionado = null
   if (!form.categoria || !form.marca) return
+  if (form.marca === OUTRO) {
+    // User will type custom marca, skip modelo loading for now
+    return
+  }
   try {
     const res = await fetch(`/api/equipamentos/modelos?categoria=${encodeURIComponent(form.categoria)}&marca=${encodeURIComponent(form.marca)}`, { cache: 'no-cache' })
     const data = await res.json()
     modelosEquip.value = data.map((m: string) => ({ value: m, label: m }))
+    modelosEquip.value.push({ value: OUTRO, label: 'Outro (digitar manualmente)' })
   } catch (e) {
     console.error('Erro ao carregar modelos:', e)
   }
 }
 
 function onModeloSelect() {
-  equipSelecionado = { categoria: form.categoria, marca: form.marca, modelo: form.modelo }
+  equipSelecionado = { categoria: form.categoria, marca: form.marca === OUTRO ? customMarca.value : form.marca, modelo: form.modelo === OUTRO ? customModelo.value : form.modelo }
 }
 
 onMounted(async() => {
@@ -207,7 +222,7 @@ function voltarQ(){currentView.value='questions'}
 
 const podeAvancarRede=computed(()=>{if(!form.rede)return false;if(form.rede==='lentidao')return true;if(form.rede==='queda-total')return!!form.energia;if(form.rede==='wifi-salas')return form.locais.trim().length>0;if(form.rede==='pontos')return true;return false})
 
-const podeAvancarEquip=computed(()=>{if(!form.equip)return false;if(form.equip==='wifi'||form.equip==='sistema')return true;return!!form.modelo})
+const podeAvancarEquip=computed(()=>{if(!form.equip)return false;if(form.equip==='wifi'||form.equip==='sistema')return true;if(form.marca===OUTRO)return customMarca.value.trim().length>0;if(form.modelo===OUTRO)return customModelo.value.trim().length>0;return!!form.modelo})
 const podeAvancarSistema=computed(()=>{if(!form.sistema)return false;if(form.sistema!=='PortalNet')return true;return!!form.pnRg&&!!form.pnNome&&!!form.pnAtrib})
 
 function irParaId(){currentView.value='id'}

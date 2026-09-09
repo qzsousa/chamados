@@ -2,7 +2,7 @@
   "compilerOptions": {
     "target": "ES2022",
     "module": "CommonJS",
-    "moduleResolution": "node",
+    "moduleResolution": "node16",
     "lib": ["ES2022"],
     "outDir": "./dist",
     "rootDir": ".",
@@ -16,7 +16,7 @@
     "sourceMap": true,
     "paths": {
       "@/*": ["./src/*"],
-      "@shared/*": ["../shared/types/dist/*"]
+      "@shared/*": ["../shared/types/*"]
     }
   },
   "include": ["src/**/*", "prisma/**/*"],

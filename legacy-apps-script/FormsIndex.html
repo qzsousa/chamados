@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Atende Leste 3 — URE Leste 3</title>
+<title>SETEC — URE Leste 3</title>
 <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -209,7 +209,7 @@ footer{text-align:center;padding:16px;font-size:12px;color:var(--tinta-suave);bo
   <img src="https://i.ibb.co/3yBdJq67/IMG-9095.png" alt="Logo URE" width="50px" height="50px">
   <div class="topbar-org">
     <small>Governo do Estado de São Paulo</small>
-    <strong>Atende Leste 3 — Unidade Regional de Ensino Leste 3</strong>
+    <strong>SETEC — Unidade Regional de Ensino Leste 3</strong>
   </div>
 </div>
 
@@ -217,7 +217,7 @@ footer{text-align:center;padding:16px;font-size:12px;color:var(--tinta-suave);bo
 
 <!-- ======================================================== HOME -->
 <section class="view active" id="view-home">
-  <p class="eyebrow">Central de Atendimento — SETEC</p>
+  <p class="eyebrow">Abertura de Chamados — SETEC</p>
   <h1 class="hero">Como podemos ajudar?</h1>
   <p class="hero-sub">Selecione o tipo de problema abaixo. O chamado será encaminhado automaticamente à equipe do SETEC.</p>
   <div class="grid-cat" id="grid-cat"></div>
@@ -360,11 +360,19 @@ footer{text-align:center;padding:16px;font-size:12px;color:var(--tinta-suave);bo
             <option value="">— Selecione uma categoria primeiro —</option>
           </select>
         </div>
+        <div class="exc" id="custom-marca" style="display:none;">
+          <label>Marca (personalizada) *</label>
+          <input type="text" class="qsel" id="custom-marca-input" placeholder="Digite a marca" oninput="onCustomMarcaInput()">
+        </div>
         <div class="exc">
           <label>Modelo *</label>
           <select class="qsel" id="sel-modelo" onchange="onModeloSelect()" disabled>
             <option value="">— Selecione uma marca primeiro —</option>
           </select>
+        </div>
+        <div class="exc" id="custom-modelo" style="display:none;">
+          <label>Modelo (personalizado) *</label>
+          <input type="text" class="qsel" id="custom-modelo-input" placeholder="Digite o modelo" oninput="onCustomModeloInput()">
         </div>
       </div>
       <div id="equip-resultado" class="al al-info" style="display:none; margin-top:12px;">
@@ -799,6 +807,8 @@ function onCategoriaChange() {
   $('sel-marca').value = '';
   $('sel-modelo').value = '';
   hide('equip-resultado');
+  hide('custom-marca');
+  hide('custom-modelo');
   $('av-equip').className = 'btn-av';
 
   if (!categoria) {
@@ -808,7 +818,8 @@ function onCategoriaChange() {
   }
 
   const marcas = getMarcas(categoria);
-  popularSelect('sel-marca', marcas, '— Selecione a marca —', marcas.length === 0);
+  const marcasComOutro = [...marcas, 'Outro (digitar manualmente)'];
+  popularSelect('sel-marca', marcasComOutro, '— Selecione a marca —', marcasComOutro.length === 0);
   popularSelect('sel-modelo', [], '— Selecione uma marca primeiro —', true);
   atualizarResultadoEquip();
 }
@@ -819,6 +830,8 @@ function onMarcaChange() {
   ST.modelo = null;
   $('sel-modelo').value = '';
   hide('equip-resultado');
+  hide('custom-marca');
+  hide('custom-modelo');
   $('av-equip').className = 'btn-av';
 
   if (!marca) {
@@ -826,8 +839,19 @@ function onMarcaChange() {
     return;
   }
 
+  const isOutroMarca = marca === 'Outro (digitar manualmente)';
+  
+  if (isOutroMarca) {
+    show('custom-marca');
+    $('custom-marca-input').value = '';
+    $('custom-marca-input').focus();
+    popularSelect('sel-modelo', [], '— Digite a marca personalizada —', true);
+    return;
+  }
+
   const modelos = getModelos(categoria, marca);
-  popularSelect('sel-modelo', modelos, '— Selecione o modelo —', modelos.length === 0);
+  const modelosComOutro = [...modelos, 'Outro (digitar manualmente)'];
+  popularSelect('sel-modelo', modelosComOutro, '— Selecione o modelo —', modelosComOutro.length === 0);
   atualizarResultadoEquip();
 }
 
@@ -843,11 +867,59 @@ function onModeloSelect() {
     return;
   }
 
+  const isOutroModelo = modelo === 'Outro (digitar manualmente)';
+  
+  if (isOutroModelo) {
+    show('custom-modelo');
+    $('custom-modelo-input').value = '';
+    $('custom-modelo-input').focus();
+    ST.modelo = { 
+      categoria: categoria, 
+      marca: marca === 'Outro (digitar manualmente)' ? $('custom-marca-input').value : marca, 
+      modelo: '' 
+    };
+    $('av-equip').className = 'btn-av';
+    return;
+  }
+
   const equip = EQUIP.dados.find(e => e.categoria === categoria && e.marca === marca && e.modelo === modelo);
   ST.modelo = equip ? { nome: equip.modelo, id: equip.id, categoria: equip.categoria, marca: equip.marca, garantia: false } : { nome: modelo };
 
   atualizarResultadoEquip();
   $('av-equip').className = 'btn-av on';
+}
+
+function onCustomMarcaInput() {
+  const marcaCustom = $('custom-marca-input').value.trim();
+  const categoria = $('sel-categoria').value;
+  
+  if (marcaCustom.length > 0) {
+    // Enable modelo dropdown with "Outro" option for custom marca
+    popularSelect('sel-modelo', ['Outro (digitar manualmente)'], '— Selecione o modelo —', false);
+    show('custom-modelo');
+    atualizarResultadoEquip();
+  } else {
+    hide('custom-modelo');
+    popularSelect('sel-modelo', [], '— Digite a marca personalizada —', true);
+  }
+}
+
+function onCustomModeloInput() {
+  const modeloCustom = $('custom-modelo-input').value.trim();
+  const categoria = $('sel-categoria').value;
+  const marca = $('sel-marca').value === 'Outro (digitar manualmente)' ? $('custom-marca-input').value.trim() : $('sel-marca').value;
+  
+  if (modeloCustom.length > 0) {
+    ST.modelo = { nome: modeloCustom, categoria: categoria, marca: marca };
+    $('equip-resultado-texto').innerHTML = `Equipamento personalizado: <strong>${categoria} / ${marca} / ${modeloCustom}</strong>`;
+    $('equip-resultado').className = 'al al-ok';
+    show('equip-resultado');
+    $('av-equip').className = 'btn-av on';
+  } else {
+    ST.modelo = null;
+    hide('equip-resultado');
+    $('av-equip').className = 'btn-av';
+  }
 }
 
 function atualizarResultadoEquip() {
@@ -1142,6 +1214,8 @@ function sEquip(v){
   $('sel-categoria').value='';
   $('sel-marca').value='';
   $('sel-modelo').value='';
+  hide('custom-marca');
+  hide('custom-modelo');
   $('av-equip').className='btn-av';
   hide('equip-resultado');
   document.querySelectorAll('.tfbtn').forEach(b=>b.classList.remove('sel'));

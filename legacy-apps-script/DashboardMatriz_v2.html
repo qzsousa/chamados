@@ -2447,7 +2447,8 @@ function onDadosCarregados(dados) {
     historico: d.Histórico || '',
     tecnicoResolucao: d['Técnico Resolução'] || '',
     timestamp: d.Timestamp,
-    updatedAt: d['Última Atualização'],
+    createdAt: d.Timestamp,
+    updatedAt: d['Última Atualização'] || d.Timestamp,
     horas: d.Timestamp ? Math.floor((Date.now() - new Date(d.Timestamp).getTime()) / 3600000) : 0,
     tempo: d.Timestamp ? formatTempo(d.Timestamp) : '—'
   }));
@@ -2489,7 +2490,7 @@ function populateFilterOptions() {
   const currentTecnico = tecnicoSelect.value;
   
   unidadeSelect.innerHTML = '<option value="">Todas as unidades</option>';
-  categoriasSelect.innerHTML = '<option value="">Todas as categorias</option>';
+  categoriaSelect.innerHTML = '<option value="">Todas as categorias</option>';
   tecnicoSelect.innerHTML = '<option value="">Todos os técnicos</option><option value="sem-tecnico">Sem técnico</option>';
   
   unidades.forEach(u => {
@@ -3686,7 +3687,96 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-document.addEventListener('DOMContentLoaded', init);
+function carregarTecnicos() {
+  google.script.run
+    .withSuccessHandler(tecnicos => {
+      const select = document.getElementById('filter-technician');
+      const current = select.value;
+      select.innerHTML = '<option value="">Todos os técnicos</option><option value="sem-tecnico">Sem técnico</option>';
+      tecnicos.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t;
+        opt.textContent = t;
+        select.appendChild(opt);
+      });
+      select.value = current;
+    })
+    .withFailureHandler(err => console.error('Erro ao carregar técnicos:', err))
+    .getTecnicos();
+}
+
+function verificarAltaPrioridade() {
+  google.script.run
+    .withSuccessHandler(chamados => {
+      if (chamados && chamados.length > 0) {
+        const naoAlertados = chamados.filter(c => !alertaConhecido.has(c.ID));
+        naoAlertados.forEach(c => {
+          alertaConhecido.add(c.ID);
+          showToast(`ALTA PRIORIDADE: ${c.ID} - ${c.Unidade}`, 'alerta');
+          if (Notification.permission === 'granted') {
+            new Notification('Chamado de Alta Prioridade', {
+              body: `${c.ID} - ${c.Unidade}: ${c.Descrição?.substring(0, 100)}`,
+              icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23ef4444" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'
+            });
+          }
+        });
+      }
+    })
+    .withFailureHandler(err => console.error('Erro ao verificar alta prioridade:', err))
+    .getChamadosAltaPrioridadeAbertos();
+}
+
+function montarTicker(tickets) {
+  const altaPrioridade = tickets.filter(t => t.urgencia === 'Crítica' && t.status !== 'Resolvidos');
+  const tickerContainer = document.getElementById('chips-container');
+  if (!tickerContainer) return;
+  
+  const existingTicker = tickerContainer.querySelector('.ticker-alta');
+  if (existingTicker) existingTicker.remove();
+  
+  if (altaPrioridade.length > 0) {
+    const ticker = document.createElement('span');
+    ticker.className = 'chip chip-priority ticker-alta';
+    ticker.style.animation = 'pulse 2s infinite';
+    ticker.innerHTML = `⚠ ${altaPrioridade.length} alta(s) prioridade(s) <button class="remove-btn" onclick="this.parentElement.remove()">×</button>`;
+    tickerContainer.insertBefore(ticker, tickerContainer.firstChild);
+  }
+}
+
+function showToast(message, type = 'info') {
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  const bgColor = type === 'alerta' ? 'rgba(239, 68, 68, 0.9)' : 'var(--bg-card)';
+  const borderColor = type === 'alerta' ? 'var(--accent-danger)' : 'var(--border-color)';
+  toast.style.cssText = `
+    background: ${bgColor};
+    border: 1px solid ${borderColor};
+    border-radius: var(--radius-md);
+    padding: var(--spacing-sm) var(--spacing-md);
+    color: var(--text-primary);
+    font-size: var(--font-size-sm);
+    box-shadow: var(--shadow-lg);
+    animation: slideIn 0.3s ease;
+  `;
+  toast.textContent = message;
+  container.appendChild(toast);
+  
+  setTimeout(() => {
+    toast.style.animation = 'slideOut 0.3s ease';
+    setTimeout(() => toast.remove(), 300);
+  }, type === 'alerta' ? 8000 : 3000);
+}
+
+function requestNotificationPermission() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  init();
+  requestNotificationPermission();
+});
 
 const style = document.createElement('style');
 style.textContent = `
@@ -3697,6 +3787,10 @@ style.textContent = `
   @keyframes slideOut {
     from { opacity: 1; transform: translateX(0); }
     to { opacity: 0; transform: translateX(100%); }
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
   }
 `;
 document.head.appendChild(style);
