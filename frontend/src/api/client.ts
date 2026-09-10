@@ -1,4 +1,5 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios'
+import { useAuthStore } from '@/stores/auth'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
 
@@ -13,7 +14,6 @@ let isRefreshing = false
 let failedQueue: Array<{ resolve: (token: string) => void; reject: (error: Error) => void }> = []
 
 function getAuthStore() {
-  const { useAuthStore } = require('@/stores/auth')
   return useAuthStore()
 }
 
