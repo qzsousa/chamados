@@ -1,0 +1,16 @@
+{
+  "name": "@shared/api",
+  "version": "1.0.0",
+  "description": "Tipos e schemas compartilhados (Zod) entre backend e frontend",
+  "main": "./dist/api.js",
+  "types": "./dist/api.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0"
+  }
+}

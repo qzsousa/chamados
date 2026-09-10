@@ -19,6 +19,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@shared/api": "file:../shared/types",
     "@prisma/client": "^5.10.0",
     "@sentry/node": "^8.0.0",
     "@supabase/supabase-js": "^2.39.0",

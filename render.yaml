@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: sci-chamados-api
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: |
+      cd ../shared/types && NODE_ENV=development npm ci && npm run build
+      cd ../backend && NODE_ENV=development npm ci && npx prisma generate && npm run build
+    startCommand: node dist/index.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "10000"
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_REFRESH_SECRET
+        sync: false
+      - key: FRONTEND_URL
+        value: https://seu-frontend.vercel.app
+      - key: SENTRY_DSN
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: GOOGLE_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: GOOGLE_SHEETS_ID
+        value: 1W9_Q8F6k0Ic7OG5dpgEIGbEzmJwjExv-S07gJptv9SY
