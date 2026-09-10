@@ -17,7 +17,8 @@
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "zod": ["node_modules/zod"]
     },
     "types": ["vite/client", "vitest/globals"]
   },
