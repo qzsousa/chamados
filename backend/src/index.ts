@@ -142,13 +142,13 @@ app.get('/api/equipamentos/modelos', async (req, res) => {
   } catch (err) { throw err }
 })
 
+app.use('/api/dashboard', dashboardRoutes)
 app.use('/api', authMiddleware)
 app.use('/api/usuarios', usuarioRoutes)
 app.use('/api/chamados', chamadoRoutes)
 app.use('/api/escolas', escolaRoutes)
 app.use('/api/equipamentos', equipamentoRoutes)
 app.use('/api/inventario', inventarioRoutes)
-app.use('/api/dashboard', dashboardRoutes)
 
 if (env.SENTRY_DSN) {
   app.use(Sentry.expressErrorHandler())
