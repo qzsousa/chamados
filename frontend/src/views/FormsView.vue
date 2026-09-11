@@ -130,6 +130,8 @@ const router = useRouter()
 const chamados = useChamadosStore()
 const ui = useUIStore()
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+
 const currentView = ref<'home'|'questions'|'id'|'success'>('home')
 const activeCategory = ref<any>(null)
 const modalTesteAberto = ref(false)
@@ -160,7 +162,7 @@ const OUTRO = '__OUTRO__'
 
 async function loadCategorias() {
   try {
-    const res = await fetch('/api/equipamentos/categorias', { cache: 'no-cache' })
+    const res = await fetch(`${API_BASE}/equipamentos/categorias`, { cache: 'no-cache' })
     const data = await res.json()
     categoriasEquip.value = data.map((c: string) => ({ value: c, label: c }))
   } catch (e) {
@@ -179,7 +181,7 @@ async function onCategoriaChange() {
   equipSelecionado = null
   if (!form.categoria) return
   try {
-    const res = await fetch(`/api/equipamentos/marcas?categoria=${encodeURIComponent(form.categoria)}`, { cache: 'no-cache' })
+    const res = await fetch(`${API_BASE}/equipamentos/marcas?categoria=${encodeURIComponent(form.categoria)}`, { cache: 'no-cache' })
     const data = await res.json()
     marcasEquip.value = data.map((m: string) => ({ value: m, label: m }))
     marcasEquip.value.push({ value: OUTRO, label: 'Outro (digitar manualmente)' })
@@ -199,7 +201,7 @@ async function onMarcaChange() {
     return
   }
   try {
-    const res = await fetch(`/api/equipamentos/modelos?categoria=${encodeURIComponent(form.categoria)}&marca=${encodeURIComponent(form.marca)}`, { cache: 'no-cache' })
+    const res = await fetch(`${API_BASE}/equipamentos/modelos?categoria=${encodeURIComponent(form.categoria)}&marca=${encodeURIComponent(form.marca)}`, { cache: 'no-cache' })
     const data = await res.json()
     modelosEquip.value = data.map((m: string) => ({ value: m, label: m }))
     modelosEquip.value.push({ value: OUTRO, label: 'Outro (digitar manualmente)' })
