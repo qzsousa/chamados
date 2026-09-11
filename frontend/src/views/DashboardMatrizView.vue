@@ -47,7 +47,7 @@
       </div>
 
       <div class="tab-content">
-        <div class="tab-panel" v-show="activeTab === 'tabela'">
+        <div class="tab-panel" :class="{ active: activeTab === 'tabela' }">
           <div class="kpi-grid">
             <div class="kpi-card abertos"><div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg></div><div class="kpi-content"><div class="kpi-label">Abertos</div><div class="kpi-value">{{ stats.abertos }}</div></div></div>
             <div class="kpi-card andamento"><div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/></svg></div><div class="kpi-content"><div class="kpi-label">Em andamento</div><div class="kpi-value">{{ stats.andamento }}</div></div></div>
@@ -86,7 +86,7 @@
           </div>
         </div>
 
-        <div class="tab-panel" v-show="activeTab === 'kanban'">
+        <div class="tab-panel" :class="{ active: activeTab === 'kanban' }">
           <div class="kanban-board">
             <div class="kanban-column" v-for="col in kanbanColumns" :key="col.status">
               <div class="kanban-column-header"><div class="kanban-column-title"><span class="status-dot" :class="col.color"></span>{{ col.label }}<span class="kanban-column-count">{{ getChamadosByStatus(col.status).length }}</span></div></div>
@@ -101,7 +101,7 @@
           </div>
         </div>
 
-        <div class="tab-panel" v-show="activeTab === 'agrupado'">
+        <div class="tab-panel" :class="{ active: activeTab === 'agrupado' }">
           <div class="grouped-view">
             <div class="group-category" v-for="cat in categoriasAgrupadas" :key="cat.tipo" :class="{ expanded: cat.expanded }">
               <div class="group-category-header" @click="cat.expanded = !cat.expanded">
