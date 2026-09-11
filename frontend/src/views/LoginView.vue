@@ -94,7 +94,7 @@ async function handleLogin() {
       ui.showToast('info', 'Primeiro acesso detectado. Defina sua nova senha.')
       await router.push({ name: 'trocar-senha' })
     } else {
-      const redirect = route.query.redirect as string || '/dashboard'
+      const redirect = route.query.redirect as string || '/matriz'
       await router.push(redirect)
     }
   } catch (err: any) {

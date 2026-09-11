@@ -80,7 +80,7 @@ router.beforeEach(async (to, _from, next) => {
   }
 
   if (to.name === 'login' && authStore.isAuthenticated) {
-    return next({ name: 'dashboard' })
+    return next({ name: 'matriz' })
   }
 
   next()
