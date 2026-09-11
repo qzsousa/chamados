@@ -80,7 +80,7 @@
                     <td class="cell-protocolo">{{ c.protocolo }}</td>
                     <td><span class="cell-urgency" :class="classeUrgencia(c.urgencia)">{{ c.urgencia.split(' ')[0] }}</span></td>
                     <td>{{ truncar(c.unidade, 30) }}</td>
-                    <td><span class="categoria">{{ truncar(c.tipo, 18) }}</span></td>
+                    <td><span class="categoria" :style="{ background: corCategoria(c.tipo), color: '#fff', borderColor: corCategoria(c.tipo) }">{{ truncar(c.tipo, 18) }}</span></td>
                     <td>{{ truncar(c.descricao || '', 50) }}</td>
                     <td class="text-center">{{ c.tecnicoSetor || '—' }}</td>
                     <td class="text-center"><span class="inventario-badge" :class="classeInventario(c.inventarioStatus)">{{ c.inventarioStatus || '—' }}</span></td>
@@ -149,7 +149,7 @@
               <div class="detail-field full-width"><div class="detail-label">E-mail(s) para contato</div><div class="detail-value long-text"><template v-if="(chamadoAtual.emailsContato || []).length"><div v-for="e in chamadoAtual.emailsContato" :key="e.email"><a :href="'mailto:' + e.email" class="email-link">{{ e.nome ? e.nome + ' — ' : '' }}{{ e.email }}</a></div></template><span v-else>— não informado —</span></div></div>
               <div class="detail-field full-width"><div class="detail-label">Descrição</div><div class="detail-value long-text">{{ chamadoAtual.descricao || '—' }}</div></div>
             </div>
-            <div v-if="podeResolver && chamadoAtual.status !== 'RESOLVIDO'" class="modal-actions-resolver"><Button variant="primary" @click="marcarResolvido">✓ Marcar como Resolvido</Button></div>
+            <div v-if="podeResolver" class="modal-actions-resolver"><select v-model="novoStatus" class="status-select-modal"><option value="ABERTO">Aberto</option><option value="ANDAMENTO">Em andamento</option><option value="COMUNICADO">Comunicado</option><option value="RESOLVIDO">Resolvido</option></select><Button variant="primary" @click="salvarStatus">Salvar status</Button></div>
           </div>
         </div>
       </div>
@@ -177,6 +177,7 @@ const sidebarLeftOpen = ref(false)
 const activeTab = ref<'tabela'|'kanban'|'agrupado'>('tabela')
 const modalAberto = ref(false)
 const chamadoAtual = ref<any>(null)
+const novoStatus = ref('RESOLVIDO')
 
 const filtros = reactive({protocolo:'',unidade:'',categoria:'',status:'',urgencia:'',tecnico:'',dataDe:'',dataAte:''})
 
@@ -241,12 +242,12 @@ function limparFiltros(){Object.keys(filtros).forEach(k=>filtros[k as keyof type
 
 async function recarregar(){await chamados.carregarMatriz()}
 
-function abrirModal(c:any){chamadoAtual.value=c;modalAberto.value=true}
+function abrirModal(c:any){chamadoAtual.value=c;novoStatus.value=c.status||'RESOLVIDO';modalAberto.value=true}
 function fecharModal(){modalAberto.value=false;chamadoAtual.value=null}
 
-async function marcarResolvido(){
+async function salvarStatus(){
   if(!chamadoAtual.value)return
-  await chamados.atualizarStatus(chamadoAtual.value.id, { status: 'RESOLVIDO' })
+  await chamados.atualizarStatus(chamadoAtual.value.id, { status: novoStatus.value })
   chamadoAtual.value = null
   modalAberto.value = false
 }
@@ -258,6 +259,14 @@ function classeUrgenciaBadge(u:string){if(u.startsWith('Alta'))return'urg-pill-a
 function classeStatus(s:string){if(s==='ABERTO')return'status-abertos';if(s==='ANDAMENTO')return'status-andamento';if(s==='COMUNICADO')return'status-comunicado';return'status-resolvidos'}
 function classeInventario(i:string|undefined){if(i==='CONCLUIDO')return'inventario-concluido';if(i==='EM_ANDAMENTO')return'inventario-andamento';if(i==='NAO_REALIZADO')return'inventario-nao-realizado';return'inventario-nao-informado'}
 function classeInventarioBadge(i:string|undefined){if(i==='CONCLUIDO')return'inventario-concluido';if(i==='EM_ANDAMENTO')return'inventario-andamento';if(i==='NAO_REALIZADO')return'inventario-nao-realizado';return'inventario-nao-informado'}
+
+const CORES_CATEGORIA = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#84cc16','#f97316','#14b8a6','#6366f1','#eab308']
+function corCategoria(tipo:string){
+  if(!tipo)return'#6b7280'
+  let h=0
+  for(let i=0;i<tipo.length;i++)h=(h*31+tipo.charCodeAt(i))>>>0
+  return CORES_CATEGORIA[h%CORES_CATEGORIA.length]
+}
 
 function truncar(t:string,max:number){return t.length>max?t.slice(0,max-1)+'…':t}
 function tempoDecorrido(ts:string){const ms=Date.now()-new Date(ts).getTime();const h=ms/3600000;if(h<1)return Math.round(ms/60000)+' min';if(h<24)return Math.round(h)+'h';return Math.round(h/24)+'d'}
@@ -415,8 +424,9 @@ onUnmounted(() => {
 .detail-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500}
 
 .filter-bar{display:flex;flex-wrap:wrap;gap:8px;padding:12px 16px;background:var(--bg-secondary);border-bottom:1px solid var(--border-color);align-items:center}
-.filter-bar select{background:var(--bg-input);border:1px solid var(--border-color);border-radius:8px;color:var(--text-primary);font-size:12px;padding:8px 12px;outline:none;cursor:pointer;min-width:150px}.filter-bar select:focus{border-color:var(--accent-primary)}
-.modal-actions-resolver{display:flex;justify-content:flex-end;margin-top:16px}
+.filter-bar select{flex:1 1 150px;max-width:220px;background:var(--bg-input);border:1px solid var(--border-color);border-radius:8px;color:var(--text-primary);font-size:12px;padding:8px 12px;outline:none;cursor:pointer;min-width:140px;height:38px}.filter-bar select:focus{border-color:var(--accent-primary)}
+.modal-actions-resolver{display:flex;justify-content:flex-end;gap:10px;margin-top:16px;align-items:center}
+.status-select-modal{background:var(--bg-input);border:1px solid var(--border-color);border-radius:8px;color:var(--text-primary);font-size:13px;padding:8px 12px;outline:none;cursor:pointer;font-family:var(--font-sans)}.status-select-modal:focus{border-color:var(--accent-primary)}
 
 @media(max-width:1024px){
   .sidebar-left{transform:translateX(-100%)}
