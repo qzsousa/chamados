@@ -1,4 +1,4 @@
-import { Router, Response } from 'express'
+import { Router, Response, Request } from 'express'
 import { prisma } from '../config/prisma'
 import { authMiddleware, AuthenticatedRequest, requireRole, requireFilialAccess } from '../middleware/auth'
 import { CriarChamadoSchema, FiltrosChamadoSchema, AtualizarStatusChamadoSchema, ResponderChamadoSchema, BatchUpdateChamadosSchema, BatchDeleteChamadosSchema, ChamadoSchema, PaginatedResponseSchema } from '@shared/api'
@@ -21,7 +21,7 @@ async function getInventarioStatus(unidade: string): Promise<string | null> {
   return mapa[chave] || null
 }
 
-router.post('/', async (req, res) => {
+export async function criarChamadoPublic(req: Request, res: Response) {
   try {
     const data = CriarChamadoSchema.parse(req.body)
 
@@ -64,7 +64,7 @@ router.post('/', async (req, res) => {
     }
     throw err
   }
-})
+}
 
 router.get('/', authMiddleware, async (req: AuthenticatedRequest, res) => {
   try {

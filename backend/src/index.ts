@@ -9,17 +9,18 @@ import * as Sentry from '@sentry/node'
 
 import { env } from './config/env'
 import { prisma } from './config/prisma'
-import { authMiddleware } from './middleware/auth'
+import { authMiddleware, attachUserRecord } from './middleware/auth'
 import { errorHandler } from './middleware/errorHandler'
 import { requestLogger } from './middleware/requestLogger'
 
 import authRoutes from './routes/auth'
 import usuarioRoutes from './routes/usuarios'
-import chamadoRoutes from './routes/chamados'
+import chamadoRoutes, { criarChamadoPublic } from './routes/chamados'
 import escolaRoutes from './routes/escolas'
 import equipamentoRoutes from './routes/equipamentos'
 import inventarioRoutes from './routes/inventario'
 import dashboardRoutes from './routes/dashboard'
+import { LISTA_ESCOLAS_EMAILS } from './services/normalization'
 
 const logger = pino({
   level: env.LOG_LEVEL,
@@ -142,8 +143,18 @@ app.get('/api/equipamentos/modelos', async (req, res) => {
   } catch (err) { throw err }
 })
 
+// Lista pública de escolas (para o formulário)
+app.get('/api/escolas/nomes', async (_req, res) => {
+  try {
+    return res.json(Object.keys(LISTA_ESCOLAS_EMAILS).sort())
+  } catch (err) { throw err }
+})
+
+// Criação de chamado é pública (formulário sem login)
+app.post('/api/chamados', criarChamadoPublic)
+
 app.use('/api/dashboard', dashboardRoutes)
-app.use('/api', authMiddleware)
+app.use('/api', authMiddleware, attachUserRecord)
 app.use('/api/usuarios', usuarioRoutes)
 app.use('/api/chamados', chamadoRoutes)
 app.use('/api/escolas', escolaRoutes)

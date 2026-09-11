@@ -144,7 +144,7 @@ const equipOptions = [{value:'wifi',label:'Wi-Fi (equipamento não conecta à re
 const fisicoOptions = ['Bateria','Teclado','Tela','Som','Câmera','Outro']
 const sistemaOptions = [{value:'PortalNet',label:'PortalNet'}]
 const cargoOptions = [{value:'Diretor',label:'Diretor'},{value:'Vice-diretor',label:'Vice-diretor'},{value:'Coordenador',label:'Coordenador'},{value:'Gerente de Organização Escolar',label:'Gerente de Organização Escolar'},{value:'Agente de Organização Escolar',label:'Agente de Organização Escolar'},{value:'Professor',label:'Professor'},{value:'Estagiário (Proati)',label:'Estagiário (Proati)'}]
-const escolaOptions = [{value:'E.E. ADHEMAR ANTONIO PRADO',label:'E.E. ADHEMAR ANTONIO PRADO'},{value:'E.E. ALCIDES BOSCOLO',label:'E.E. ALCIDES BOSCOLO'}]
+const escolaOptions = ref<Array<{value:string,label:string}>>([])
 const urgenciaOptions = ['Baixa','Média','Alta']
 const contato = {nome:'Jessica Moraes - Chefe de Seção SETEC',unidade:'URE Leste 3',telefone:'(11) 2523-7010',email:'lt3.setec@educacao.sp.gov.br'}
 
@@ -168,6 +168,16 @@ async function loadCategorias() {
   } catch (e) {
     console.error('Erro ao carregar categorias:', e)
     categoriasEquip.value = ['Notebook','Tablet','Impressora'].map(c => ({ value: c, label: c }))
+  }
+}
+
+async function loadEscolas() {
+  try {
+    const res = await fetch(`${API_BASE}/escolas/nomes`, { cache: 'no-cache' })
+    const data = await res.json()
+    escolaOptions.value = data.map((n: string) => ({ value: n, label: n }))
+  } catch (e) {
+    console.error('Erro ao carregar escolas:', e)
   }
 }
 
@@ -216,6 +226,7 @@ function onModeloSelect() {
 
 onMounted(async() => {
   await loadCategorias()
+  await loadEscolas()
 })
 
 function abrirCat(id:string){activeCategory.value=categories.find(c=>c.id===id)||null;currentView.value='questions'}
