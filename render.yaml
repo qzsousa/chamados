@@ -23,7 +23,7 @@ services:
       - key: JWT_REFRESH_SECRET
         sync: false
       - key: FRONTEND_URL
-        value: https://chamados-seintec1.vercel.app
+        value: https://chamados-lac-delta.vercel.app
       - key: SENTRY_DSN
         sync: false
       - key: SUPABASE_SERVICE_KEY
