@@ -14,8 +14,9 @@ export const useAuthStore = defineStore('auth', () => {
   const isAdmin = computed(() => user.value?.nivel === 'ADMIN')
   const mustChangePassword = computed(() => user.value?.primeiroLogin === true)
 
-  function setTokens(newAccessToken: string, _newRefreshToken: string) {
+  function setTokens(newAccessToken: string, newRefreshToken: string) {
     accessToken.value = newAccessToken
+    if (newRefreshToken) localStorage.setItem('refreshToken', newRefreshToken)
   }
 
   async function initialize() {
@@ -40,6 +41,7 @@ export const useAuthStore = defineStore('auth', () => {
       accessToken.value = data.accessToken
       user.value = data.user
       localStorage.setItem('accessToken', data.accessToken)
+      localStorage.setItem('refreshToken', data.refreshToken)
       return data
     } finally {
       isLoading.value = false
@@ -53,10 +55,12 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function refresh() {
-    const { data } = await api.post<LoginResponse>('/auth/refresh')
+    const refreshToken = localStorage.getItem('refreshToken') || ''
+    const { data } = await api.post<LoginResponse>('/auth/refresh', { refreshToken })
     accessToken.value = data.accessToken
     user.value = data.user
     localStorage.setItem('accessToken', data.accessToken)
+    localStorage.setItem('refreshToken', data.refreshToken)
     return data
   }
 
@@ -79,6 +83,7 @@ export const useAuthStore = defineStore('auth', () => {
       accessToken.value = null
       user.value = null
       localStorage.removeItem('accessToken')
+      localStorage.removeItem('refreshToken')
     }
   }
 

@@ -55,7 +55,8 @@ api.interceptors.response.use(
 
       try {
         const authStore = getAuthStore()
-        const { data } = await axios.post(`${API_BASE}/auth/refresh`, {}, { withCredentials: true })
+        const refreshToken = localStorage.getItem('refreshToken') || ''
+        const { data } = await axios.post(`${API_BASE}/auth/refresh`, { refreshToken }, { withCredentials: true })
         authStore.setTokens(data.accessToken, data.refreshToken)
         processQueue(data.accessToken, null)
         if (originalRequest.headers) {
