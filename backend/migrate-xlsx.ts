@@ -6,7 +6,7 @@ import { normalizarNomeEscola, getMapaTecnicos } from './src/services/normalizat
 import * as XLSX from 'xlsx'
 
 const BCRYPT_COST = 12
-const XLSX_PATH = join(process.cwd(), '..', 'database', 'Teste em branco (respostas) (4).xlsx')
+const XLSX_PATH = join(process.cwd(), '..', 'database', 'Teste em branco (respostas) (5).xlsx')
 
 const prisma = new PrismaClient({
   datasources: { db: { url: process.env.DIRECT_URL } }
@@ -30,10 +30,6 @@ function str(v: unknown): string {
   return String(v ?? '').trim()
 }
 
-function normalizar(v: unknown): string {
-  return String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim()
-}
-
 const NIVEL_MAP: Record<string, string> = {
   'matriz': 'ADMIN',
   'tecnico': 'TECNICO',
@@ -51,10 +47,6 @@ const STATUS_CHAMADO_MAP: Record<string, string> = {
 
 function normalizeKey(s: string): string {
   return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
-}
-
-function chamadoKey(solicitante: unknown, tipo: unknown, descricao: unknown): string {
-  return `${normalizar(solicitante)}|${normalizar(tipo)}|${normalizar(descricao)}`
 }
 
 async function migrateUsuarios(rows: any[]) {
@@ -100,110 +92,41 @@ async function migrateEquipamentos(rows: any[]) {
   console.log(`  Total: ${r.count} equipamentos migrados`)
 }
 
-async function migrateChamados(chamadosRows: any[], respostasRows: any[]) {
-  console.log('🎫 Migrando chamados...')
+// Colunas da aba "Chamados" (posicional, pois a coluna de ID está sem rótulo):
+// [0] ID, [1] Timestamp, [2] Unidade, [3] Solicitante, [4] Função, [5] Tipo,
+// [6] Descrição, [7] Urgência, [8] Anexo, [9] Status, [10] Responsável,
+// [11] Última Atualização, [12] Histórico, [13] Técnico Resolução, [14] Email
+async function migrateChamados(rows: any[][]) {
+  console.log('🎫 Migrando chamados (aba Chamados)...')
   const mapaTecnicos = getMapaTecnicos()
 
-  // 1. Enriquecidos (aba "Chamados"): mapa chave -> dados de status/histórico
-  const enriquecidos = new Map<string, any>()
-  for (const row of chamadosRows) {
-    const protocolo = str(row['ID'])
-    const unidade = str(row['Unidade'])
-    if (!protocolo || !unidade) continue
-    const k = chamadoKey(row['Solicitante'], row['Tipo'], row['Descrição'])
-    enriquecidos.set(k, { ...row, protocolo, unidade })
-  }
-
-  // 2. Fonte de verdade: respostas do Forms (aba "Respostas ao formulário 1")
-  const mapaRespostas = new Map<string, any>()
-  const ordem: string[] = []
-  for (const row of respostasRows) {
-    const unidade = str(row['UNIDADE ESCOLAR'])
-    if (!unidade) continue
-    const k = chamadoKey(row['Nome do solicitante'], row['Tipo de Solicitação'], row['Descrição do Problema'])
-    if (!mapaRespostas.has(k)) {
-      mapaRespostas.set(k, row)
-      ordem.push(k)
-    }
-  }
-
-  // 3. Gerar protocolos únicos para os que não vieram da aba "Chamados"
-  const usados = new Set(enriquecidos.values ? [...enriquecidos.values()].map((e: any) => e.protocolo) : [])
-  function gerarProtocolo(ts: Date): string {
-    const ymd = ts.toISOString().slice(0, 10).replace(/-/g, '')
-    let seq = 1
-    let p = `CH-${ymd}-${String(seq).padStart(4, '0')}`
-    while (usados.has(p)) { seq++; p = `CH-${ymd}-${String(seq).padStart(4, '0')}` }
-    usados.add(p)
-    return p
-  }
-
   const dados: any[] = []
-  for (const k of ordem) {
-    const resp = mapaRespostas.get(k)
-    const enc = enriquecidos.get(k)
+  for (const row of rows) {
+    const protocolo = str(row[0])
+    if (!protocolo) continue
 
-    const unidade = str(resp['UNIDADE ESCOLAR'])
-    const timestamp = toDate(resp['Carimbo de data/hora'])
+    const unidade = str(row[2])
     const escolaNorm = normalizarNomeEscola(unidade)
     const tecnicoSetor = mapaTecnicos[escolaNorm] || ''
 
-    let protocolo: string
-    let status: string
-    let responsavel: string | null = null
-    let historico: string | null = null
-    let tecnicoResolucao: string | null = null
-    let ultimaAtualizacao: Date
-    let solicitante: string
-    let funcao: string | null
-    let tipo: string
-    let descricao: string
-    let urgencia: string
-    let anexoUrl: string | null
-
-    if (enc) {
-      // dados enriquecidos da aba "Chamados"
-      protocolo = enc.protocolo
-      const statusRaw = normalizeKey(str(enc['Status']))
-      status = STATUS_CHAMADO_MAP[statusRaw] || 'ABERTO'
-      responsavel = str(enc['Responsável']) || null
-      historico = str(enc['Histórico']) || null
-      tecnicoResolucao = str(enc['Técnico Resolução']) || null
-      ultimaAtualizacao = toDate(enc['Última Atualização'])
-      solicitante = str(enc['Solicitante'])
-      funcao = str(enc['Função']) || null
-      tipo = str(enc['Tipo'])
-      descricao = str(enc['Descrição'])
-      urgencia = str(enc['Urgência'])
-      anexoUrl = str(enc['Anexo']) || null
-    } else {
-      // resposta bruta sem chamado processado
-      protocolo = gerarProtocolo(timestamp)
-      status = 'ABERTO'
-      ultimaAtualizacao = timestamp
-      solicitante = str(resp['Nome do solicitante'])
-      funcao = str(resp['2- Função']) || null
-      tipo = str(resp['Tipo de Solicitação'])
-      descricao = str(resp['Descrição do Problema'])
-      urgencia = str(resp['Urgência'])
-      anexoUrl = str(resp['Anexos'] || resp['Anexos.  \nFotos ou prints do problema.']) || null
-    }
+    const statusRaw = normalizeKey(str(row[9]))
+    const status = STATUS_CHAMADO_MAP[statusRaw] || 'ABERTO'
 
     dados.push({
       protocolo,
-      timestamp,
+      timestamp: toDate(row[1]),
       unidade,
-      solicitante,
-      funcao,
-      tipo,
-      descricao,
-      urgencia,
-      anexoUrl,
+      solicitante: str(row[3]),
+      funcao: str(row[4]) || null,
+      tipo: str(row[5]),
+      descricao: str(row[6]),
+      urgencia: str(row[7]),
+      anexoUrl: str(row[8]) || null,
       status,
-      responsavel,
-      ultimaAtualizacao,
-      historico,
-      tecnicoResolucao,
+      responsavel: str(row[10]) || null,
+      ultimaAtualizacao: toDate(row[11]),
+      historico: str(row[12]) || null,
+      tecnicoResolucao: str(row[13]) || null,
       tecnicoSetor
     })
   }
@@ -214,7 +137,7 @@ async function migrateChamados(chamadosRows: any[], respostasRows: any[]) {
     const r = await prisma.chamado.createMany({ data: chunk, skipDuplicates: true })
     total += r.count
   }
-  console.log(`  Total: ${total} chamados (${dados.length} processados, ${enriquecidos.size} enriquecidos)`)
+  console.log(`  Total: ${total} chamados migrados (${dados.length} processados)`)
 }
 
 async function main() {
@@ -222,15 +145,18 @@ async function main() {
   console.log(`   Arquivo: ${XLSX_PATH}`)
 
   const wb = XLSX.readFile(XLSX_PATH)
+
   const usuariosRows = XLSX.utils.sheet_to_json(wb.Sheets['Usuarios'])
   const equipamentosRows = XLSX.utils.sheet_to_json(wb.Sheets['Equipamentos'])
-  const chamadosRows = XLSX.utils.sheet_to_json(wb.Sheets['Chamados'])
-  const respostasRows = XLSX.utils.sheet_to_json(wb.Sheets['Respostas ao formulário 1'])
+  const chamadosAoa = XLSX.utils.sheet_to_json(wb.Sheets['Chamados'], { header: 1, defval: '' })
+
+  // descarta a linha de cabeçalho
+  const chamadosRows = chamadosAoa.slice(1) as any[][]
 
   await migrateUsuarios(usuariosRows)
   await migrateEquipamentos(equipamentosRows)
   await prisma.chamado.deleteMany({})
-  await migrateChamados(chamadosRows, respostasRows)
+  await migrateChamados(chamadosRows)
 
   console.log('✅ Migração concluída!')
 }
