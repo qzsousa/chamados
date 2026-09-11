@@ -194,9 +194,11 @@ router.post('/change-password', authMiddleware, async (req: AuthenticatedRequest
       return res.status(404).json({ error: 'NOT_FOUND', message: 'Usuário não encontrado' })
     }
 
-    const valid = await bcrypt.compare(senhaAtual, user.senhaHash)
-    if (!valid) {
-      return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Senha atual incorreta' })
+    if (!user.primeiroLogin) {
+      const valid = await bcrypt.compare(senhaAtual, user.senhaHash)
+      if (!valid) {
+        return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Senha atual incorreta' })
+      }
     }
 
     const policy = passwordPolicy.validate(novaSenha)
