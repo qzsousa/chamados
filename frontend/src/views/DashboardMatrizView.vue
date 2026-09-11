@@ -40,14 +40,6 @@
         </div>
       </div>
 
-      <div class="filter-bar">
-        <select v-model="filtros.unidade"><option value="">Todas as unidades</option><option v-for="u in unidadesUnicas" :key="u" :value="u">{{ u }}</option></select>
-        <select v-model="filtros.categoria"><option value="">Todas as categorias</option><option v-for="c in categoriasUnicas" :key="c" :value="c">{{ c }}</option></select>
-        <select v-model="filtros.status"><option value="">Todos os status</option><option value="ABERTO">Aberto</option><option value="ANDAMENTO">Em andamento</option><option value="COMUNICADO">Comunicado</option><option value="RESOLVIDO">Resolvido</option></select>
-        <select v-model="filtros.urgencia"><option value="">Todas as urgências</option><option value="Alta">Alta</option><option value="Média">Média</option><option value="Baixa">Baixa</option></select>
-        <select v-model="filtros.tecnico"><option value="">Todos os técnicos</option><option v-for="t in tecnicosUnicos" :key="t" :value="t">{{ t }}</option></select>
-      </div>
-
       <div class="tabs">
         <button class="tab-btn" :class="{ active: activeTab === 'tabela' }" @click="activeTab='tabela'"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>Tabela</button>
         <button class="tab-btn" :class="{ active: activeTab === 'kanban' }" @click="activeTab='kanban'"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="5" height="14" rx="1"/><rect x="10" y="3" width="5" height="10" rx="1"/><rect x="17" y="3" width="5" height="16" rx="1"/></svg>Kanban</button>
@@ -70,6 +62,14 @@
             </div>
             <div class="chart-box"><div class="chart-title">Resolvidos por Técnico</div><canvas id="chartTecnico"></canvas></div>
           </div>
+
+          <div class="filter-bar">
+        <select v-model="filtros.unidade"><option value="">Todas as unidades</option><option v-for="u in unidadesUnicas" :key="u" :value="u">{{ u }}</option></select>
+        <select v-model="filtros.categoria"><option value="">Todas as categorias</option><option v-for="c in categoriasUnicas" :key="c" :value="c">{{ c }}</option></select>
+        <select v-model="filtros.status"><option value="">Todos os status</option><option value="ABERTO">Aberto</option><option value="ANDAMENTO">Em andamento</option><option value="COMUNICADO">Comunicado</option><option value="RESOLVIDO">Resolvido</option></select>
+        <select v-model="filtros.urgencia"><option value="">Todas as urgências</option><option value="Alta">Alta</option><option value="Média">Média</option><option value="Baixa">Baixa</option></select>
+        <select v-model="filtros.tecnico"><option value="">Todos os técnicos</option><option v-for="t in tecnicosUnicos" :key="t" :value="t">{{ t }}</option></select>
+      </div>
 
           <div class="table-container">
             <div class="table-wrapper">
