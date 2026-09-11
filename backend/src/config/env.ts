@@ -20,6 +20,12 @@ const envSchema = z.object({
   GOOGLE_SERVICE_ACCOUNT_JSON: z.string().optional(),
   GOOGLE_SHEETS_ID: z.string().optional(),
 
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().optional(),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  EMAIL_FROM: z.string().optional(),
+
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info')
 })
 

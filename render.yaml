@@ -32,3 +32,13 @@ services:
         sync: false
       - key: GOOGLE_SHEETS_ID
         value: 1W9_Q8F6k0Ic7OG5dpgEIGbEzmJwjExv-S07gJptv9SY
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: EMAIL_FROM
+        sync: false

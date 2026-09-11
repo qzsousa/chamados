@@ -122,7 +122,8 @@ export const ChamadoSchema = z.object({
   historico: z.string().nullable(),
   tecnicoResolucao: z.string().nullable(),
   tecnicoSetor: z.string().nullable(),
-  inventarioStatus: InventarioStatusSchema.nullable()
+  inventarioStatus: InventarioStatusSchema.nullable(),
+  email: z.string().nullable()
 })
 
 export type Chamado = z.infer<typeof ChamadoSchema>
@@ -134,6 +135,7 @@ export const CriarChamadoSchema = z.object({
   tipo: z.string().min(1),
   descricao: z.string().min(1),
   urgencia: z.string().min(1),
+  email: z.string().email().optional(),
   anexoBase64: z.string().optional(),
   anexoNome: z.string().optional(),
   anexoTipo: z.string().optional()

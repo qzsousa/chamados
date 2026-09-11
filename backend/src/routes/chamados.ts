@@ -5,6 +5,7 @@ import { CriarChamadoSchema, FiltrosChamadoSchema, AtualizarStatusChamadoSchema,
 import { ZodError } from 'zod'
 import { normalizarNomeEscola, getMapaTecnicos } from '../services/normalization'
 import { getMapaInventario } from '../services/migration'
+import { notificarChamadoConcluido, notificarChamadoCriado } from '../services/email'
 
 const router = Router()
 
@@ -43,6 +44,7 @@ router.post('/', async (req, res) => {
         descricao: data.descricao,
         urgencia: data.urgencia,
         anexoUrl,
+        email: data.email || null,
         tecnicoSetor,
         inventarioStatus: inventarioStatus as any,
         historico: `Chamado criado em ${new Date().toLocaleString('pt-BR')}`
@@ -52,6 +54,8 @@ router.post('/', async (req, res) => {
     if (data.urgencia.startsWith('Alta')) {
       await notificarAltaPrioridade(chamado)
     }
+
+    await notificarChamadoCriado(chamado)
 
     return res.status(201).json(chamado)
   } catch (err) {
@@ -161,6 +165,7 @@ router.patch('/:id/status', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GES
     }
 
     const agora = new Date()
+    const statusAnterior = chamado.status
     const entradaHistorico = `[${agora.toLocaleString('pt-BR')}] Status alterado para "${status}" por ${req.userRecord?.nome || 'Sistema'}${tecnicoResolucao ? ` (técnico: ${tecnicoResolucao})` : ''}`
 
     const updated = await prisma.chamado.update({
@@ -173,6 +178,10 @@ router.patch('/:id/status', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GES
         historico: `${chamado.historico || ''}\n${entradaHistorico}`.trim()
       }
     })
+
+    if (status === 'RESOLVIDO' && statusAnterior !== 'RESOLVIDO') {
+      await notificarChamadoConcluido(updated)
+    }
 
     return res.json(updated)
   } catch (err) {
@@ -245,7 +254,7 @@ router.patch('/batch', authMiddleware, requireRole('ADMIN', 'TECNICO'), async (r
         historicoNovo = `${historicoNovo}\n${entrada}`.trim()
       }
 
-      await prisma.chamado.update({
+      const updated = await prisma.chamado.update({
         where: { id },
         data: {
           status: status || chamado.status,
@@ -255,6 +264,11 @@ router.patch('/batch', authMiddleware, requireRole('ADMIN', 'TECNICO'), async (r
           historico: historicoNovo
         }
       })
+
+      if (status && status === 'RESOLVIDO' && chamado.status !== 'RESOLVIDO') {
+        await notificarChamadoConcluido(updated)
+      }
+
       atualizados++
     }
 

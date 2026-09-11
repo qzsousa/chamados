@@ -138,6 +138,7 @@
               <div class="detail-field"><div class="detail-label">Técnico do Setor</div><div class="detail-value">{{ chamadoAtual.tecnicoSetor || '—' }}</div></div>
               <div class="detail-field"><div class="detail-label">Inventário</div><div class="detail-value"><span class="detail-badge" :class="classeInventarioBadge(chamadoAtual.inventarioStatus)">{{ chamadoAtual.inventarioStatus || 'Não informado' }}</span></div></div>
               <div class="detail-field"><div class="detail-label">Aberto em</div><div class="detail-value">{{ formatDate(chamadoAtual.timestamp) }}</div></div>
+              <div class="detail-field full-width"><div class="detail-label">E-mail(s) para contato</div><div class="detail-value long-text"><template v-if="(chamadoAtual.emailsContato || []).length"><div v-for="e in chamadoAtual.emailsContato" :key="e.email"><a :href="'mailto:' + e.email" class="email-link">{{ e.nome ? e.nome + ' — ' : '' }}{{ e.email }}</a></div></template><span v-else>— não informado —</span></div></div>
               <div class="detail-field full-width"><div class="detail-label">Descrição</div><div class="detail-value long-text">{{ chamadoAtual.descricao || '—' }}</div></div>
             </div>
           </div>
@@ -390,6 +391,7 @@ onUnmounted(() => {
 .detail-label{font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)}
 .detail-value{font-size:13px;color:var(--text-primary);padding:8px 12px;background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:8px;font-family:var(--font-mono)}
 .detail-value.long-text{font-family:var(--font-sans);white-space:pre-wrap;word-break:break-word;min-height:80px}
+.email-link{color:var(--accent-primary);text-decoration:none;font-family:var(--font-sans)}.email-link:hover{text-decoration:underline}
 .detail-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500}
 
 @media(max-width:1024px){

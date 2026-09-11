@@ -2,7 +2,7 @@ import { Router, Response } from 'express'
 import { prisma } from '../config/prisma'
 import { authMiddleware, AuthenticatedRequest } from '../middleware/auth'
 import { DashboardKPIsSchema, DashboardMatrizResponseSchema, DashboardFiltradoResponseSchema } from '@shared/api'
-import { normalizarNomeEscola, getMapaTecnicos } from '../services/normalization'
+import { normalizarNomeEscola, getMapaTecnicos, getEmailsContato } from '../services/normalization'
 import { getMapaInventario } from '../services/migration'
 
 const router = Router()
@@ -30,7 +30,8 @@ async function getDashboardData(filtroFilial?: string, filtroNivel?: string) {
     return {
       ...c,
       tecnicoSetor: c.tecnicoSetor || mapaTecnicos[escolaNorm] || '',
-      inventarioStatus: c.inventarioStatus || mapaInventario[escolaNorm] || null
+      inventarioStatus: c.inventarioStatus || mapaInventario[escolaNorm] || null,
+      emailsContato: getEmailsContato(c.unidade)
     }
   })
 

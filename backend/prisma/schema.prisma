@@ -60,6 +60,7 @@ model Chamado {
   tecnicoResolucao   String?
   tecnicoSetor       String?
   inventarioStatus   String?  // CONCLUIDO, EM_ANDAMENTO, NAO_REALIZADO, NAO_INFORMADO
+  email              String?  // e-mail do solicitante
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
