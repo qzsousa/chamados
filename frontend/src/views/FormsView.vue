@@ -30,6 +30,25 @@
             <p class="sub">{{ contato.unidade }} · {{ contato.telefone }} · {{ contato.email }}</p>
           </div>
         </div>
+
+        <div class="consulta">
+          <h4>Consultar chamado</h4>
+          <p class="consulta-sub">Informe o número de protocolo para acompanhar o andamento do seu chamado.</p>
+          <div class="consulta-form">
+            <input v-model="consultaProtocolo" class="consulta-input" type="text" placeholder="Ex.: CH-20260101-0001" @keyup.enter="consultarChamado" />
+            <button type="button" class="consulta-btn" :disabled="consultando" @click="consultarChamado">Consultar</button>
+          </div>
+          <p v-if="consultaErro" class="consulta-erro">{{ consultaErro }}</p>
+          <div v-if="consultaResultado" class="consulta-resultado">
+            <div class="consulta-linha"><span class="k">Protocolo</span><span class="v mono">{{ consultaResultado.protocolo }}</span></div>
+            <div class="consulta-linha"><span class="k">Unidade</span><span class="v">{{ consultaResultado.unidade }}</span></div>
+            <div class="consulta-linha"><span class="k">Tipo</span><span class="v">{{ consultaResultado.tipo }}</span></div>
+            <div class="consulta-linha"><span class="k">Status</span><span class="v status" :class="classeStatusConsulta(consultaResultado.status)">{{ statusLabelConsulta(consultaResultado.status) }}</span></div>
+            <div class="consulta-linha"><span class="k">Aberto em</span><span class="v">{{ formatarDataConsulta(consultaResultado.timestamp) }}</span></div>
+            <div v-if="consultaResultado.descricao" class="consulta-linha col"><span class="k">Descrição</span><span class="v">{{ consultaResultado.descricao }}</span></div>
+            <div v-if="consultaResultado.descricaoResolucao" class="consulta-linha col"><span class="k">O que foi feito</span><span class="v">{{ consultaResultado.descricaoResolucao }}</span></div>
+          </div>
+        </div>
       </section>
 
       <section v-show="currentView === 'questions'" class="view active">
@@ -58,12 +77,13 @@
           </div>
           <div v-if="form.rede === 'wifi-salas'" class="qb"><h3 class="qt">Quais salas ou locais estão sem conexão?</h3><p class="qs">Detalhe os locais afetados para agilizar o atendimento.</p><textarea class="locais-ta" v-model="form.locais" placeholder="Ex.: Sala 5, Sala 7, Quadra, Laboratório de Informática, Secretaria..."></textarea></div>
           <div v-if="form.rede === 'pontos'" class="qb"><h3 class="qt">Pontos de Rede — Anexo obrigatório</h3><div class="al al-aviso"><p>Para solicitações de novos pontos de rede, é <strong>obrigatório</strong> anexar <strong>fotos das salas e locais</strong> onde os pontos são necessários.</p></div></div>
+          <div v-if="form.rede === 'outro'" class="qb"><h3 class="qt">Descreva o problema</h3><p class="qs">Conte em detalhes o problema de rede que está enfrentando.</p><textarea class="locais-ta" v-model="form.outro" placeholder="Descreva o problema..."></textarea></div>
           <Button v-if="podeAvancarRede" variant="primary" size="lg" class="btn-av" @click="irParaId">Continuar →</Button>
         </div>
 
         <div v-if="activeCategory?.id === 'equip'" class="cat-qs">
           <Card class="qb"><h3 class="qt">Qual é o tipo de problema no equipamento?</h3><div class="ops"><button v-for="opt in equipOptions" :key="opt.value" type="button" class="op" :class="{ sel: form.equip === opt.value }" @click="form.equip = opt.value"><span class="radio"></span>{{ opt.label }}</button></div></Card>
-          <div v-if="form.equip && form.equip !== 'wifi' && form.equip !== 'sistema'" class="qb">
+          <div v-if="form.equip && form.equip !== 'wifi' && form.equip !== 'sistema' && form.equip !== 'outro'" class="qb">
             <h3 class="qt">Selecione o equipamento</h3>
             <div class="excs">
               <div class="exc"><label>Categoria *</label><Select id="equip-categoria" v-model="form.categoria" :options="categoriasEquip" placeholder="— Selecione a categoria —" :disabled="!categoriasEquip.length" @update:modelValue="onCategoriaChange" /></div>
@@ -75,12 +95,14 @@
             <div v-if="equipSelecionado" class="al al-ok"><p>Equipamento: <strong>{{ equipSelecionado.categoria }} / {{ equipSelecionado.marca }} / {{ equipSelecionado.modelo }}</strong></p></div>
           </div>
           <div v-if="form.equip === 'fisico'" class="qb"><h3 class="qt">Qual é o tipo de problema físico?</h3><div class="tfgrid"><button v-for="opt in fisicoOptions" :key="opt" type="button" class="tfbtn" :class="{ sel: form.tipoFisico === opt }" @click="form.tipoFisico = opt">{{ opt }}</button></div></div>
+          <div v-if="form.equip === 'outro'" class="qb"><h3 class="qt">Descreva o problema</h3><p class="qs">Conte em detalhes o problema no equipamento.</p><textarea class="locais-ta" v-model="form.outro" placeholder="Descreva o problema..."></textarea></div>
           <Button v-if="podeAvancarEquip" variant="primary" size="lg" class="btn-av" @click="irParaId">Continuar →</Button>
         </div>
 
         <div v-if="activeCategory?.id === 'sistema'" class="cat-qs">
           <Card class="qb"><h3 class="qt">Qual sistema está com problema?</h3><Select id="form-sistema" v-model="form.sistema" :options="sistemaOptions" placeholder="— Selecione o sistema —" @update:modelValue="onSistemaChange" /></Card>
           <div v-if="form.sistema === 'PortalNet'" class="qb"><h3 class="qt">Informações para o PortalNet</h3><div class="excs"><div class="exc"><label>RG *</label><Input v-model="form.pnRg" placeholder="Número do RG" /></div><div class="exc"><label>Nome completo *</label><Input v-model="form.pnNome" placeholder="Nome completo do servidor" /></div><div class="exc"><label>CIE *</label><Input v-model="form.pnCie" placeholder="Código CIE da escola" /></div><div class="exc"><label>Atribuições / Transferência *</label><Input v-model="form.pnAtrib" placeholder="Ex.: Transferir de E.E. X para E.E. Y — atribuição de Coordenador Pedagógico..." /></div></div></div>
+          <div v-if="form.sistema === 'outro'" class="qb"><h3 class="qt">Descreva o problema</h3><p class="qs">Informe qual sistema está com problema e o que está acontecendo.</p><textarea class="locais-ta" v-model="form.outro" placeholder="Descreva o problema..."></textarea></div>
           <Button v-if="podeAvancarSistema" variant="primary" size="lg" class="btn-av" @click="irParaId">Continuar →</Button>
         </div>
 
@@ -137,18 +159,53 @@ const activeCategory = ref<any>(null)
 const modalTesteAberto = ref(false)
 const testeUrl = 'https://www.brasilbandalarga.com.br/'
 const protocolo = ref('')
+const consultaProtocolo = ref('')
+const consultando = ref(false)
+const consultaErro = ref('')
+const consultaResultado = ref<any>(null)
 
 const categories = [{id:'rede',cor:'#1E7FC7',titulo:'Problema de Rede',desc:'Lentidão, queda de internet, Wi-Fi instável ou solicitação de pontos de rede.'},{id:'equip',cor:'#1E7A4C',titulo:'Problema de Equipamento',desc:'Notebook, tablet ou impressora com problema físico, de software, Wi-Fi ou formatação.'},{id:'sistema',cor:'#7A4FB5',titulo:'Problema em Sistema',desc:'Erros em sistemas como PortalNet e outros sistemas educacionais.'},{id:'email',cor:'#C9711A',titulo:'Problema no E-mail',desc:'Sem acesso, senha bloqueada ou problemas de login.'}]
-const redeOptions = [{value:'lentidao',label:'Lentidão'},{value:'queda-total',label:'Queda total de internet'},{value:'wifi-salas',label:'Queda de Wi-Fi em salas ou locais específicos'},{value:'pontos',label:'Solicitação de Pontos de Rede'}]
-const equipOptions = [{value:'wifi',label:'Wi-Fi (equipamento não conecta à rede)'},{value:'fisico',label:'Manutenção — Problemas Físicos'},{value:'software',label:'Manutenção — Problemas de Software'},{value:'formatacao',label:'Formatação'},{value:'sistema',label:'Sistema (login, configuração, perfil)'}]
+const redeOptions = [{value:'lentidao',label:'Lentidão'},{value:'queda-total',label:'Queda total de internet'},{value:'wifi-salas',label:'Queda de Wi-Fi em salas ou locais específicos'},{value:'pontos',label:'Solicitação de Pontos de Rede'},{value:'outro',label:'Outro'}]
+const equipOptions = [{value:'wifi',label:'Wi-Fi (equipamento não conecta à rede)'},{value:'fisico',label:'Manutenção — Problemas Físicos'},{value:'software',label:'Manutenção — Problemas de Software'},{value:'formatacao',label:'Formatação'},{value:'sistema',label:'Sistema (login, configuração, perfil)'},{value:'outro',label:'Outro'}]
 const fisicoOptions = ['Bateria','Teclado','Tela','Som','Câmera','Outro']
-const sistemaOptions = [{value:'PortalNet',label:'PortalNet'}]
+const sistemaOptions = [{value:'PortalNet',label:'PortalNet'},{value:'SCI - Sistema de Chamados',label:'SCI - Sistema de Chamados'},{value:'SCE - Sistema de Controle de Equipamentos',label:'SCE - Sistema de Controle de Equipamentos'},{value:'outro',label:'Outro'}]
 const cargoOptions = [{value:'Diretor',label:'Diretor'},{value:'Vice-diretor',label:'Vice-diretor'},{value:'Coordenador',label:'Coordenador'},{value:'Gerente de Organização Escolar',label:'Gerente de Organização Escolar'},{value:'Agente de Organização Escolar',label:'Agente de Organização Escolar'},{value:'Professor',label:'Professor'},{value:'Estagiário (Proati)',label:'Estagiário (Proati)'}]
 const escolaOptions = ref<Array<{value:string,label:string}>>([])
 const urgenciaOptions = ['Baixa','Média','Alta']
 const contato = {nome:'Jessica Moraes - Chefe de Seção SETEC',unidade:'URE Leste 3',telefone:'(11) 2523-7010',email:'lt3.setec@educacao.sp.gov.br'}
 
-const form = reactive({rede:'',energia:'',locais:'',equip:'',categoria:'',marca:'',modelo:'',tipoFisico:'',sistema:'',pnRg:'',pnNome:'',pnCie:'',pnAtrib:'',emCie:'',emEscola:'',emLogin:'',emEmail:'',nome:'',cargo:'',email:'',escola:'',descAdicional:'',urgencia:'',anexo:null as File|null})
+async function consultarChamado(){
+  const p = consultaProtocolo.value.trim()
+  consultaErro.value = ''
+  consultaResultado.value = null
+  if(!p){ consultaErro.value = 'Informe o número do protocolo.'; return }
+  consultando.value = true
+  try{
+    const res = await fetch(`${API_BASE}/chamados/protocolo/${encodeURIComponent(p)}`, { cache: 'no-cache' })
+    if(!res.ok){
+      const d = await res.json().catch(()=>null)
+      consultaErro.value = d?.message || 'Chamado não encontrado.'
+      return
+    }
+    consultaResultado.value = await res.json()
+  }catch(e){
+    consultaErro.value = 'Erro ao consultar o chamado. Tente novamente.'
+  }finally{
+    consultando.value = false
+  }
+}
+
+const STATUS_LABEL: Record<string,string> = { ABERTO:'Aberto', ANDAMENTO:'Em andamento', COMUNICADO:'Comunicado', RESOLVIDO:'Resolvido' }
+function statusLabelConsulta(s:string){ return STATUS_LABEL[s] || s }
+function classeStatusConsulta(s:string){
+  if(s==='ABERTO') return 'st-aberto'
+  if(s==='ANDAMENTO') return 'st-andamento'
+  if(s==='COMUNICADO') return 'st-comunicado'
+  return 'st-resolvido'
+}
+function formatarDataConsulta(ts:string){ return ts ? new Date(ts).toLocaleString('pt-BR') : '—' }
+
+const form = reactive({rede:'',energia:'',locais:'',equip:'',categoria:'',marca:'',modelo:'',tipoFisico:'',sistema:'',outro:'',pnRg:'',pnNome:'',pnCie:'',pnAtrib:'',emCie:'',emEscola:'',emLogin:'',emEmail:'',nome:'',cargo:'',email:'',escola:'',descAdicional:'',urgencia:'',anexo:null as File|null})
 const errors = reactive({nome:'',cargo:'',email:'',escola:'',urgencia:'',anexo:''})
 const categoriasEquip = ref<Array<{value: string, label: string}>>([])
 const marcasEquip = ref<Array<{value: string, label: string}>>([])
@@ -233,10 +290,10 @@ function abrirCat(id:string){activeCategory.value=categories.find(c=>c.id===id)|
 function voltarHome(){currentView.value='home';activeCategory.value=null;resetForm()}
 function voltarQ(){currentView.value='questions'}
 
-const podeAvancarRede=computed(()=>{if(!form.rede)return false;if(form.rede==='lentidao')return true;if(form.rede==='queda-total')return!!form.energia;if(form.rede==='wifi-salas')return form.locais.trim().length>0;if(form.rede==='pontos')return true;return false})
+const podeAvancarRede=computed(()=>{if(!form.rede)return false;if(form.rede==='lentidao')return true;if(form.rede==='queda-total')return!!form.energia;if(form.rede==='wifi-salas')return form.locais.trim().length>0;if(form.rede==='pontos')return true;if(form.rede==='outro')return form.outro.trim().length>0;return false})
 
-const podeAvancarEquip=computed(()=>{if(!form.equip)return false;if(form.equip==='wifi'||form.equip==='sistema')return true;if(form.marca===OUTRO)return customMarca.value.trim().length>0;if(form.modelo===OUTRO)return customModelo.value.trim().length>0;return!!form.modelo})
-const podeAvancarSistema=computed(()=>{if(!form.sistema)return false;if(form.sistema!=='PortalNet')return true;return!!form.pnRg&&!!form.pnNome&&!!form.pnCie&&!!form.pnAtrib})
+const podeAvancarEquip=computed(()=>{if(!form.equip)return false;if(form.equip==='wifi'||form.equip==='sistema')return true;if(form.equip==='outro')return form.outro.trim().length>0;if(form.marca===OUTRO)return customMarca.value.trim().length>0;if(form.modelo===OUTRO)return customModelo.value.trim().length>0;return!!form.modelo})
+const podeAvancarSistema=computed(()=>{if(!form.sistema)return false;if(form.sistema==='outro')return form.outro.trim().length>0;if(form.sistema!=='PortalNet')return true;return!!form.pnRg&&!!form.pnNome&&!!form.pnCie&&!!form.pnAtrib})
 
 function irParaId(){currentView.value='id'}
 
@@ -246,7 +303,7 @@ function handleAnexo(e:Event){const t=e.target as HTMLInputElement;if(t.files&&t
 
 async function enviar(){errors.nome=form.nome?'':'Informe seu nome';errors.cargo=form.cargo?'':'Selecione seu cargo';errors.email=form.email&&form.email.includes('@')?'':'E-mail inválido';errors.escola=form.escola?'':'Selecione a escola';errors.urgencia=form.urgencia?'':'Selecione a urgência';if(errors.nome||errors.cargo||errors.email||errors.escola||errors.urgencia)return;submitting=true;try{const anexoBase64=form.anexo?await fileToBase64(form.anexo):undefined;const result=await chamados.criar({unidade:form.escola,solicitante:form.nome,funcao:form.cargo,tipo:activeCategory.value?.titulo||'Outro',descricao:form.descAdicional||buildDescricao(),urgencia:form.urgencia,email:form.email,anexoBase64,anexoNome:form.anexo?.name,anexoTipo:form.anexo?.type});protocolo.value=result.protocolo;currentView.value='success'}catch(err:any){ui.showToast('error',err.response?.data?.message||'Erro ao enviar chamado')}finally{submitting=false}}
 
-function buildDescricao(){const parts:string[]=[];if(form.rede)parts.push(`Rede: ${form.rede}`);if(form.energia)parts.push(`Energia: ${form.energia}`);if(form.locais)parts.push(`Locais: ${form.locais}`);if(form.equip)parts.push(`Equip: ${form.equip}`);if(form.tipoFisico)parts.push(`Físico: ${form.tipoFisico}`);if(form.sistema)parts.push(`Sistema: ${form.sistema}`);if(form.pnRg)parts.push(`RG: ${form.pnRg}`);if(form.pnNome)parts.push(`Nome: ${form.pnNome}`);if(form.pnCie)parts.push(`CIE: ${form.pnCie}`);if(form.pnAtrib)parts.push(`Atrib: ${form.pnAtrib}`);if(form.emCie)parts.push(`CIE: ${form.emCie}`);if(form.emEscola)parts.push(`Esc: ${form.emEscola}`);if(form.emLogin)parts.push(`Login: ${form.emLogin}`);if(form.emEmail)parts.push(`Email: ${form.emEmail}`);if(form.categoria)parts.push(`Cat: ${form.categoria}`);if(form.marca)parts.push(`Marca: ${form.marca}`);if(form.modelo)parts.push(`Mod: ${form.modelo}`);return parts.join(' | ')}
+function buildDescricao(){const parts:string[]=[];if(form.rede)parts.push(`Rede: ${form.rede}`);if(form.energia)parts.push(`Energia: ${form.energia}`);if(form.locais)parts.push(`Locais: ${form.locais}`);if(form.equip)parts.push(`Equip: ${form.equip}`);if(form.tipoFisico)parts.push(`Físico: ${form.tipoFisico}`);if(form.sistema)parts.push(`Sistema: ${form.sistema}`);if(form.outro)parts.push(`Outro: ${form.outro}`);if(form.pnRg)parts.push(`RG: ${form.pnRg}`);if(form.pnNome)parts.push(`Nome: ${form.pnNome}`);if(form.pnCie)parts.push(`CIE: ${form.pnCie}`);if(form.pnAtrib)parts.push(`Atrib: ${form.pnAtrib}`);if(form.emCie)parts.push(`CIE: ${form.emCie}`);if(form.emEscola)parts.push(`Esc: ${form.emEscola}`);if(form.emLogin)parts.push(`Login: ${form.emLogin}`);if(form.emEmail)parts.push(`Email: ${form.emEmail}`);if(form.categoria)parts.push(`Cat: ${form.categoria}`);if(form.marca)parts.push(`Marca: ${form.marca}`);if(form.modelo)parts.push(`Mod: ${form.modelo}`);return parts.join(' | ')}
 
 function fileToBase64(file:File):Promise<string>{return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve((reader.result as string).split(',')[1]);reader.onerror=reject;reader.readAsDataURL(file)})}
 
@@ -258,7 +315,25 @@ function fecharTeste(){modalTesteAberto.value=false}
 
 <style scoped>
 /* Core styles - full CSS moved to main.css */
-.forms-app { min-height: 100vh; display: flex; flex-direction: column; }
+.forms-app {
+  min-height: 100vh; display: flex; flex-direction: column;
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f1f5f9;
+  --bg-card: #ffffff;
+  --bg-hover: #f1f5f9;
+  --bg-input: #ffffff;
+  --border-color: #e2e8f0;
+  --border-light: #cbd5e1;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.07);
+  --shadow-lg: 0 10px 15px rgba(0,0,0,0.1);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
 .topbar { background: var(--bg-secondary); border-bottom: 1px solid var(--border-color); padding: 14px 20px; display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 100; }
 .topbar-logo { flex-shrink: 0; }
 .topbar-org { display: flex; flex-direction: column; line-height: 1.2; }
@@ -283,6 +358,26 @@ function fecharTeste(){modalTesteAberto.value=false}
 .contato h4 { margin: 0 0 2px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: rgba(255,255,255,.7); font-weight: 700; }
 .contato p { margin: 0; font-size: 14px; font-weight: 600; }
 .contato .sub { font-size: 12px; font-weight: 400; color: rgba(255,255,255,.8); margin-top: 2px; }
+.consulta { margin-top: 16px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 14px; padding: 18px 20px; }
+.consulta h4 { margin: 0 0 2px; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-secondary); font-weight: 700; }
+.consulta-sub { margin: 0 0 12px; font-size: 12.5px; color: var(--text-secondary); }
+.consulta-form { display: flex; gap: 8px; }
+.consulta-input { flex: 1; border: 1.5px solid var(--border-color); border-radius: 8px; padding: 10px 12px; font-size: 13.5px; font-family: inherit; font-family: var(--font-mono); color: var(--text-primary); background: var(--bg-input); }
+.consulta-input:focus { outline: none; border-color: var(--accent-primary); box-shadow: 0 0 0 3px rgba(59,130,246,.2); }
+.consulta-btn { background: var(--accent-primary); color: #fff; border: none; border-radius: 8px; padding: 10px 18px; font-size: 13.5px; font-weight: 700; cursor: pointer; font-family: inherit; }
+.consulta-btn:disabled { opacity: .6; cursor: not-allowed; }
+.consulta-erro { margin: 10px 0 0; font-size: 12.5px; color: var(--accent-danger); font-weight: 600; }
+.consulta-resultado { margin-top: 14px; border-top: 1px solid var(--border-color); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.consulta-linha { display: flex; gap: 12px; font-size: 13px; }
+.consulta-linha.col { flex-direction: column; gap: 2px; }
+.consulta-linha .k { min-width: 96px; color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; font-weight: 700; }
+.consulta-linha .v { color: var(--text-primary); word-break: break-word; }
+.consulta-linha .v.mono { font-family: var(--font-mono); font-weight: 600; }
+.consulta-linha .v.status { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+.st-aberto { background: rgba(241,196,15,.18); color: #b45309; }
+.st-andamento { background: rgba(59,130,246,.15); color: #2563eb; }
+.st-comunicado { background: rgba(245,158,11,.15); color: #b45309; }
+.st-resolvido { background: rgba(16,185,129,.15); color: #047857; }
 .fheader { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
 .voltar-btn { color: var(--accent-primary); }
 .badge { padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; }

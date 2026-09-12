@@ -58,6 +58,7 @@ model Chamado {
   ultimaAtualizacao  DateTime @updatedAt
   historico          String?
   tecnicoResolucao   String?
+  descricaoResolucao String?
   tecnicoSetor       String?
   inventarioStatus   String?  // CONCLUIDO, EM_ANDAMENTO, NAO_REALIZADO, NAO_INFORMADO
   email              String?  // e-mail do solicitante

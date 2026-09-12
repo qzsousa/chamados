@@ -9,6 +9,7 @@
       </div>
       <div class="header-center"><div class="clock" id="clock">--:--:--</div></div>
       <div class="header-right">
+        <button v-if="auth.isAdmin" class="btn-gerenciar" @click="router.push('/admin/usuarios')" title="Gerenciar usuários"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Usuários</button>
         <label class="theme-toggle" title="Alternar tema"><input type="checkbox" id="theme-toggle" v-model="darkMode"><span class="slider"><svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg><svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span></label>
       </div>
     </header>
@@ -64,6 +65,7 @@
           </div>
 
           <div class="filter-bar">
+        <span class="filter-bar-title">Filtros</span>
         <select v-model="filtros.unidade"><option value="">Todas as unidades</option><option v-for="u in unidadesUnicas" :key="u" :value="u">{{ u }}</option></select>
         <select v-model="filtros.categoria"><option value="">Todas as categorias</option><option v-for="c in categoriasUnicas" :key="c" :value="c">{{ c }}</option></select>
         <select v-model="filtros.status"><option value="">Todos os status</option><option value="ABERTO">Aberto</option><option value="ANDAMENTO">Em andamento</option><option value="COMUNICADO">Comunicado</option><option value="RESOLVIDO">Resolvido</option></select>
@@ -135,7 +137,13 @@
 
       <div class="modal-overlay" :class="{ open: modalAberto }" @click.self="fecharModal">
         <div class="modal" v-if="chamadoAtual">
-          <div class="modal-header"><h2 class="modal-title">{{ chamadoAtual.protocolo }}<Button variant="ghost" size="sm" @click="copiarChamado" class="btn-copiar" title="Copiar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></Button></h2><Button variant="ghost" size="sm" @click="fecharModal" class="modal-close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></Button></div>
+          <div class="modal-header">
+            <div class="modal-title-wrap"><h2 class="modal-title">{{ chamadoAtual.protocolo }}<Button variant="ghost" size="sm" @click="copiarChamado" class="btn-copiar" title="Copiar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></Button></h2></div>
+            <div class="modal-header-actions">
+              <button v-if="podeResolver" class="btn-atualizar-status" @click="focarStatusAtualizacao">Atualizar status do chamado</button>
+              <Button variant="ghost" size="sm" @click="fecharModal" class="modal-close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></Button>
+            </div>
+          </div>
           <div class="modal-body">
             <div class="detail-grid">
               <div class="detail-field"><div class="detail-label">Unidade</div><div class="detail-value">{{ chamadoAtual.unidade }}</div></div>
@@ -148,8 +156,18 @@
               <div class="detail-field"><div class="detail-label">Aberto em</div><div class="detail-value">{{ formatDate(chamadoAtual.timestamp) }}</div></div>
               <div class="detail-field full-width"><div class="detail-label">E-mail(s) para contato</div><div class="detail-value long-text"><template v-if="(chamadoAtual.emailsContato || []).length"><div v-for="e in chamadoAtual.emailsContato" :key="e.email"><a :href="'mailto:' + e.email" class="email-link">{{ e.nome ? e.nome + ' — ' : '' }}{{ e.email }}</a></div></template><span v-else>— não informado —</span></div></div>
               <div class="detail-field full-width"><div class="detail-label">Descrição</div><div class="detail-value long-text">{{ chamadoAtual.descricao || '—' }}</div></div>
+              <div class="detail-field full-width"><div class="detail-label">Anexo</div><div class="detail-value long-text"><a v-if="chamadoAtual.anexoUrl" :href="chamadoAtual.anexoUrl" target="_blank" rel="noopener" class="email-link">Ver anexo do chamado</a><span v-else>— sem anexo —</span></div></div>
+              <div v-if="chamadoAtual.descricaoResolucao" class="detail-field full-width"><div class="detail-label">Descrição da resolução</div><div class="detail-value long-text">{{ chamadoAtual.descricaoResolucao }}</div></div>
             </div>
-            <div v-if="podeResolver" class="modal-actions-resolver"><select v-model="novoStatus" class="status-select-modal"><option value="ABERTO">Aberto</option><option value="ANDAMENTO">Em andamento</option><option value="COMUNICADO">Comunicado</option><option value="RESOLVIDO">Resolvido</option></select><Button variant="primary" @click="salvarStatus">Salvar status</Button></div>
+            <div v-if="podeResolver" id="resolver-status" class="modal-actions-resolver">
+              <div class="resolver-box">
+                <label class="resolver-label">Novo status</label>
+                <select v-model="novoStatus" class="status-select-modal"><option value="ABERTO">Aberto</option><option value="ANDAMENTO">Em andamento</option><option value="COMUNICADO">Comunicado</option><option value="RESOLVIDO">Resolvido</option></select>
+                <label class="resolver-label">Descrição da resolução (enviada à escola por e-mail)</label>
+                <textarea v-model="descricaoResolucao" class="resolver-textarea" placeholder="Descreva o que foi feito para resolver o chamado..."></textarea>
+                <Button variant="primary" @click="salvarStatus">Salvar status</Button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -159,6 +177,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useChamadosStore } from '@/stores/chamados'
 import { useAuthStore } from '@/stores/auth'
 import { Chart, registerables } from 'chart.js'
@@ -167,6 +186,7 @@ import Button from '@/components/ui/Button.vue'
 
 Chart.register(...registerables)
 
+const router = useRouter()
 const chamados = useChamadosStore()
 const auth = useAuthStore()
 
@@ -178,6 +198,7 @@ const activeTab = ref<'tabela'|'kanban'|'agrupado'>('tabela')
 const modalAberto = ref(false)
 const chamadoAtual = ref<any>(null)
 const novoStatus = ref('RESOLVIDO')
+const descricaoResolucao = ref('')
 
 const filtros = reactive({protocolo:'',unidade:'',categoria:'',status:'',urgencia:'',tecnico:'',dataDe:'',dataAte:''})
 
@@ -242,13 +263,19 @@ function limparFiltros(){Object.keys(filtros).forEach(k=>filtros[k as keyof type
 
 async function recarregar(){await chamados.carregarMatriz()}
 
-function abrirModal(c:any){chamadoAtual.value=c;novoStatus.value=c.status||'RESOLVIDO';modalAberto.value=true}
-function fecharModal(){modalAberto.value=false;chamadoAtual.value=null}
+function abrirModal(c:any){chamadoAtual.value=c;novoStatus.value=c.status||'RESOLVIDO';descricaoResolucao.value=c.descricaoResolucao||'';modalAberto.value=true}
+function fecharModal(){modalAberto.value=false;chamadoAtual.value=null;descricaoResolucao.value=''}
+
+function focarStatusAtualizacao(){
+  const el = document.getElementById('resolver-status')
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
 
 async function salvarStatus(){
   if(!chamadoAtual.value)return
-  await chamados.atualizarStatus(chamadoAtual.value.id, { status: novoStatus.value })
+  await chamados.atualizarStatus(chamadoAtual.value.id, { status: novoStatus.value, descricaoResolucao: descricaoResolucao.value || undefined })
   chamadoAtual.value = null
+  descricaoResolucao.value = ''
   modalAberto.value = false
 }
 
@@ -326,6 +353,7 @@ onUnmounted(() => {
 .logo{display:flex;align-items:center;gap:12px;font-weight:700;font-size:20px;color:var(--text-primary);text-decoration:none}.logo-icon{width:36px;height:36px;background:linear-gradient(135deg,var(--accent-primary),var(--accent-purple));border-radius:8px;display:flex;align-items:center;justify-content:center;color:white;font-size:18px}
 .clock{font-family:var(--font-mono);font-size:16px;font-variant-numeric:tabular-nums;color:var(--text-secondary);background:var(--bg-tertiary);padding:4px 16px;border-radius:999px;min-width:140px;text-align:center}
 .theme-toggle{position:relative;width:48px;height:28px}.theme-toggle input{opacity:0;width:0;height:0}.theme-toggle .slider{position:absolute;inset:0;background:var(--bg-tertiary);border-radius:999px;transition:background .15s;display:flex;align-items:center;padding:2px}.theme-toggle .slider::before{content:'';position:absolute;width:24px;height:24px;background:white;border-radius:50%;left:2px;transition:transform .15s;box-shadow:var(--shadow-sm)}.theme-toggle input:checked+.slider{background:var(--accent-primary)}.theme-toggle input:checked+.slider::before{transform:translateX(20px)}.theme-toggle .slider svg{position:absolute;width:16px;height:16px;color:var(--text-secondary)}.theme-toggle .slider .sun-icon{left:6px}.theme-toggle .slider .moon-icon{right:6px;opacity:0}.theme-toggle input:checked+.slider .sun-icon{opacity:0}.theme-toggle input:checked+.slider .moon-icon{opacity:1}
+.btn-gerenciar{display:inline-flex;align-items:center;gap:6px;padding:0 14px;height:36px;background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:8px;color:var(--text-secondary);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s}.btn-gerenciar:hover{color:var(--accent-primary);border-color:var(--accent-primary);background:var(--bg-hover)}
 
 .sidebar-left{position:fixed;top:64px;left:0;bottom:0;width:280px;background:var(--bg-secondary);border-right:1px solid var(--border-color);display:flex;flex-direction:column;overflow-y:auto;padding:16px;gap:24px;z-index:200;transform:translateX(-100%);transition:transform .3s}.sidebar-left.open{transform:translateX(0)}
 .sidebar-section{background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:16px}
@@ -374,14 +402,14 @@ onUnmounted(() => {
 .inventario-badge{font-size:11px;padding:2px 8px;border-radius:20px;font-weight:600;display:inline-block}
 .inventario-concluido{background:rgba(16,185,129,.15);color:var(--accent-secondary)}.inventario-andamento{background:rgba(245,158,11,.15);color:var(--accent-warning)}.inventario-nao-realizado{background:rgba(239,68,68,.15);color:var(--accent-danger)}.inventario-nao-informado{background:var(--bg-tertiary);color:var(--text-muted)}
 .status-badge{font-size:11px;padding:2px 10px;border-radius:20px;font-weight:700;display:inline-block;letter-spacing:.02em;background:var(--bg-tertiary);color:var(--text-muted)}
-.status-abertos{background:rgba(245,158,11,.15);color:var(--accent-warning)}.status-andamento{background:rgba(59,130,246,.15);color:var(--accent-primary)}.status-comunicado{background:rgba(245,158,11,.15);color:var(--accent-warning)}.status-resolvidos{background:rgba(16,185,129,.15);color:var(--accent-secondary)}
+.status-abertos{background:rgba(241,196,15,.18);color:#eab308}.status-andamento{background:rgba(59,130,246,.15);color:var(--accent-primary)}.status-comunicado{background:rgba(245,158,11,.15);color:var(--accent-warning)}.status-resolvidos{background:rgba(16,185,129,.15);color:var(--accent-secondary)}
 .critico{color:var(--accent-danger);font-weight:700}
 
 .kanban-board{display:flex;gap:16px;overflow-x:auto;padding:16px 0;min-height:500px}
 .kanban-column{min-width:300px;max-width:340px;flex:1;background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:12px;display:flex;flex-direction:column}
 .kanban-column-header{display:flex;align-items:center;justify-content:space-between;padding:16px;border-bottom:1px solid var(--border-color);background:var(--bg-secondary);border-radius:12px 12px 0 0}
 .kanban-column-title{display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px}
-.status-dot{width:8px;height:8px;border-radius:50%}.status-abertos{background:var(--accent-warning)}.status-andamento{background:var(--accent-primary)}.status-comunicado{background:var(--accent-warning)}.status-resolvidos{background:var(--accent-secondary)}
+.status-dot{width:8px;height:8px;border-radius:50%}.status-dot.status-abertos{background:#eab308}.status-dot.status-andamento{background:var(--accent-primary)}.status-dot.status-comunicado{background:var(--accent-warning)}.status-dot.status-resolvidos{background:var(--accent-secondary)}
 .kanban-column-count{background:var(--bg-tertiary);color:var(--text-secondary);padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;font-family:var(--font-mono)}
 .kanban-cards{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:8px;min-height:400px}
 .kanban-card{background:var(--bg-card);border:1px solid var(--border-color);border-radius:8px;padding:16px;cursor:pointer;transition:all .15s}.kanban-card:hover{border-color:var(--border-light);box-shadow:var(--shadow-md)}
@@ -424,9 +452,16 @@ onUnmounted(() => {
 .detail-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500}
 
 .filter-bar{display:flex;flex-wrap:wrap;gap:8px;padding:12px 16px;background:var(--bg-secondary);border-bottom:1px solid var(--border-color);align-items:center}
+.filter-bar-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-right:4px}
 .filter-bar select{flex:1 1 150px;max-width:220px;background:var(--bg-input);border:1px solid var(--border-color);border-radius:8px;color:var(--text-primary);font-size:12px;padding:8px 12px;outline:none;cursor:pointer;min-width:140px;height:38px}.filter-bar select:focus{border-color:var(--accent-primary)}
 .modal-actions-resolver{display:flex;justify-content:flex-end;gap:10px;margin-top:16px;align-items:center}
 .status-select-modal{background:var(--bg-input);border:1px solid var(--border-color);border-radius:8px;color:var(--text-primary);font-size:13px;padding:8px 12px;outline:none;cursor:pointer;font-family:var(--font-sans)}.status-select-modal:focus{border-color:var(--accent-primary)}
+.modal-title-wrap{display:flex;align-items:center;min-width:0}
+.modal-header-actions{display:flex;align-items:center;gap:8px}
+.btn-atualizar-status{background:var(--accent-primary);color:#fff;border:none;border-radius:6px;padding:8px 12px;font-size:11px;font-weight:700;letter-spacing:.03em;cursor:pointer;white-space:nowrap;transition:filter .15s}.btn-atualizar-status:hover{filter:brightness(1.1)}
+.resolver-box{width:100%;display:flex;flex-direction:column;gap:8px;background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:10px;padding:16px}
+.resolver-label{font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.04em}
+.resolver-textarea{width:100%;min-height:80px;background:var(--bg-input);border:1px solid var(--border-color);border-radius:8px;color:var(--text-primary);font-size:13px;padding:10px 12px;resize:vertical;font-family:var(--font-sans);outline:none}.resolver-textarea:focus{border-color:var(--accent-primary)}
 
 @media(max-width:1024px){
   .sidebar-left{transform:translateX(-100%)}

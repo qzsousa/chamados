@@ -121,6 +121,7 @@ export const ChamadoSchema = z.object({
   ultimaAtualizacao: z.string().datetime(),
   historico: z.string().nullable(),
   tecnicoResolucao: z.string().nullable(),
+  descricaoResolucao: z.string().nullable(),
   tecnicoSetor: z.string().nullable(),
   inventarioStatus: InventarioStatusSchema.nullable(),
   email: z.string().nullable()
@@ -145,7 +146,8 @@ export type CriarChamado = z.infer<typeof CriarChamadoSchema>
 
 export const AtualizarStatusChamadoSchema = z.object({
   status: StatusChamadoSchema,
-  tecnicoResolucao: z.string().optional()
+  tecnicoResolucao: z.string().optional(),
+  descricaoResolucao: z.string().optional()
 })
 
 export type AtualizarStatusChamado = z.infer<typeof AtualizarStatusChamadoSchema>

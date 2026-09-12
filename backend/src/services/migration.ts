@@ -1,3 +1,5 @@
+import { readFileSync } from 'fs'
+import { join } from 'path'
 import { prisma } from '../config/prisma'
 import { google } from 'googleapis'
 import bcrypt from 'bcryptjs'
@@ -19,16 +21,25 @@ async function getSheetsClient(config: SheetsConfig) {
   return google.sheets({ version: 'v4', auth })
 }
 
-async function readSheet(sheets: any, sheetName: string) {
+async function readSheet(sheets: any, sheetName: string, spreadsheetId?: string) {
   const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: process.env.GOOGLE_SHEETS_ID,
+    spreadsheetId: spreadsheetId || process.env.GOOGLE_SHEETS_ID,
     range: `${sheetName}!A:Z`
   })
   return response.data.values || []
 }
 
 export async function runMigration() {
-  const serviceAccountJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON
+  let serviceAccountJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON
+
+  if (!serviceAccountJson) {
+    try {
+      serviceAccountJson = readFileSync(join(process.cwd(), 'gcp-service-account.json'), 'utf-8')
+    } catch {
+      serviceAccountJson = ''
+    }
+  }
+
   const sheetsId = process.env.GOOGLE_SHEETS_ID
 
   if (!serviceAccountJson || !sheetsId) {
@@ -167,7 +178,8 @@ async function migrateEquipamentos(sheets: any) {
 
 async function migrateInventario(sheets: any) {
   console.log('📦 Migrando inventário...')
-  const rows = await readSheet(sheets, 'Base de Dados')
+  const inventarioSheetsId = process.env.GOOGLE_INVENTARIO_SHEETS_ID || process.env.GOOGLE_SHEETS_ID
+  const rows = await readSheet(sheets, 'Base de Dados', inventarioSheetsId)
   if (rows.length < 2) { console.log('  Nenhum inventário encontrado'); return }
 
   const headers = rows[0]

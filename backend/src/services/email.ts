@@ -41,6 +41,7 @@ export async function notificarChamadoConcluido(chamado: {
   solicitante: string
   tipo: string
   descricao: string
+  descricaoResolucao?: string | null
   email: string | null
 }) {
   let destinatarios: EmailContato[] = getEmailsContato(chamado.unidade)
@@ -55,7 +56,8 @@ export async function notificarChamadoConcluido(chamado: {
   }
 
   const assunto = `Chamado concluído — ${chamado.protocolo} (${chamado.unidade})`
-  const textoBase = `Seu chamado foi concluído.\n\nProtocolo: ${chamado.protocolo}\nUnidade: ${chamado.unidade}\nSolicitante: ${chamado.solicitante}\nTipo: ${chamado.tipo}\n\nObrigado por entrar em contato com o SETEC — URE Leste 3.`
+  const resolucao = (chamado.descricaoResolucao || '').trim()
+  const textoBase = `Seu chamado foi concluído.\n\nProtocolo: ${chamado.protocolo}\nUnidade: ${chamado.unidade}\nSolicitante: ${chamado.solicitante}\nTipo: ${chamado.tipo}${resolucao ? `\n\nO que foi feito:\n${resolucao}` : ''}\n\nObrigado por entrar em contato com o SETEC — URE Leste 3.`
 
   for (const dest of destinatarios) {
     const html = `
@@ -68,6 +70,7 @@ export async function notificarChamadoConcluido(chamado: {
           <tr><td style="padding: 6px 0; color: #9ca3af;">Solicitante</td><td style="padding: 6px 0;">${escapar(chamado.solicitante)}</td></tr>
           <tr><td style="padding: 6px 0; color: #9ca3af;">Tipo</td><td style="padding: 6px 0;">${escapar(chamado.tipo)}</td></tr>
           <tr><td style="padding: 6px 0; color: #9ca3af; vertical-align: top;">Descrição</td><td style="padding: 6px 0;">${escapar(chamado.descricao)}</td></tr>
+          ${resolucao ? `<tr><td style="padding: 6px 0; color: #9ca3af; vertical-align: top;">O que foi feito</td><td style="padding: 6px 0;">${escapar(resolucao).replace(/\n/g, '<br>')}</td></tr>` : ''}
         </table>
         <p style="font-size: 12.5px; color: #9ca3af; margin-top: 22px;">Agradecemos o contato. Em caso de dúvidas, fale conosco pelo e-mail lt3.setec@educacao.sp.gov.br.</p>
       </div>`

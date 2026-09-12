@@ -6,6 +6,7 @@ import { ZodError } from 'zod'
 import { normalizarNomeEscola, getMapaTecnicos } from '../services/normalization'
 import { getMapaInventario } from '../services/migration'
 import { notificarChamadoConcluido, notificarChamadoCriado } from '../services/email'
+import { supabase } from '../config/supabase'
 
 const router = Router()
 
@@ -19,6 +20,35 @@ async function getInventarioStatus(unidade: string): Promise<string | null> {
   const mapa = await getMapaInventario()
   const chave = normalizarNomeEscola(unidade)
   return mapa[chave] || null
+}
+
+export async function consultarChamadoPublic(req: Request, res: Response) {
+  try {
+    const protocolo = String(req.params.protocolo || '').trim()
+    if (!protocolo) {
+      return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Informe o protocolo' })
+    }
+
+    const chamado = await prisma.chamado.findUnique({ where: { protocolo } })
+    if (!chamado) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'Chamado não encontrado' })
+    }
+
+    return res.json({
+      protocolo: chamado.protocolo,
+      unidade: chamado.unidade,
+      solicitante: chamado.solicitante,
+      tipo: chamado.tipo,
+      status: chamado.status,
+      descricao: chamado.descricao,
+      descricaoResolucao: chamado.descricaoResolucao,
+      anexoUrl: chamado.anexoUrl,
+      timestamp: chamado.timestamp,
+      ultimaAtualizacao: chamado.ultimaAtualizacao
+    })
+  } catch (err) {
+    throw err
+  }
 }
 
 export async function criarChamadoPublic(req: Request, res: Response) {
@@ -147,7 +177,7 @@ router.get('/:id', authMiddleware, async (req: AuthenticatedRequest, res) => {
 
 router.patch('/:id/status', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GESTOR'), async (req: AuthenticatedRequest, res) => {
   try {
-    const { status, tecnicoResolucao } = AtualizarStatusChamadoSchema.parse(req.body)
+    const { status, tecnicoResolucao, descricaoResolucao } = AtualizarStatusChamadoSchema.parse(req.body)
 
     const chamado = await prisma.chamado.findUnique({ where: { id: req.params.id } })
     if (!chamado) {
@@ -166,7 +196,7 @@ router.patch('/:id/status', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GES
 
     const agora = new Date()
     const statusAnterior = chamado.status
-    const entradaHistorico = `[${agora.toLocaleString('pt-BR')}] Status alterado para "${status}" por ${req.userRecord?.nome || 'Sistema'}${tecnicoResolucao ? ` (técnico: ${tecnicoResolucao})` : ''}`
+    const entradaHistorico = `[${agora.toLocaleString('pt-BR')}] Status alterado para "${status}" por ${req.userRecord?.nome || 'Sistema'}${tecnicoResolucao ? ` (técnico: ${tecnicoResolucao})` : ''}${descricaoResolucao ? `\nDescrição da resolução: ${descricaoResolucao}` : ''}`
 
     const updated = await prisma.chamado.update({
       where: { id: req.params.id },
@@ -175,6 +205,7 @@ router.patch('/:id/status', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GES
         responsavel: req.userRecord?.nome,
         ultimaAtualizacao: agora,
         tecnicoResolucao: tecnicoResolucao || chamado.tecnicoResolucao,
+        descricaoResolucao: descricaoResolucao || chamado.descricaoResolucao,
         historico: `${chamado.historico || ''}\n${entradaHistorico}`.trim()
       }
     })
@@ -311,7 +342,26 @@ async function gerarProtocolo(): Promise<string> {
 }
 
 async function salvarAnexo(base64: string, nome: string, tipo: string, protocolo: string): Promise<string> {
-  return `anexos/${protocolo}_${nome}`
+  const safeNome = nome.replace(/[^\w.\-]/g, '_')
+  if (!supabase) {
+    console.log('[anexo] Supabase Storage não configurado — anexo não persistido.')
+    return `anexos/${protocolo}_${safeNome}`
+  }
+
+  const filePath = `${protocolo}/${Date.now()}_${safeNome}`
+  const bytes = Buffer.from(base64, 'base64')
+
+  try {
+    await supabase.storage.from('anexos').upload(filePath, bytes, {
+      contentType: tipo || 'application/octet-stream',
+      upsert: true
+    })
+    const { data } = supabase.storage.from('anexos').getPublicUrl(filePath)
+    return data.publicUrl
+  } catch (err) {
+    console.error('[anexo] Falha ao enviar para o Supabase Storage:', err)
+    return `anexos/${protocolo}_${safeNome}`
+  }
 }
 
 async function notificarAltaPrioridade(chamado: any): Promise<void> {

@@ -15,7 +15,7 @@ import { requestLogger } from './middleware/requestLogger'
 
 import authRoutes from './routes/auth'
 import usuarioRoutes from './routes/usuarios'
-import chamadoRoutes, { criarChamadoPublic } from './routes/chamados'
+import chamadoRoutes, { criarChamadoPublic, consultarChamadoPublic } from './routes/chamados'
 import escolaRoutes from './routes/escolas'
 import equipamentoRoutes from './routes/equipamentos'
 import inventarioRoutes from './routes/inventario'
@@ -152,6 +152,8 @@ app.get('/api/escolas/nomes', async (_req, res) => {
 
 // Criação de chamado é pública (formulário sem login)
 app.post('/api/chamados', criarChamadoPublic)
+// Consulta pública de chamado por protocolo
+app.get('/api/chamados/protocolo/:protocolo', consultarChamadoPublic)
 
 app.use('/api/dashboard', dashboardRoutes)
 app.use('/api', authMiddleware, attachUserRecord)

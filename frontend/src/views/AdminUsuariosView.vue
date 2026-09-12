@@ -93,6 +93,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useUIStore } from '@/stores/ui'
+import api from '@/api/client'
 import Button from '@/components/ui/Button.vue'
 import Input from '@/components/ui/Input.vue'
 import Select from '@/components/ui/Select.vue'
@@ -105,6 +106,7 @@ const modalAberto = ref(false)
 const editando = ref(false)
 const salvando = ref(false)
 const senhaTemporaria = ref('')
+const usuarioId = ref('')
 
 const filtros = reactive({search:'',nivel:'',status:''})
 const paginaAtual = ref(1)
@@ -137,14 +139,14 @@ onMounted(async()=>{
 
 async function carregarUsuarios(){
   try{
-    const {data} = await auth.axios?.get('/api/usuarios') || await fetch('/api/usuarios').then(r=>r.json())
-    if(data?.data) usuarios.value = data.data
-    else usuarios.value = data || []
+    const {data} = await api.get('/usuarios')
+    usuarios.value = data?.data || data || []
   }catch{}
 }
 
 function abrirModalCriar(){
   editando.value = false
+  usuarioId.value = ''
   formUsuario.nome = ''
   formUsuario.email = ''
   formUsuario.nivel = ''
@@ -157,6 +159,7 @@ function abrirModalCriar(){
 
 function abrirModalEditar(u:any){
   editando.value = true
+  usuarioId.value = u.id
   formUsuario.nome = u.nome
   formUsuario.email = u.email
   formUsuario.nivel = u.nivel
@@ -183,14 +186,16 @@ async function salvarUsuario(){
   salvando.value = true
   try{
     if(editando.value){
-      // await api.patch(`/usuarios/${usuarioId}`, formUsuario)
+      await api.patch(`/usuarios/${usuarioId.value}`, { nome: formUsuario.nome, nivel: formUsuario.nivel, filial: formUsuario.filial, status: formUsuario.status })
+      ui.showToast('success', 'Usuário atualizado')
+      await carregarUsuarios()
+      fecharModal()
     }else{
-      // const {data} = await api.post('/usuarios', formUsuario)
-      // senhaTemporaria.value = data.senhaTemporaria
+      const {data} = await api.post('/usuarios', { nome: formUsuario.nome, email: formUsuario.email, nivel: formUsuario.nivel, filial: formUsuario.filial })
+      senhaTemporaria.value = data?.senhaTemporaria || ''
+      ui.showToast('success', senhaTemporaria.value ? 'Usuário criado — copie a senha temporária' : 'Usuário criado')
+      await carregarUsuarios()
     }
-    ui.showToast('success', editando.value ? 'Usuário atualizado' : 'Usuário criado')
-    await carregarUsuarios()
-    fecharModal()
   }catch(err:any){
     ui.showToast('error', err.response?.data?.message || 'Erro ao salvar')
   }finally{
@@ -199,19 +204,23 @@ async function salvarUsuario(){
 }
 
 async function confirmarDesativar(u:any){
-  if(!confirm(`Desativar usuário ${u.nome}?`)) return
+  if(!confirm(`Remover usuário ${u.nome}?`)) return
   try{
-    // await api.delete(`/usuarios/${u.id}`)
-    ui.showToast('success','Usuário desativado')
+    await api.delete(`/usuarios/${u.id}`)
+    ui.showToast('success','Usuário removido')
     await carregarUsuarios()
-  }catch{}
+  }catch(err:any){
+    ui.showToast('error', err.response?.data?.message || 'Erro ao remover')
+  }
 }
 
 async function gerarSenhaTemporaria(u:any){
   try{
-    // const {data} = await api.post('/auth/admin/gerar-senha-temporaria',{email:u.email})
-    // ui.showToast('success',`Senha temporária: ${data.senhaTemporaria}`)
-  }catch{}
+    const {data} = await api.post('/auth/admin/gerar-senha-temporaria',{email:u.email})
+    ui.showToast('success',`Senha temporária gerada: ${data.senhaTemporaria}`)
+  }catch(err:any){
+    ui.showToast('error', err.response?.data?.message || 'Erro ao gerar senha')
+  }
 }
 
 function limparFiltros(){filtros.search='';filtros.nivel='';filtros.status='';paginaAtual.value=1}
