@@ -147,7 +147,8 @@ export type CriarChamado = z.infer<typeof CriarChamadoSchema>
 export const AtualizarStatusChamadoSchema = z.object({
   status: StatusChamadoSchema,
   tecnicoResolucao: z.string().optional(),
-  descricaoResolucao: z.string().optional()
+  descricaoResolucao: z.string().optional(),
+  responsavel: z.string().optional()
 })
 
 export type AtualizarStatusChamado = z.infer<typeof AtualizarStatusChamadoSchema>

@@ -177,7 +177,7 @@ router.get('/:id', authMiddleware, async (req: AuthenticatedRequest, res) => {
 
 router.patch('/:id/status', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GESTOR'), async (req: AuthenticatedRequest, res) => {
   try {
-    const { status, tecnicoResolucao, descricaoResolucao } = AtualizarStatusChamadoSchema.parse(req.body)
+    const { status, tecnicoResolucao, descricaoResolucao, responsavel } = AtualizarStatusChamadoSchema.parse(req.body)
 
     const chamado = await prisma.chamado.findUnique({ where: { id: req.params.id } })
     if (!chamado) {
@@ -202,7 +202,7 @@ router.patch('/:id/status', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GES
       where: { id: req.params.id },
       data: {
         status,
-        responsavel: req.userRecord?.nome,
+        responsavel: responsavel || req.userRecord?.nome || chamado.responsavel,
         ultimaAtualizacao: agora,
         tecnicoResolucao: tecnicoResolucao || chamado.tecnicoResolucao,
         descricaoResolucao: descricaoResolucao || chamado.descricaoResolucao,

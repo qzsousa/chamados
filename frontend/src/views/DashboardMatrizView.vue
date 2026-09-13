@@ -3,8 +3,8 @@
     <header class="header">
       <div class="header-left">
         <a href="#" class="logo">
-          <div class="logo-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
-          <span>SCI Chamados</span>
+          <img src="https://i.ibb.co/3yBdJq67/IMG-9095.png" alt="Logo URE Leste 3" class="logo-img" />
+          <span>Sistema de Chamados</span>
         </a>
       </div>
       <div class="header-center"><div class="clock" id="clock">--:--:--</div></div>
@@ -35,16 +35,13 @@
           <span v-if="filtros.urgencia" class="chip chip-priority">Urgência: {{ filtros.urgencia }}<button class="remove-btn" @click="filtros.urgencia=''">×</button></span>
           <span v-if="filtros.tecnico" class="chip chip-technician">Técnico: {{ filtros.tecnico }}<button class="remove-btn" @click="filtros.tecnico=''">×</button></span>
         </div>
-        <div class="toolbar-actions">
-          <Button variant="secondary" @click="limparFiltros"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Limpar</Button>
-          <Button variant="primary" @click="recarregar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6"/><circle cx="18" cy="18" r="3"/><path d="M1 2h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"/></svg>Atualizar</Button>
-        </div>
       </div>
 
       <div class="tabs">
         <button class="tab-btn" :class="{ active: activeTab === 'tabela' }" @click="activeTab='tabela'"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>Tabela</button>
         <button class="tab-btn" :class="{ active: activeTab === 'kanban' }" @click="activeTab='kanban'"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="5" height="14" rx="1"/><rect x="10" y="3" width="5" height="10" rx="1"/><rect x="17" y="3" width="5" height="16" rx="1"/></svg>Kanban</button>
         <button class="tab-btn" :class="{ active: activeTab === 'agrupado' }" @click="activeTab='agrupado'"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Agrupado</button>
+        <button class="tab-btn" :class="{ active: activeTab === 'graficos' }" @click="activeTab='graficos'"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Gráficos</button>
       </div>
 
       <div class="tab-content">
@@ -54,14 +51,6 @@
             <div class="kpi-card andamento"><div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/></svg></div><div class="kpi-content"><div class="kpi-label">Em andamento</div><div class="kpi-value">{{ stats.andamento }}</div></div></div>
             <div class="kpi-card comunicado"><div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></div><div class="kpi-content"><div class="kpi-label">Comunicado</div><div class="kpi-value">{{ stats.comunicado }}</div></div></div>
             <div class="kpi-card resolvidos"><div class="kpi-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></div><div class="kpi-content"><div class="kpi-label">Resolvidos</div><div class="kpi-value">{{ stats.resolvidos }}</div></div></div>
-          </div>
-
-          <div class="charts-grid">
-            <div class="charts-left">
-              <div class="chart-box"><div class="chart-title">Por Status</div><canvas id="chartStatus"></canvas></div>
-              <div class="chart-box"><div class="chart-title">Por Urgência</div><canvas id="chartUrgencia"></canvas></div>
-            </div>
-            <div class="chart-box"><div class="chart-title">Resolvidos por Técnico</div><canvas id="chartTecnico"></canvas></div>
           </div>
 
           <div class="filter-bar">
@@ -133,6 +122,16 @@
             </div>
           </div>
         </div>
+
+        <div class="tab-panel" :class="{ active: activeTab === 'graficos' }">
+          <div class="charts-grid">
+            <div class="charts-left">
+              <div class="chart-box"><div class="chart-title">Por Status</div><canvas id="chartStatus"></canvas></div>
+              <div class="chart-box"><div class="chart-title">Por Urgência</div><canvas id="chartUrgencia"></canvas></div>
+            </div>
+            <div class="chart-box"><div class="chart-title">Resolvidos por Técnico</div><canvas id="chartTecnico"></canvas></div>
+          </div>
+        </div>
       </div>
 
       <div class="modal-overlay" :class="{ open: modalAberto }" @click.self="fecharModal">
@@ -140,7 +139,7 @@
           <div class="modal-header">
             <div class="modal-title-wrap"><h2 class="modal-title">{{ chamadoAtual.protocolo }}<Button variant="ghost" size="sm" @click="copiarChamado" class="btn-copiar" title="Copiar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></Button></h2></div>
             <div class="modal-header-actions">
-              <button v-if="podeResolver" class="btn-atualizar-status" @click="focarStatusAtualizacao">Atualizar status do chamado</button>
+              <button v-if="podeResolver" class="btn-atualizar-status" @click="abrirModalStatus">Atualizar status do chamado</button>
               <Button variant="ghost" size="sm" @click="fecharModal" class="modal-close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></Button>
             </div>
           </div>
@@ -159,12 +158,26 @@
               <div class="detail-field full-width"><div class="detail-label">Anexo</div><div class="detail-value long-text"><a v-if="chamadoAtual.anexoUrl" :href="chamadoAtual.anexoUrl" target="_blank" rel="noopener" class="email-link">Ver anexo do chamado</a><span v-else>— sem anexo —</span></div></div>
               <div v-if="chamadoAtual.descricaoResolucao" class="detail-field full-width"><div class="detail-label">Descrição da resolução</div><div class="detail-value long-text">{{ chamadoAtual.descricaoResolucao }}</div></div>
             </div>
-            <div v-if="podeResolver" id="resolver-status" class="modal-actions-resolver">
-              <div class="resolver-box">
-                <label class="resolver-label">Novo status</label>
-                <select v-model="novoStatus" class="status-select-modal"><option value="ABERTO">Aberto</option><option value="ANDAMENTO">Em andamento</option><option value="COMUNICADO">Comunicado</option><option value="RESOLVIDO">Resolvido</option></select>
-                <label class="resolver-label">Descrição da resolução (enviada à escola por e-mail)</label>
-                <textarea v-model="descricaoResolucao" class="resolver-textarea" placeholder="Descreva o que foi feito para resolver o chamado..."></textarea>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-overlay" :class="{ open: modalStatusAberto }" @click.self="fecharModalStatus">
+        <div class="modal modal-status" v-if="chamadoAtual">
+          <div class="modal-header">
+            <div class="modal-title-wrap"><h2 class="modal-title">Atualizar status — {{ chamadoAtual.protocolo }}</h2></div>
+            <Button variant="ghost" size="sm" @click="fecharModalStatus" class="modal-close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></Button>
+          </div>
+          <div class="modal-body">
+            <div class="resolver-box">
+              <label class="resolver-label">Novo status</label>
+              <select v-model="novoStatus" class="status-select-modal"><option value="ABERTO">Aberto</option><option value="ANDAMENTO">Em andamento</option><option value="COMUNICADO">Comunicado</option><option value="RESOLVIDO">Resolvido</option></select>
+              <label class="resolver-label">Responsável pelo atendimento</label>
+              <select v-model="responsavel" class="status-select-modal"><option value="">— selecionar responsável —</option><option v-for="r in RESPONSAVEIS" :key="r" :value="r">{{ r }}</option></select>
+              <label class="resolver-label">Descrição da resolução (enviada à escola por e-mail)</label>
+              <textarea v-model="descricaoResolucao" class="resolver-textarea" placeholder="Descreva o que foi feito para resolver o chamado..."></textarea>
+              <div class="modal-actions-resolver">
+                <Button variant="secondary" @click="fecharModalStatus">Cancelar</Button>
                 <Button variant="primary" @click="salvarStatus">Salvar status</Button>
               </div>
             </div>
@@ -176,12 +189,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useChamadosStore } from '@/stores/chamados'
 import { useAuthStore } from '@/stores/auth'
 import { Chart, registerables } from 'chart.js'
-import Card from '@/components/ui/Card.vue'
 import Button from '@/components/ui/Button.vue'
 
 Chart.register(...registerables)
@@ -194,11 +206,15 @@ const podeResolver = computed(() => auth.isAuthenticated && ['ADMIN', 'TECNICO',
 
 const darkMode = ref(true)
 const sidebarLeftOpen = ref(false)
-const activeTab = ref<'tabela'|'kanban'|'agrupado'>('tabela')
+const activeTab = ref<'tabela'|'kanban'|'agrupado'|'graficos'>('tabela')
 const modalAberto = ref(false)
 const chamadoAtual = ref<any>(null)
 const novoStatus = ref('RESOLVIDO')
 const descricaoResolucao = ref('')
+const modalStatusAberto = ref(false)
+const responsavel = ref('')
+
+const RESPONSAVEIS = ['JOÃO','CHARLES','HERBERT','JOSEMIR','CAROL','GUILHERME','VALDEIR','JESSICA','MATHEUS','FABIO','PABLO','FERNANDA']
 
 const filtros = reactive({protocolo:'',unidade:'',categoria:'',status:'',urgencia:'',tecnico:'',dataDe:'',dataAte:''})
 
@@ -218,11 +234,12 @@ let tecnicoChart: Chart | null = null
 onMounted(async()=>{
   await chamados.carregarMatriz()
   updateStats()
-  drawCharts()
   updateDerived()
 })
 
-watch(()=>chamados.lista,()=>{updateStats();updateDerived();drawCharts()},{deep:true})
+watch(()=>chamados.lista,()=>{updateStats();updateDerived();if(activeTab.value==='graficos')drawCharts()},{deep:true})
+
+watch(activeTab, async (t)=>{ if(t==='graficos'){ await nextTick(); drawCharts() } })
 
 function updateStats(){stats.abertos=chamados.stats.abertos;stats.andamento=chamados.stats.andamento;stats.comunicado=chamados.stats.comunicado;stats.resolvidos=chamados.stats.resolvidos}
 
@@ -259,24 +276,26 @@ const categoriasAgrupadas=computed(()=>{
 
 function updateDerived(){}
 
-function limparFiltros(){Object.keys(filtros).forEach(k=>filtros[k as keyof typeof filtros]='')}
+function abrirModal(c:any){chamadoAtual.value=c;novoStatus.value=c.status||'RESOLVIDO';descricaoResolucao.value=c.descricaoResolucao||'';responsavel.value=c.responsavel||'';modalAberto.value=true}
+function fecharModal(){modalAberto.value=false;chamadoAtual.value=null;descricaoResolucao.value='';responsavel.value=''}
 
-async function recarregar(){await chamados.carregarMatriz()}
-
-function abrirModal(c:any){chamadoAtual.value=c;novoStatus.value=c.status||'RESOLVIDO';descricaoResolucao.value=c.descricaoResolucao||'';modalAberto.value=true}
-function fecharModal(){modalAberto.value=false;chamadoAtual.value=null;descricaoResolucao.value=''}
-
-function focarStatusAtualizacao(){
-  const el = document.getElementById('resolver-status')
-  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+function abrirModalStatus(){
+  novoStatus.value = chamadoAtual.value?.status || 'RESOLVIDO'
+  descricaoResolucao.value = chamadoAtual.value?.descricaoResolucao || ''
+  responsavel.value = chamadoAtual.value?.responsavel || ''
+  modalStatusAberto.value = true
 }
+function fecharModalStatus(){modalStatusAberto.value=false}
 
 async function salvarStatus(){
   if(!chamadoAtual.value)return
-  await chamados.atualizarStatus(chamadoAtual.value.id, { status: novoStatus.value, descricaoResolucao: descricaoResolucao.value || undefined })
+  await chamados.atualizarStatus(chamadoAtual.value.id, { status: novoStatus.value, descricaoResolucao: descricaoResolucao.value || undefined, responsavel: responsavel.value || undefined })
+  fecharModalStatus()
+  modalAberto.value = false
   chamadoAtual.value = null
   descricaoResolucao.value = ''
-  modalAberto.value = false
+  responsavel.value = ''
+  await chamados.carregarMatriz()
 }
 
 function copiarChamado(){if(!chamadoAtual.value)return;const d=chamadoAtual.value;const txt=`PROTOCOLO: ${d.protocolo}\nUNIDADE: ${d.unidade}\nSOLICITANTE: ${d.solicitante}\nCARGO: ${d.funcao||'—'}\nTIPO: ${d.tipo}\nURGÊNCIA: ${d.urgencia}\nSTATUS: ${d.status}\nTÉCNICO: ${d.tecnicoSetor||'—'}\nINVENTÁRIO: ${d.inventarioStatus||'—'}\nABERTO: ${formatDate(d.timestamp)}\nDESCRIÇÃO:\n${d.descricao||'—'}`;navigator.clipboard.writeText(txt)}
@@ -350,7 +369,7 @@ onUnmounted(() => {
 .dashboard-matriz{display:flex;flex-direction:column;min-height:100vh;background:var(--bg-primary)}
 .header{display:flex;align-items:center;justify-content:space-between;height:64px;padding:0 24px;background:var(--bg-secondary);border-bottom:1px solid var(--border-color);z-index:100}
 .header-left{flex:1}.header-center{flex:1;justify-content:center;display:flex}.header-right{flex:1;justify-content:flex-end;display:flex;gap:12px}
-.logo{display:flex;align-items:center;gap:12px;font-weight:700;font-size:20px;color:var(--text-primary);text-decoration:none}.logo-icon{width:36px;height:36px;background:linear-gradient(135deg,var(--accent-primary),var(--accent-purple));border-radius:8px;display:flex;align-items:center;justify-content:center;color:white;font-size:18px}
+.logo{display:flex;align-items:center;gap:12px;font-weight:700;font-size:20px;color:var(--text-primary);text-decoration:none}.logo-img{width:40px;height:40px;object-fit:contain;border-radius:6px}
 .clock{font-family:var(--font-mono);font-size:16px;font-variant-numeric:tabular-nums;color:var(--text-secondary);background:var(--bg-tertiary);padding:4px 16px;border-radius:999px;min-width:140px;text-align:center}
 .theme-toggle{position:relative;width:48px;height:28px}.theme-toggle input{opacity:0;width:0;height:0}.theme-toggle .slider{position:absolute;inset:0;background:var(--bg-tertiary);border-radius:999px;transition:background .15s;display:flex;align-items:center;padding:2px}.theme-toggle .slider::before{content:'';position:absolute;width:24px;height:24px;background:white;border-radius:50%;left:2px;transition:transform .15s;box-shadow:var(--shadow-sm)}.theme-toggle input:checked+.slider{background:var(--accent-primary)}.theme-toggle input:checked+.slider::before{transform:translateX(20px)}.theme-toggle .slider svg{position:absolute;width:16px;height:16px;color:var(--text-secondary)}.theme-toggle .slider .sun-icon{left:6px}.theme-toggle .slider .moon-icon{right:6px;opacity:0}.theme-toggle input:checked+.slider .sun-icon{opacity:0}.theme-toggle input:checked+.slider .moon-icon{opacity:1}
 .btn-gerenciar{display:inline-flex;align-items:center;gap:6px;padding:0 14px;height:36px;background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:8px;color:var(--text-secondary);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s}.btn-gerenciar:hover{color:var(--accent-primary);border-color:var(--accent-primary);background:var(--bg-hover)}
@@ -460,6 +479,7 @@ onUnmounted(() => {
 .modal-header-actions{display:flex;align-items:center;gap:8px}
 .btn-atualizar-status{background:var(--accent-primary);color:#fff;border:none;border-radius:6px;padding:8px 12px;font-size:11px;font-weight:700;letter-spacing:.03em;cursor:pointer;white-space:nowrap;transition:filter .15s}.btn-atualizar-status:hover{filter:brightness(1.1)}
 .resolver-box{width:100%;display:flex;flex-direction:column;gap:8px;background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:10px;padding:16px}
+.modal-status{max-width:560px}
 .resolver-label{font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.04em}
 .resolver-textarea{width:100%;min-height:80px;background:var(--bg-input);border:1px solid var(--border-color);border-radius:8px;color:var(--text-primary);font-size:13px;padding:10px 12px;resize:vertical;font-family:var(--font-sans);outline:none}.resolver-textarea:focus{border-color:var(--accent-primary)}
 
