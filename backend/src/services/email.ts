@@ -79,6 +79,70 @@ export async function notificarChamadoConcluido(chamado: {
   }
 }
 
+const STATUS_LABEL: Record<string, string> = {
+  ABERTO: 'Aberto',
+  ANDAMENTO: 'Em andamento',
+  COMUNICADO: 'Comunicado',
+  RESOLVIDO: 'Resolvido'
+}
+
+const STATUS_BADGE: Record<string, string> = {
+  ABERTO: '#fef3c7;#92400e',
+  ANDAMENTO: '#dbeafe;#1e40af',
+  COMUNICADO: '#e0e7ff;#3730a3',
+  RESOLVIDO: '#ecfdf5;#065f46'
+}
+
+export async function notificarChamadoStatusAlterado(chamado: {
+  protocolo: string
+  unidade: string
+  solicitante: string
+  tipo: string
+  descricao: string
+  status: string
+  descricaoResolucao?: string | null
+  tecnicoResolucao?: string | null
+  email: string | null
+}) {
+  let destinatarios: EmailContato[] = getEmailsContato(chamado.unidade)
+
+  if (destinatarios.length === 0 && (chamado.email || '').trim()) {
+    destinatarios = [{ nome: chamado.solicitante, email: chamado.email as string }]
+  }
+
+  if (destinatarios.length === 0) {
+    console.log(`[email] Nenhum e-mail de contato para notificar mudança de status do ${chamado.protocolo}`)
+    return
+  }
+
+  const label = STATUS_LABEL[chamado.status] || chamado.status
+  const [badgeBg, badgeColor] = (STATUS_BADGE[chamado.status] || '#f3f4f6;#111827').split(';')
+  const resolucao = (chamado.descricaoResolucao || '').trim()
+
+  const assunto = `Atualização do chamado ${chamado.protocolo} — ${label}`
+  const textoBase = `O status do seu chamado foi atualizado para "${label}".\n\nProtocolo: ${chamado.protocolo}\nUnidade: ${chamado.unidade}\nSolicitante: ${chamado.solicitante}\nTipo: ${chamado.tipo}${resolucao ? `\n\nO que foi feito:\n${resolucao}` : ''}\n\nObrigado por entrar em contato com o SETEC — URE Leste 3.`
+
+  for (const dest of destinatarios) {
+    const html = `
+      <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 28px; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px;">
+        <div style="display: inline-block; background: ${badgeBg}; color: ${badgeColor}; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 20px; margin-bottom: 14px;">Status: ${label}</div>
+        <h2 style="font-size: 18px; color: #111827; margin: 0 0 4px;">Seu chamado foi atualizado</h2>
+        <p style="font-family: 'Courier New', monospace; font-size: 13px; color: #6b7280; margin: 0 0 20px;">${escapar(chamado.protocolo)}</p>
+        <table style="width: 100%; font-size: 14px; color: #374151; border-collapse: collapse;">
+          <tr><td style="padding: 6px 0; color: #9ca3af; width: 110px;">Unidade</td><td style="padding: 6px 0;">${escapar(chamado.unidade)}</td></tr>
+          <tr><td style="padding: 6px 0; color: #9ca3af;">Solicitante</td><td style="padding: 6px 0;">${escapar(chamado.solicitante)}</td></tr>
+          <tr><td style="padding: 6px 0; color: #9ca3af;">Tipo</td><td style="padding: 6px 0;">${escapar(chamado.tipo)}</td></tr>
+          <tr><td style="padding: 6px 0; color: #9ca3af; vertical-align: top;">Descrição</td><td style="padding: 6px 0;">${escapar(chamado.descricao)}</td></tr>
+          ${chamado.tecnicoResolucao ? `<tr><td style="padding: 6px 0; color: #9ca3af;">Técnico</td><td style="padding: 6px 0;">${escapar(chamado.tecnicoResolucao)}</td></tr>` : ''}
+          ${resolucao ? `<tr><td style="padding: 6px 0; color: #9ca3af; vertical-align: top;">O que foi feito</td><td style="padding: 6px 0;">${escapar(resolucao).replace(/\n/g, '<br>')}</td></tr>` : ''}
+        </table>
+        <p style="font-size: 12.5px; color: #9ca3af; margin-top: 22px;">Em caso de dúvidas, fale conosco pelo e-mail lt3.seintec@educacao.sp.gov.br.</p>
+      </div>`
+
+    await sendEmail(dest.email, assunto, textoBase, html)
+  }
+}
+
 export async function notificarChamadoCriado(chamado: {
   protocolo: string
   unidade: string

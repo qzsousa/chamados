@@ -5,7 +5,7 @@ import { CriarChamadoSchema, FiltrosChamadoSchema, AtualizarStatusChamadoSchema,
 import { ZodError } from 'zod'
 import { normalizarNomeEscola, getMapaTecnicos } from '../services/normalization'
 import { getMapaInventario } from '../services/migration'
-import { notificarChamadoConcluido, notificarChamadoCriado } from '../services/email'
+import { notificarChamadoStatusAlterado, notificarChamadoCriado } from '../services/email'
 import { supabase } from '../config/supabase'
 
 const router = Router()
@@ -210,8 +210,8 @@ router.patch('/:id/status', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GES
       }
     })
 
-    if (status === 'RESOLVIDO' && statusAnterior !== 'RESOLVIDO') {
-      await notificarChamadoConcluido(updated)
+    if (status !== statusAnterior) {
+      await notificarChamadoStatusAlterado(updated)
     }
 
     return res.json(updated)
@@ -296,8 +296,8 @@ router.patch('/batch', authMiddleware, requireRole('ADMIN', 'TECNICO'), async (r
         }
       })
 
-      if (status && status === 'RESOLVIDO' && chamado.status !== 'RESOLVIDO') {
-        await notificarChamadoConcluido(updated)
+      if (status && status !== chamado.status) {
+        await notificarChamadoStatusAlterado(updated)
       }
 
       atualizados++
