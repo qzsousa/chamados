@@ -2,7 +2,7 @@
   <div class="dashboard-matriz">
     <header class="header">
       <div class="header-left">
-        <a href="#" class="logo">
+        <a href="https://www.educacao.sp.gov.br/ureleste3" target="_blank" rel="noopener" class="logo">
           <img src="https://i.ibb.co/3yBdJq67/IMG-9095.png" alt="Logo URE Leste 3" class="logo-img" />
           <span>Sistema de Chamados</span>
         </a>

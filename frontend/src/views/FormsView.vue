@@ -1,16 +1,16 @@
 <template>
   <div class="forms-app">
     <header class="topbar">
-      <img src="https://i.ibb.co/3yBdJq67/IMG-9095.png" alt="Logo URE" width="50" height="50" class="topbar-logo" />
+      <a href="https://www.educacao.sp.gov.br/ureleste3" target="_blank" rel="noopener" class="topbar-logo-link"><img src="https://i.ibb.co/3yBdJq67/IMG-9095.png" alt="Logo URE" width="50" height="50" class="topbar-logo" /></a>
       <div class="topbar-org">
         <small>Governo do Estado de São Paulo</small>
-        <strong>Atende Leste 3 — Unidade Regional de Ensino Leste 3</strong>
+        <strong>SETEC — Unidade Regional de Ensino Leste 3</strong>
       </div>
     </header>
 
     <main class="forms-main">
       <section v-show="currentView === 'home'" class="view active">
-        <p class="eyebrow">Central de Atendimento — SETEC</p>
+        <p class="eyebrow">Abertura de Chamados — SETEC</p>
         <h1 class="hero">Como podemos ajudar?</h1>
         <p class="hero-sub">Selecione o tipo de problema abaixo. O chamado será encaminhado automaticamente à equipe do SETEC.</p>
 
@@ -336,6 +336,7 @@ function fecharTeste(){modalTesteAberto.value=false}
 }
 .topbar { background: var(--bg-secondary); border-bottom: 1px solid var(--border-color); padding: 14px 20px; display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 100; }
 .topbar-logo { flex-shrink: 0; }
+.topbar-logo-link { display: flex; align-items: center; flex-shrink: 0; }
 .topbar-org { display: flex; flex-direction: column; line-height: 1.2; }
 .topbar-org small { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-secondary); font-weight: 600; }
 .topbar-org strong { font-size: 14px; font-weight: 700; color: var(--text-primary); }

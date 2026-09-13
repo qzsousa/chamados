@@ -108,7 +108,7 @@ async function migrateUsuarios(sheets: any) {
   console.log(`  Total: ${criados} usuários criados`)
 }
 
-async function migrateEscolas() {
+export async function migrateEscolas() {
   console.log('🏫 Migrando escolas...')
   const mapaTecnicos = getMapaTecnicos()
 
@@ -176,7 +176,7 @@ async function migrateEquipamentos(sheets: any) {
   console.log(`  Total: ${criados} equipamentos migrados`)
 }
 
-async function migrateInventario(sheets: any) {
+export async function migrateInventario(sheets: any) {
   console.log('📦 Migrando inventário...')
   const inventarioSheetsId = process.env.GOOGLE_INVENTARIO_SHEETS_ID || process.env.GOOGLE_SHEETS_ID
   const rows = await readSheet(sheets, 'Base de Dados', inventarioSheetsId)

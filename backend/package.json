@@ -12,6 +12,7 @@
     "prisma:studio": "prisma studio",
     "prisma:seed": "tsx prisma/seed.ts",
     "migration:run": "tsx src/services/migration.ts",
+    "inventario:sync": "tsx migrate-inventario-only.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
