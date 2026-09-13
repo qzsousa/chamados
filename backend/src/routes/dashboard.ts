@@ -66,7 +66,7 @@ router.get('/matriz', async (_req, res) => {
 
     return res.json({
       kpis,
-      chamados: chamados.slice(0, 100),
+      chamados,
       graficos: { porStatus, porUrgencia, resolvidosPorTecnico }
     })
   } catch (err) {
@@ -122,7 +122,7 @@ router.get('/filtrado', authMiddleware, async (req: AuthenticatedRequest, res) =
 
     return res.json({
       kpis,
-      chamados: chamados.slice(0, 100),
+      chamados,
       avisos: avisos.slice(0, 10),
       inventario: req.userRecord ? {
         unidade: req.userRecord.filial,
