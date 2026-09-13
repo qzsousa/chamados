@@ -55,6 +55,7 @@
 
           <div class="filter-bar">
         <span class="filter-bar-title">Filtros</span>
+        <input type="text" class="filter-bar-search" v-model="filtros.busca" placeholder="Pesquisar chamado...">
         <select v-model="filtros.unidade"><option value="">Todas as unidades</option><option v-for="u in unidadesUnicas" :key="u" :value="u">{{ u }}</option></select>
         <select v-model="filtros.categoria"><option value="">Todas as categorias</option><option v-for="c in categoriasUnicas" :key="c" :value="c">{{ c }}</option></select>
         <select v-model="filtros.status"><option value="">Todos os status</option><option value="ABERTO">Aberto</option><option value="ANDAMENTO">Em andamento</option><option value="COMUNICADO">Comunicado</option><option value="RESOLVIDO">Resolvido</option></select>
@@ -216,7 +217,7 @@ const responsavel = ref('')
 
 const RESPONSAVEIS = ['JOÃO','CHARLES','HERBERT','JOSEMIR','CAROL','GUILHERME','VALDEIR','JESSICA','MATHEUS','FABIO','PABLO','FERNANDA']
 
-const filtros = reactive({protocolo:'',unidade:'',categoria:'',status:'',urgencia:'',tecnico:'',dataDe:'',dataAte:''})
+const filtros = reactive({protocolo:'',busca:'',unidade:'',categoria:'',status:'',urgencia:'',tecnico:'',dataDe:'',dataAte:''})
 
 const stats = reactive({abertos:0,andamento:0,comunicado:0,resolvidos:0})
 
@@ -250,6 +251,16 @@ const tecnicosUnicos=computed(()=>[...new Set(chamados.lista.map(c=>c.tecnicoSet
 const chamadosFiltrados=computed(()=>{
   let result=chamados.lista
   if(filtros.protocolo)result=result.filter(c=>c.protocolo.includes(filtros.protocolo))
+  if(filtros.busca){
+    const termo=filtros.busca.toLowerCase()
+    result=result.filter(c=>
+      (c.protocolo||'').toLowerCase().includes(termo) ||
+      (c.unidade||'').toLowerCase().includes(termo) ||
+      (c.descricao||'').toLowerCase().includes(termo) ||
+      (c.solicitante||'').toLowerCase().includes(termo) ||
+      (c.tipo||'').toLowerCase().includes(termo)
+    )
+  }
   if(filtros.unidade)result=result.filter(c=>c.unidade===filtros.unidade)
   if(filtros.categoria)result=result.filter(c=>c.tipo===filtros.categoria)
   if(filtros.status)result=result.filter(c=>c.status===filtros.status)
@@ -473,6 +484,7 @@ onUnmounted(() => {
 .filter-bar{display:flex;flex-wrap:wrap;gap:8px;padding:12px 16px;background:var(--bg-secondary);border-bottom:1px solid var(--border-color);align-items:center}
 .filter-bar-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-right:4px}
 .filter-bar select{flex:1 1 150px;max-width:220px;background:var(--bg-input);border:1px solid var(--border-color);border-radius:8px;color:var(--text-primary);font-size:12px;padding:8px 12px;outline:none;cursor:pointer;min-width:140px;height:38px}.filter-bar select:focus{border-color:var(--accent-primary)}
+.filter-bar-search{flex:1 1 180px;max-width:260px;background:var(--bg-input);border:1px solid var(--border-color);border-radius:8px;color:var(--text-primary);font-size:12px;padding:8px 12px;outline:none;min-width:160px;height:38px}.filter-bar-search:focus{border-color:var(--accent-primary)}
 .modal-actions-resolver{display:flex;justify-content:flex-end;gap:10px;margin-top:16px;align-items:center}
 .status-select-modal{background:var(--bg-input);border:1px solid var(--border-color);border-radius:8px;color:var(--text-primary);font-size:13px;padding:8px 12px;outline:none;cursor:pointer;font-family:var(--font-sans)}.status-select-modal:focus{border-color:var(--accent-primary)}
 .modal-title-wrap{display:flex;align-items:center;min-width:0}

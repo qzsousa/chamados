@@ -3,8 +3,21 @@ import { prisma } from '../config/prisma'
 import { authMiddleware, AuthenticatedRequest, requireRole } from '../middleware/auth'
 import { InventarioSchema, InventarioUpdateSchema } from '@shared/api'
 import { ZodError } from 'zod'
+import { syncInventario } from '../services/migration'
 
 const router = Router()
+
+router.post('/sync', authMiddleware, requireRole('ADMIN'), async (_req: AuthenticatedRequest, res) => {
+  try {
+    const result = await syncInventario()
+    if (!result.ok) {
+      return res.status(400).json({ error: 'VALIDATION_ERROR', message: result.motivo || 'Não foi possível sincronizar' })
+    }
+    return res.json({ success: true })
+  } catch (err) {
+    throw err
+  }
+})
 
 router.get('/', authMiddleware, async (_req: AuthenticatedRequest, res) => {
   try {

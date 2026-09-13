@@ -6,7 +6,7 @@ import { normalizarNomeEscola, getMapaTecnicos } from './src/services/normalizat
 import * as XLSX from 'xlsx'
 
 const BCRYPT_COST = 12
-const XLSX_PATH = join(process.cwd(), '..', 'database', 'Teste em branco (respostas) (5).xlsx')
+const XLSX_PATH = join(process.cwd(), '..', 'database', 'Teste em branco (respostas) (6).xlsx')
 
 const prisma = new PrismaClient({
   datasources: { db: { url: process.env.DIRECT_URL } }

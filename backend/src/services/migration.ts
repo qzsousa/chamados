@@ -29,9 +29,8 @@ async function readSheet(sheets: any, sheetName: string, spreadsheetId?: string)
   return response.data.values || []
 }
 
-export async function runMigration() {
+async function getServiceAccountJson(): Promise<string> {
   let serviceAccountJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON
-
   if (!serviceAccountJson) {
     try {
       serviceAccountJson = readFileSync(join(process.cwd(), 'gcp-service-account.json'), 'utf-8')
@@ -39,6 +38,11 @@ export async function runMigration() {
       serviceAccountJson = ''
     }
   }
+  return serviceAccountJson
+}
+
+export async function runMigration() {
+  const serviceAccountJson = await getServiceAccountJson()
 
   const sheetsId = process.env.GOOGLE_SHEETS_ID
 
@@ -58,6 +62,24 @@ export async function runMigration() {
   await migrateChamados(sheets)
 
   console.log('✅ Migração concluída!')
+}
+
+// Sincroniza apenas escolas + inventário (leve, reutilizável para agendamentos)
+export async function syncInventario(): Promise<{ ok: boolean; motivo?: string }> {
+  const serviceAccountJson = await getServiceAccountJson()
+  const sheetsId = process.env.GOOGLE_INVENTARIO_SHEETS_ID || process.env.GOOGLE_SHEETS_ID
+
+  if (!serviceAccountJson || !sheetsId) {
+    const motivo = 'GOOGLE_SERVICE_ACCOUNT_JSON ou GOOGLE_INVENTARIO_SHEETS_ID não configurados'
+    console.log(`⚠️ [inventario:sync] ${motivo}. Pulando.`)
+    return { ok: false, motivo }
+  }
+
+  const sheets = await getSheetsClient({ serviceAccountJson, sheetsId })
+  await migrateEscolas()
+  await migrateInventario(sheets)
+  console.log('✅ [inventario:sync] concluído.')
+  return { ok: true }
 }
 
 async function migrateUsuarios(sheets: any) {

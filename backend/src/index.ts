@@ -21,6 +21,7 @@ import equipamentoRoutes from './routes/equipamentos'
 import inventarioRoutes from './routes/inventario'
 import dashboardRoutes from './routes/dashboard'
 import { LISTA_ESCOLAS_EMAILS } from './services/normalization'
+import { syncInventario } from './services/migration'
 
 const logger = pino({
   level: env.LOG_LEVEL,
@@ -172,6 +173,18 @@ app.use(errorHandler(logger))
 const server = app.listen(env.PORT, () => {
   logger.info(`🚀 Server running on port ${env.PORT} (${env.NODE_ENV})`)
 })
+
+// Sincronização automática de inventário (escolas + status)
+const SYNC_INTERVAL_MS = 6 * 60 * 60 * 1000
+async function autoSyncInventario() {
+  try {
+    await syncInventario()
+  } catch (err) {
+    logger.error({ err }, 'falha na sincronização automática de inventário')
+  }
+}
+setTimeout(autoSyncInventario, 5000)
+setInterval(autoSyncInventario, SYNC_INTERVAL_MS)
 
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, shutting down gracefully')
