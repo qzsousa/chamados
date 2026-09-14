@@ -62,6 +62,7 @@ model Chamado {
   tecnicoSetor       String?
   inventarioStatus   String?  // CONCLUIDO, EM_ANDAMENTO, NAO_REALIZADO, NAO_INFORMADO
   email              String?  // e-mail do solicitante
+  excluido           Boolean  @default(false) // soft delete
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 

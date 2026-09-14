@@ -251,6 +251,34 @@ export async function migrateInventario(sheets: any) {
   console.log(`  Total: ${atualizados} inventários migrados`)
 }
 
+// A coluna de protocolo (ID) pode estar sem rótulo na planilha (1ª célula vazia).
+// Nesse caso, usamos as posições fixas do layout da aba:
+// [0] ID, [1] Timestamp, [2] Unidade, [3] Solicitante, [4] Função, [5] Tipo,
+// [6] Descrição, [7] Urgência, [8] Anexo, [9] Status, [10] Responsável,
+// [11] Última Atualização, [12] Histórico, [13] Técnico Resolução, [14] Email
+function colIndex(headers: any[], name: string, fallbackPos: number): number {
+  const i = headers.indexOf(name)
+  return i !== -1 ? i : fallbackPos
+}
+
+// A planilha retorna datas formatadas em pt-BR ("dd/MM/yyyy HH:mm:ss"), que o
+// new Date() interpretaria como MM/dd/yyyy. Fazemos o parse manual.
+function parseDataPlanilha(v: unknown): Date {
+  if (typeof v === 'number') return new Date(Math.round((v - 25569) * 86400 * 1000))
+  if (v instanceof Date && !isNaN(v.getTime())) return v
+  const s = String(v ?? '').trim()
+  if (s) {
+    const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/)
+    if (m) {
+      const dt = new Date(+m[3], +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0))
+      if (!isNaN(dt.getTime())) return dt
+    }
+    const d = new Date(s)
+    if (!isNaN(d.getTime())) return d
+  }
+  return new Date()
+}
+
 async function migrateChamados(sheets: any) {
   console.log('🎫 Migrando chamados...')
   const rows = await readSheet(sheets, 'Chamados')
@@ -258,20 +286,21 @@ async function migrateChamados(sheets: any) {
 
   const headers = rows[0]
   const idx = {
-    id: headers.indexOf('ID'),
-    timestamp: headers.indexOf('Timestamp'),
-    unidade: headers.indexOf('Unidade'),
-    solicitante: headers.indexOf('Solicitante'),
-    funcao: headers.indexOf('Função'),
-    tipo: headers.indexOf('Tipo'),
-    descricao: headers.indexOf('Descrição'),
-    urgencia: headers.indexOf('Urgência'),
-    anexo: headers.indexOf('Anexo'),
-    status: headers.indexOf('Status'),
-    responsavel: headers.indexOf('Responsável'),
-    ultimaAtualizacao: headers.indexOf('Última Atualização'),
-    historico: headers.indexOf('Histórico'),
-    tecnicoResolucao: headers.indexOf('Técnico Resolução')
+    id: colIndex(headers, 'ID', 0),
+    timestamp: colIndex(headers, 'Timestamp', 1),
+    unidade: colIndex(headers, 'Unidade', 2),
+    solicitante: colIndex(headers, 'Solicitante', 3),
+    funcao: colIndex(headers, 'Função', 4),
+    tipo: colIndex(headers, 'Tipo', 5),
+    descricao: colIndex(headers, 'Descrição', 6),
+    urgencia: colIndex(headers, 'Urgência', 7),
+    anexo: colIndex(headers, 'Anexo', 8),
+    status: colIndex(headers, 'Status', 9),
+    responsavel: colIndex(headers, 'Responsável', 10),
+    ultimaAtualizacao: colIndex(headers, 'Última Atualização', 11),
+    historico: colIndex(headers, 'Histórico', 12),
+    tecnicoResolucao: colIndex(headers, 'Técnico Resolução', 13),
+    email: colIndex(headers, 'Email', 14)
   }
 
   const mapaTecnicos = getMapaTecnicos()
@@ -304,7 +333,7 @@ async function migrateChamados(sheets: any) {
     await prisma.chamado.create({
       data: {
         protocolo,
-        timestamp: row[idx.timestamp] ? new Date(row[idx.timestamp]) : new Date(),
+        timestamp: parseDataPlanilha(row[idx.timestamp]),
         unidade,
         solicitante: String(row[idx.solicitante] || '').trim(),
         funcao: String(row[idx.funcao] || '').trim() || null,
@@ -314,11 +343,12 @@ async function migrateChamados(sheets: any) {
         anexoUrl: String(row[idx.anexo] || '').trim() || null,
         status: (statusMap[String(row[idx.status] || '').trim()] || 'ABERTO') as any,
         responsavel: String(row[idx.responsavel] || '').trim() || null,
-        ultimaAtualizacao: row[idx.ultimaAtualizacao] ? new Date(row[idx.ultimaAtualizacao]) : new Date(),
+        ultimaAtualizacao: parseDataPlanilha(row[idx.ultimaAtualizacao]),
         historico: String(row[idx.historico] || '').trim() || null,
         tecnicoResolucao: String(row[idx.tecnicoResolucao] || '').trim() || null,
         tecnicoSetor,
-        inventarioStatus: inventarioStatus as any
+        inventarioStatus: inventarioStatus as any,
+        email: String(row[idx.email] || '').trim() || null
       }
     })
     criados++

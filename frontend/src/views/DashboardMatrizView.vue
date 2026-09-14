@@ -79,7 +79,7 @@
                     <td class="text-center"><span class="status-badge" :class="classeStatus(c.status)">{{ c.status }}</span></td>
                     <td class="text-right" :class="{ critico: isCritico(c) }">{{ tempoDecorrido(c.timestamp) }}</td>
                     <td class="text-center">
-                      <button class="btn-danger" @click.stop="confirmarExcluir(c)" title="Excluir chamado">
+                      <button v-if="podeResolver" class="btn-danger" @click.stop="confirmarExcluir(c)" title="Excluir chamado">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                       </button>
                     </td>
@@ -200,6 +200,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from
 import { useRouter } from 'vue-router'
 import { useChamadosStore } from '@/stores/chamados'
 import { useAuthStore } from '@/stores/auth'
+import { useUIStore } from '@/stores/ui'
 import { Chart, registerables } from 'chart.js'
 import Button from '@/components/ui/Button.vue'
 
@@ -208,6 +209,7 @@ Chart.register(...registerables)
 const router = useRouter()
 const chamados = useChamadosStore()
 const auth = useAuthStore()
+const ui = useUIStore()
 
 const podeResolver = computed(() => auth.isAuthenticated && ['ADMIN', 'TECNICO', 'GESTOR'].includes(auth.user?.nivel || ''))
 

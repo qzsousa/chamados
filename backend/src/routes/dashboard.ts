@@ -8,7 +8,7 @@ import { getMapaInventario } from '../services/migration'
 const router = Router()
 
 async function getDashboardData(filtroFilial?: string, filtroNivel?: string) {
-  const where: any = {}
+  const where: any = { excluido: false }
 
   if (filtroFilial && filtroNivel !== 'ADMIN') {
     where.unidade = filtroFilial

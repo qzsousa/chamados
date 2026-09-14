@@ -8,6 +8,9 @@ import { getMapaInventario } from '../services/migration'
 import { notificarChamadoStatusAlterado, notificarChamadoCriado } from '../services/email'
 import { supabase } from '../config/supabase'
 
+// sempre ignorar chamados marcados como excluídos
+const filtroExcluido = { excluido: false }
+
 const router = Router()
 
 function getTecnicoSetor(unidade: string): string {
@@ -15,6 +18,9 @@ function getTecnicoSetor(unidade: string): string {
   const chave = normalizarNomeEscola(unidade)
   return mapa[chave] || ''
 }
+
+// sempre ignorar chamados marcados como excluídos
+const filtroExcluido = { excluido: false }
 
 async function getInventarioStatus(unidade: string): Promise<string | null> {
   const mapa = await getMapaInventario()
@@ -30,7 +36,7 @@ export async function consultarChamadoPublic(req: Request, res: Response) {
     }
 
     const chamado = await prisma.chamado.findUnique({ where: { protocolo } })
-    if (!chamado) {
+    if (!chamado || chamado.excluido) {
       return res.status(404).json({ error: 'NOT_FOUND', message: 'Chamado não encontrado' })
     }
 
@@ -104,7 +110,7 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res) => {
       limit: req.query.limit ? parseInt(req.query.limit as string) : 20
     })
 
-    const where: any = {}
+    const where: any = { ...filtroExcluido }
 
     if (req.userRecord && req.userRecord.nivel !== 'ADMIN') {
       if (req.userRecord.nivel === 'TECNICO') {
@@ -155,7 +161,7 @@ router.get('/:id', authMiddleware, async (req: AuthenticatedRequest, res) => {
   try {
     const chamado = await prisma.chamado.findUnique({ where: { id: req.params.id } })
 
-    if (!chamado) {
+    if (!chamado || chamado.excluido) {
       return res.status(404).json({ error: 'NOT_FOUND', message: 'Chamado não encontrado' })
     }
 
@@ -341,7 +347,11 @@ router.delete('/:id', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GESTOR'),
       }
     }
 
-    await prisma.chamado.delete({ where: { id: req.params.id } })
+    // soft delete: marca como excluído em vez de apagar do banco
+    await prisma.chamado.update({
+      where: { id: req.params.id },
+      data: { excluido: true }
+    })
     return res.json({ success: true })
   } catch (err) {
     if (err instanceof ZodError) {
@@ -355,7 +365,7 @@ router.delete('/batch', authMiddleware, requireRole('ADMIN'), async (req: Authen
   try {
     const { ids } = BatchDeleteChamadosSchema.parse(req.body)
 
-    const result = await prisma.chamado.deleteMany({ where: { id: { in: ids } } })
+    const result = await prisma.chamado.updateMany({ where: { id: { in: ids } }, data: { excluido: true } })
 
     return res.json({ removidos: result.count })
   } catch (err) {
