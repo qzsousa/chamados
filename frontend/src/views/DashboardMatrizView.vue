@@ -9,6 +9,8 @@
       </div>
       <div class="header-center"><div class="clock" id="clock">--:--:--</div></div>
       <div class="header-right">
+        <span v-if="!auth.isAuthenticated" class="hint-publica">Modo público — somente leitura</span>
+        <span v-if="!podeResolver" class="hint-publica" @click="router.push('/login')" title="Fazer login para alterar status" style="cursor:pointer">🔒 Alterações exigem login</span>
         <button v-if="auth.isAdmin" class="btn-gerenciar" @click="router.push('/admin/usuarios')" title="Gerenciar usuários"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Usuários</button>
         <label class="theme-toggle" title="Alternar tema"><input type="checkbox" id="theme-toggle" v-model="darkMode"><span class="slider"><svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg><svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span></label>
       </div>
@@ -66,9 +68,10 @@
           <div class="table-container">
             <div class="table-wrapper">
               <table class="table">
-                <thead><tr><th>Protocolo</th><th>Urgência</th><th>Unidade</th><th>Categoria</th><th>Descrição</th><th>Técnico</th><th>Inventário</th><th>Status</th><th>Aberto</th><th>Ações</th></tr></thead>
+                <thead><tr><th class="col-check"><input type="checkbox" :checked="todosSelecionados" @change="alternarTodos" title="Selecionar todos"></th><th>Protocolo</th><th>Urgência</th><th>Unidade</th><th>Categoria</th><th>Descrição</th><th>Técnico</th><th>Inventário</th><th>Status</th><th>Aberto</th><th>Ações</th></tr></thead>
                 <tbody>
                   <tr v-for="c in chamadosFiltrados" :key="c.id" @click="abrirModal(c)" class="linha-chamado">
+                    <td v-if="podeResolver" class="col-check" @click.stop><input type="checkbox" :checked="idsSelecionados.has(c.id)" @change="alternarSelecao(c.id)" title="Selecionar"></td>
                     <td class="cell-protocolo">{{ c.protocolo }}</td>
                     <td><span class="cell-urgency" :class="classeUrgencia(c.urgencia)">{{ c.urgencia.split(' ')[0] }}</span></td>
                     <td>{{ truncar(c.unidade, 30) }}</td>
@@ -84,7 +87,7 @@
                       </button>
                     </td>
                   </tr>
-                  <tr v-if="chamadosFiltrados.length === 0"><td colspan="10" class="text-center" style="padding: 48px 20px; color: var(--text-muted);">Nenhum chamado encontrado</td></tr>
+                  <tr v-if="chamadosFiltrados.length === 0"><td colspan="11" class="text-center" style="padding: 48px 20px; color: var(--text-muted);">Nenhum chamado encontrado</td></tr>
                 </tbody>
               </table>
             </div>
@@ -138,6 +141,12 @@
             <div class="chart-box"><div class="chart-title">Resolvidos por Técnico</div><canvas id="chartTecnico"></canvas></div>
           </div>
         </div>
+</div>
+
+      <div class="barra-selecao" :class="{ visivel: idsSelecionados.size > 0 }" v-if="podeResolver">
+        <span class="selecao-info">{{ idsSelecionados.size }} chamado(s) selecionado(s)</span>
+        <Button variant="secondary" size="sm" @click="limparSelecao" title="Limpar seleção">Desmarcar</Button>
+        <Button variant="primary" size="sm" @click="abrirModalLote" title="Alterar status em massa">Alterar status</Button>
       </div>
 
       <div class="modal-overlay" :class="{ open: modalAberto }" @click.self="fecharModal">
@@ -191,6 +200,27 @@
           </div>
         </div>
       </div>
+
+      <!-- Modal de atualização em lote -->
+      <div class="modal-overlay" :class="{ open: modalLoteAberto }" @click.self="modalLoteAberto = false">
+        <div class="modal modal-status">
+          <div class="modal-header">
+            <div class="modal-title-wrap"><h2 class="modal-title">Alterar status em lote — {{ idsSelecionados.size }} chamado(s)</h2></div>
+            <Button variant="ghost" size="sm" @click="modalLoteAberto = false" class="modal-close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></Button>
+          </div>
+          <div class="modal-body">
+            <div class="resolver-box">
+              <label class="resolver-label">Novo status</label>
+              <select v-model="novoStatusLote" class="status-select-modal"><option value="ABERTO">Aberto</option><option value="ANDAMENTO">Em andamento</option><option value="COMUNICADO">Comunicado</option><option value="RESOLVIDO">Resolvido</option></select>
+              <div class="modal-actions-resolver">
+                <Button variant="secondary" @click="modalLoteAberto = false">Cancelar</Button>
+                <Button variant="primary" @click="salvarLote" :loading="salvandoLote" :disabled="salvandoLote">Aplicar em todos</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </main>
   </div>
 </template>
@@ -225,6 +255,54 @@ const responsavel = ref('')
 
 const RESPONSAVEIS = ['JOÃO','CHARLES','HERBERT','JOSEMIR','CAROL','GUILHERME','VALDEIR','JESSICA','MATHEUS','FABIO','PABLO','FERNANDA']
 
+const idsSelecionados = ref<Set<string>>(new Set())
+const novoStatusLote = ref('ANDAMENTO')
+const salvandoLote = ref(false)
+const modalLoteAberto = ref(false)
+
+const todosSelecionados = computed(()=>{
+  return chamadosFiltrados.value.length > 0 && chamadosFiltrados.value.every(c=>idsSelecionados.value.has(c.id))
+})
+
+function alternarSelecao(id:string){
+  const s = new Set(idsSelecionados.value)
+  if(s.has(id)) s.delete(id)
+  else s.add(id)
+  idsSelecionados.value = s
+}
+function alternarTodos(){
+  const todos = todosSelecionados.value
+  const s = new Set(idsSelecionados.value)
+  chamadosFiltrados.value.forEach(c=>{
+    if(todos) s.delete(c.id)
+    else s.add(c.id)
+  })
+  idsSelecionados.value = s
+}
+function limparSelecao(){ idsSelecionados.value = new Set() }
+
+function abrirModalLote(){
+  if(idsSelecionados.value.size === 0) return
+  novoStatusLote.value = 'ANDAMENTO'
+  modalLoteAberto.value = true
+}
+async function salvarLote(){
+  if(salvandoLote.value) return
+  salvandoLote.value = true
+  const ids = [...idsSelecionados.value]
+  try{
+    await chamados.atualizarLote({ ids, status: novoStatusLote.value })
+    ui.showToast('success', `Status alterado em ${ids.length} chamado(s)`)
+    idsSelecionados.value = new Set()
+    modalLoteAberto.value = false
+    await chamados.carregarMatriz()
+  }catch(err:any){
+    ui.showToast('error', err.response?.data?.message || 'Erro ao salvar em massa')
+  }finally{
+    salvandoLote.value = false
+  }
+}
+
 const filtros = reactive({protocolo:'',busca:'',unidade:'',categoria:'',status:'',urgencia:'',tecnico:'',dataDe:'',dataAte:''})
 
 const stats = reactive({abertos:0,andamento:0,comunicado:0,resolvidos:0})
@@ -241,6 +319,7 @@ let urgenciaChart: Chart | null = null
 let tecnicoChart: Chart | null = null
 
 onMounted(async()=>{
+  await auth.initialize()
   await chamados.carregarMatriz()
   updateStats()
   updateDerived()
@@ -530,6 +609,10 @@ onUnmounted(() => {
   .sidebar-left.open{transform:translateX(0)}
 }
 /* End of styles */
+.barra-selecao{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(10px);background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:10px 16px;display:flex;align-items:center;gap:12px;box-shadow:var(--shadow-md);opacity:0;visibility:hidden;z-index:200;transition:all .2s}
+.barra-selecao.visivel{opacity:1;visibility:visible;transform:translateX(-50%) translateY(0)}
+.selecao-info{font-size:12px;font-weight:600;color:var(--text-secondary);min-width:110px}
+.col-check{width:34px;text-align:center}.col-check input[type="checkbox"]{cursor:pointer}
 </style>
  
  
