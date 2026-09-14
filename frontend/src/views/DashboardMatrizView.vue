@@ -530,6 +530,8 @@ onUnmounted(() => {
   .sidebar-left.open{transform:translateX(0)}
 }
 /* End of styles */
-</style> 
-  
+</style>
+ 
+ 
+ 
  
