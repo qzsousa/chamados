@@ -85,7 +85,7 @@ export async function criarChamadoPublic(req: Request, res: Response) {
       await notificarAltaPrioridade(chamado)
     }
 
-    await notificarChamadoCriado(chamado)
+    notificarChamadoCriado(chamado).catch(() => {})
 
     return res.status(201).json(chamado)
   } catch (err) {

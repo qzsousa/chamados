@@ -1,4 +1,5 @@
 import 'dotenv/config'
+import dns from 'dns'
 import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
@@ -22,6 +23,9 @@ import inventarioRoutes from './routes/inventario'
 import dashboardRoutes from './routes/dashboard'
 import { LISTA_ESCOLAS_EMAILS } from './services/normalization'
 import { syncInventario } from './services/migration'
+
+// Força DNS a resolver IPv4 primeiro (Render não tem egress IPv6 → evita "ENETUNREACH")
+dns.setDefaultResultOrder('ipv4first')
 
 const logger = pino({
   level: env.LOG_LEVEL,
