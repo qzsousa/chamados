@@ -96,9 +96,9 @@
             <div class="kanban-column" v-for="col in kanbanColumns" :key="col.status">
               <div class="kanban-column-header"><div class="kanban-column-title"><span class="status-dot" :class="col.color"></span>{{ col.label }}<span class="kanban-column-count">{{ getChamadosByStatus(col.status).length }}</span></div></div>
               <div class="kanban-cards">
-                <div class="kanban-card" v-for="c in getChamadosByStatus(col.status)" :key="c.id" @click="abrirModal(c)">
-                  <div class="kanban-card-header"><span class="kanban-card-protocolo">{{ c.protocolo }}</span><span class="kanban-card-urgency" :class="classeUrgencia(c.urgencia)">{{ c.urgencia.split(' ')[0] }}</span></div>
-                  <div class="kanban-card-body">{{ c.unidade }} · {{ truncar(c.tipo, 20) }}</div>
+                <div class="kanban-card" v-for="c in getChamadosByStatus(col.status)" :key="c.id">
+                  <div class="kanban-card-header"><span class="kanban-card-protocolo">{{ c.protocolo }}</span><span class="kanban-card-urgency" :class="classeUrgencia(c.urgencia)">{{ c.urgencia.split(' ')[0] }}</span><Button v-if="podeResolver" variant="ghost" size="sm" class="kanban-delete-btn" @click.stop="confirmarExcluir(c)" title="Excluir chamado"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></Button></div>
+                  <div class="kanban-card-body" @click="abrirModal(c)" style="cursor:pointer">{{ c.unidade }} · {{ truncar(c.tipo, 20) }}</div>
                   <div class="kanban-card-footer"><span>{{ tempoDecorrido(c.timestamp) }}</span><span class="status-badge" :class="classeStatus(c.status)">{{ c.status }}</span></div>
                 </div>
               </div>
@@ -146,6 +146,7 @@
             <div class="modal-title-wrap"><h2 class="modal-title">{{ chamadoAtual.protocolo }}<Button variant="ghost" size="sm" @click="copiarChamado" class="btn-copiar" title="Copiar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></Button></h2></div>
             <div class="modal-header-actions">
               <button v-if="podeResolver" class="btn-atualizar-status" @click="abrirModalStatus">Atualizar status do chamado</button>
+              <button v-if="podeResolver" class="btn-excluir" @click="confirmarExcluirModal(chamadoAtual)" title="Excluir chamado">Excluir</button>
               <Button variant="ghost" size="sm" @click="fecharModal" class="modal-close"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></Button>
             </div>
           </div>
@@ -326,6 +327,16 @@ async function confirmarExcluir(c: any){
   }
 }
 
+function confirmarExcluirModal(c: any){
+  if(!confirm(`Tem certeza que deseja excluir o chamado ${c.protocolo}? Esta ação não pode ser desfeita.`)) return
+  chamados.deletar(c.id).then(() => {
+    ui.showToast('success', 'Chamado excluído com sucesso')
+    fecharModal()
+  }).catch((err: any) => {
+    ui.showToast('error', err.response?.data?.message || 'Erro ao excluir chamado')
+  })
+}
+
 function classeUrgencia(u:string){if(u.startsWith('Alta'))return'urgency-critica';if(u.startsWith('Média'))return'urgency-media';return'urgency-baixa'}
 function classeUrgenciaBadge(u:string){if(u.startsWith('Alta'))return'urg-pill-alta';if(u.startsWith('Média'))return'urg-pill-media';return'urg-pill-baixa'}
 function classeStatus(s:string){if(s==='ABERTO')return'status-abertos';if(s==='ANDAMENTO')return'status-andamento';if(s==='COMUNICADO')return'status-comunicado';return'status-resolvidos'}
@@ -399,6 +410,8 @@ onUnmounted(() => {
 .clock{font-family:var(--font-mono);font-size:16px;font-variant-numeric:tabular-nums;color:var(--text-secondary);background:var(--bg-tertiary);padding:4px 16px;border-radius:999px;min-width:140px;text-align:center}
 .theme-toggle{position:relative;width:48px;height:28px}.theme-toggle input{opacity:0;width:0;height:0}.theme-toggle .slider{position:absolute;inset:0;background:var(--bg-tertiary);border-radius:999px;transition:background .15s;display:flex;align-items:center;padding:2px}.theme-toggle .slider::before{content:'';position:absolute;width:24px;height:24px;background:white;border-radius:50%;left:2px;transition:transform .15s;box-shadow:var(--shadow-sm)}.theme-toggle input:checked+.slider{background:var(--accent-primary)}.theme-toggle input:checked+.slider::before{transform:translateX(20px)}.theme-toggle .slider svg{position:absolute;width:16px;height:16px;color:var(--text-secondary)}.theme-toggle .slider .sun-icon{left:6px}.theme-toggle .slider .moon-icon{right:6px;opacity:0}.theme-toggle input:checked+.slider .sun-icon{opacity:0}.theme-toggle input:checked+.slider .moon-icon{opacity:1}
 .btn-gerenciar{display:inline-flex;align-items:center;gap:6px;padding:0 14px;height:36px;background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:8px;color:var(--text-secondary);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s}.btn-gerenciar:hover{color:var(--accent-primary);border-color:var(--accent-primary);background:var(--bg-hover)}
+.btn-excluir{display:inline-flex;align-items:center;gap:6px;padding:0 14px;height:36px;background:rgba(239,68,68,.08);border:1px solid var(--accent-danger);border-radius:8px;color:var(--accent-danger);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s}.btn-excluir:hover{background:rgba(239,68,68,.15)}
+.kanban-delete-btn{color:var(--text-muted) !important}.kanban-delete-btn:hover{color:var(--accent-danger) !important;background:rgba(239,68,68,.1)}
 
 .sidebar-left{position:fixed;top:64px;left:0;bottom:0;width:280px;background:var(--bg-secondary);border-right:1px solid var(--border-color);display:flex;flex-direction:column;overflow-y:auto;padding:16px;gap:24px;z-index:200;transform:translateX(-100%);transition:transform .3s}.sidebar-left.open{transform:translateX(0)}
 .sidebar-section{background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:16px}
