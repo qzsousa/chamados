@@ -35,6 +35,23 @@ function escapar(v: unknown): string {
   return String(v ?? '')
 }
 
+// Junta os e-mails de contato da escola + o e-mail do solicitante, sem duplicar
+function obterDestinatarios(unidade: string, solicitante: string, emailSolicitante: string | null): EmailContato[] {
+  const dests: EmailContato[] = []
+  const vistos = new Set<string>()
+  const add = (nome: string, email: string) => {
+    const e = (email || '').trim().toLowerCase()
+    if (!e || vistos.has(e)) return
+    vistos.add(e)
+    dests.push({ nome, email: e })
+  }
+
+  for (const d of getEmailsContato(unidade)) add(d.nome, d.email)
+  if (emailSolicitante) add(solicitante, emailSolicitante)
+
+  return dests
+}
+
 export async function notificarChamadoConcluido(chamado: {
   protocolo: string
   unidade: string
@@ -104,11 +121,7 @@ export async function notificarChamadoStatusAlterado(chamado: {
   tecnicoResolucao?: string | null
   email: string | null
 }) {
-  let destinatarios: EmailContato[] = getEmailsContato(chamado.unidade)
-
-  if (destinatarios.length === 0 && (chamado.email || '').trim()) {
-    destinatarios = [{ nome: chamado.solicitante, email: chamado.email as string }]
-  }
+  const destinatarios = obterDestinatarios(chamado.unidade, chamado.solicitante, chamado.email)
 
   if (destinatarios.length === 0) {
     console.log(`[email] Nenhum e-mail de contato para notificar mudança de status do ${chamado.protocolo}`)
@@ -151,8 +164,8 @@ export async function notificarChamadoCriado(chamado: {
   descricao: string
   email: string | null
 }) {
-  const emailSolicitante = (chamado.email || '').trim()
-  if (!emailSolicitante) return
+  const destinatarios = obterDestinatarios(chamado.unidade, chamado.solicitante, chamado.email)
+  if (destinatarios.length === 0) return
 
   const assunto = `Chamado registrado — ${chamado.protocolo}`
   const textoAlternativo = `Seu chamado foi registrado com sucesso.\n\nProtocolo: ${chamado.protocolo}\nUnidade: ${chamado.unidade}\nSolicitante: ${chamado.solicitante}\nTipo: ${chamado.tipo}\n\nGuarde o número de protocolo. Esta é uma mensagem automática, não responda.`
@@ -171,5 +184,7 @@ export async function notificarChamadoCriado(chamado: {
       <p style="font-size: 12.5px; color: #9ca3af; margin-top: 22px;">Guarde o protocolo acima. Esta é uma mensagem automática, por favor não responda.</p>
     </div>`
 
-  await sendEmail(emailSolicitante, assunto, textoAlternativo, html)
+  for (const dest of destinatarios) {
+    await sendEmail(dest.email, assunto, textoAlternativo, html)
+  }
 }

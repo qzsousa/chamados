@@ -257,7 +257,8 @@ export const LISTA_ESCOLAS_EMAILS: Record<string, string> = {
   'E.E. SUMIE IWATA': 'e909129a@educacao.sp.gov.br',
   'E.E. VILA BELA': 'e923047a@educacao.sp.gov.br',
   'E.E. YERVANT KISSAJIKIAN': 'e906207a@educacao.sp.gov.br',
-  'E.E. ZÍPORA RUBISTEIN': 'e914721a@educacao.sp.gov.br'
+  'E.E. ZÍPORA RUBISTEIN': 'e914721a@educacao.sp.gov.br',
+  'UNIDADE LESTE 3': 'lt3.seintec@educacao.sp.gov.br'
 }
 
 export interface EmailContato {
