@@ -59,7 +59,7 @@ app.use(cookieParser())
 
 const generalLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 100,
+  max: 500,
   message: { error: 'RATE_LIMITED', message: 'Muitas requisições, tente novamente em um minuto' },
   standardHeaders: true,
   legacyHeaders: false
@@ -67,7 +67,7 @@ const generalLimiter = rateLimit({
 
 const authLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 10,
+  max: 30,
   message: { error: 'RATE_LIMITED', message: 'Muitas tentativas de login, aguarde um minuto' },
   standardHeaders: true,
   legacyHeaders: false
@@ -75,7 +75,7 @@ const authLimiter = rateLimit({
 
 const refreshLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 30,
+  max: 100,
   message: { error: 'RATE_LIMITED', message: 'Muitas tentativas de renovação, aguarde um minuto' },
   standardHeaders: true,
   legacyHeaders: false

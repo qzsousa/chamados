@@ -306,9 +306,18 @@ async function migrateChamados(sheets: any) {
   const mapaTecnicos = getMapaTecnicos()
   const mapaInventario = await getMapaInventario()
 
+  // Carrega os protocolos já existentes de uma vez (evita 1 query por linha)
+  const existentes = new Set(
+    (await prisma.chamado.findMany({ select: { protocolo: true } })).map(c => c.protocolo)
+  )
+
   const vistos = new Set<string>()
-  let criados = 0
   let duplicados = 0
+  const novos: any[] = []
+
+  const statusMap: Record<string, string> = {
+    'Aberto': 'ABERTO', 'Em andamento': 'ANDAMENTO', 'Comunicado': 'COMUNICADO', 'Resolvido': 'RESOLVIDO'
+  }
 
   for (const row of rows.slice(1)) {
     const protocolo = String(row[idx.id] || '').trim()
@@ -318,40 +327,38 @@ async function migrateChamados(sheets: any) {
     if (vistos.has(chave)) { duplicados++; continue }
     vistos.add(chave)
 
-    const existing = await prisma.chamado.findUnique({ where: { protocolo } })
-    if (existing) { duplicados++; continue }
+    if (existentes.has(protocolo)) { duplicados++; continue }
 
     const unidade = String(row[idx.unidade] || '').trim()
     const escolaNorm = normalizarNomeEscola(unidade)
     const tecnicoSetor = mapaTecnicos[escolaNorm] || ''
     const inventarioStatus = mapaInventario[escolaNorm] || null
 
-    const statusMap: Record<string, string> = {
-      'Aberto': 'ABERTO', 'Em andamento': 'ANDAMENTO', 'Comunicado': 'COMUNICADO', 'Resolvido': 'RESOLVIDO'
-    }
-
-    await prisma.chamado.create({
-      data: {
-        protocolo,
-        timestamp: parseDataPlanilha(row[idx.timestamp]),
-        unidade,
-        solicitante: String(row[idx.solicitante] || '').trim(),
-        funcao: String(row[idx.funcao] || '').trim() || null,
-        tipo: String(row[idx.tipo] || '').trim(),
-        descricao: String(row[idx.descricao] || '').trim(),
-        urgencia: String(row[idx.urgencia] || '').trim(),
-        anexoUrl: String(row[idx.anexo] || '').trim() || null,
-        status: (statusMap[String(row[idx.status] || '').trim()] || 'ABERTO') as any,
-        responsavel: String(row[idx.responsavel] || '').trim() || null,
-        ultimaAtualizacao: parseDataPlanilha(row[idx.ultimaAtualizacao]),
-        historico: String(row[idx.historico] || '').trim() || null,
-        tecnicoResolucao: String(row[idx.tecnicoResolucao] || '').trim() || null,
-        tecnicoSetor,
-        inventarioStatus: inventarioStatus as any,
-        email: String(row[idx.email] || '').trim() || null
-      }
+    novos.push({
+      protocolo,
+      timestamp: parseDataPlanilha(row[idx.timestamp]),
+      unidade,
+      solicitante: String(row[idx.solicitante] || '').trim(),
+      funcao: String(row[idx.funcao] || '').trim() || null,
+      tipo: String(row[idx.tipo] || '').trim(),
+      descricao: String(row[idx.descricao] || '').trim(),
+      urgencia: String(row[idx.urgencia] || '').trim(),
+      anexoUrl: String(row[idx.anexo] || '').trim() || null,
+      status: (statusMap[String(row[idx.status] || '').trim()] || 'ABERTO') as any,
+      responsavel: String(row[idx.responsavel] || '').trim() || null,
+      ultimaAtualizacao: parseDataPlanilha(row[idx.ultimaAtualizacao]),
+      historico: String(row[idx.historico] || '').trim() || null,
+      tecnicoResolucao: String(row[idx.tecnicoResolucao] || '').trim() || null,
+      tecnicoSetor,
+      inventarioStatus: inventarioStatus as any,
+      email: String(row[idx.email] || '').trim() || null
     })
-    criados++
+  }
+
+  let criados = 0
+  for (let i = 0; i < novos.length; i += 100) {
+    const r = await prisma.chamado.createMany({ data: novos.slice(i, i + 100), skipDuplicates: true })
+    criados += r.count
   }
   console.log(`  Total: ${criados} chamados migrados, ${duplicados} duplicados ignorados`)
 }

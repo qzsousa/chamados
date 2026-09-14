@@ -38,7 +38,12 @@ api.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean }
 
-    if (error.response?.status === 401 && !originalRequest._retry && originalRequest.url !== '/auth/login') {
+    // Não intercepta chamadas de auth nem a própria rota de refresh (evita loops)
+    if (originalRequest.url === '/auth/refresh' || originalRequest.url === '/auth/login') {
+      return Promise.reject(error)
+    }
+
+    if (error.response?.status === 401 && !originalRequest._retry) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject })
@@ -56,6 +61,12 @@ api.interceptors.response.use(
       try {
         const authStore = getAuthStore()
         const refreshToken = localStorage.getItem('refreshToken') || ''
+        if (!refreshToken) {
+          // Sem refresh token: faz logout silencioso sem chamar /auth/logout
+          localStorage.removeItem('accessToken')
+          authStore.logout()
+          return Promise.reject(error)
+        }
         const { data } = await axios.post(`${API_BASE}/auth/refresh`, { refreshToken }, { withCredentials: true })
         authStore.setTokens(data.accessToken, data.refreshToken)
         processQueue(data.accessToken, null)
