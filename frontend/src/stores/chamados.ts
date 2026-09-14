@@ -69,12 +69,6 @@ export const useChamadosStore = defineStore('chamados', () => {
     return data
   }
 
-  async function deletar(id: string) {
-    const { data } = await api.delete<{ success: boolean }>(`/chamados/${id}`)
-    lista.value = lista.value.filter((c) => c.id !== id)
-    return data
-  }
-
   async function carregarMatriz() {
     loading.value = true
     try {
