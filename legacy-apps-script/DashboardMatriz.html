@@ -522,7 +522,9 @@
     <div class="barra-acoes">
       <div class="filtros">
         <input type="text" id="filtroUnidade" placeholder="Unidade…">
-        <input type="text" id="filtroCategoria" placeholder="Categoria…">
+        <select id="filtroCategoria">
+          <option value="">Todas as categorias</option>
+        </select>
         <select id="filtroStatus">
           <option value="">Todos os status</option>
           <option value="Aberto">Aberto</option>
@@ -604,6 +606,7 @@
         <div class="info-item"><div class="k">Técnico do setor</div><div class="v" id="modalTecnicoSetor"></div></div>
         <div class="info-item"><div class="k">Inventário</div><div class="v" id="modalInventario"></div></div>
         <div class="info-item"><div class="k">Aberto em</div><div class="v" id="modalAbertoEm"></div></div>
+        <div class="info-item full"><div class="k">E-mail(s) para contato</div><div class="v" id="modalEmailsContato"></div></div>
         <div class="info-item full"><div class="k">Descrição</div><div class="v" id="modalDescricao"></div></div>
       </div>
 
@@ -837,6 +840,7 @@
         console.warn('Container #filaChamados não encontrado.');
         return;
       }
+      montarFiltroCategorias(dados);
       animarNumero('kpiAbertos', dados.filter(d => d.Status === 'Aberto').length);
       animarNumero('kpiAndamento', dados.filter(d => d.Status === 'Em andamento').length);
       animarNumero('kpiComunicado', dados.filter(d => d.Status === 'Comunicado').length);
@@ -958,9 +962,24 @@ function desenharGraficos(dados) {
 }
 
     // ===== FILTROS =====
+    function montarFiltroCategorias(dados) {
+      const select = document.getElementById('filtroCategoria');
+      if (!select) return;
+      const categorias = [...new Set(dados.map(d => d.Tipo).filter(Boolean))].sort();
+      const valorAtual = select.value;
+      select.innerHTML = '<option value="">Todas as categorias</option>';
+      categorias.forEach(cat => {
+        const opt = document.createElement('option');
+        opt.value = cat;
+        opt.textContent = cat;
+        select.appendChild(opt);
+      });
+      if (valorAtual && categorias.includes(valorAtual)) select.value = valorAtual;
+    }
+
     function aplicarFiltros(dados) {
       const unidade = document.getElementById('filtroUnidade').value.toLowerCase();
-      const categoria = document.getElementById('filtroCategoria').value.toLowerCase();
+      const categoria = document.getElementById('filtroCategoria').value;
       const status = document.getElementById('filtroStatus').value;
       const urgencia = document.getElementById('filtroUrgencia').value;
       const tecnico = document.getElementById('filtroTecnico').value;
@@ -972,7 +991,7 @@ function desenharGraficos(dados) {
         const dataChamado = new Date(d.Timestamp);
         const invStatus = d.Inventario || '';
         return (!unidade || (d.Unidade && d.Unidade.toLowerCase().includes(unidade))) &&
-          (!categoria || (d.Tipo && d.Tipo.toLowerCase().includes(categoria))) &&
+          (!categoria || (d.Tipo && d.Tipo === categoria)) &&
           (!status || d.Status === status) &&
           (!urgencia || d['Urgência'] === urgencia) &&
           (!tecnico || d.TecnicoSetor === tecnico) &&
@@ -1193,6 +1212,7 @@ function desenharGraficos(dados) {
       document.getElementById('modalInventario').innerText = chamadoAtual.Inventario || 'Não informado';
       document.getElementById('modalAbertoEm').innerText = new Date(chamadoAtual.Timestamp).toLocaleString('pt-BR');
       document.getElementById('modalDescricao').innerText = chamadoAtual.Descrição;
+      document.getElementById('modalEmailsContato').innerHTML = renderizarEmailsContato(chamadoAtual.EmailsContato);
       document.getElementById('modalStatus').value = chamadoAtual.Status;
       document.getElementById('modalHistorico').innerText = chamadoAtual.Histórico || 'Sem histórico ainda.';
       document.getElementById('modalResposta').value = '';
@@ -1242,6 +1262,17 @@ function desenharGraficos(dados) {
     function alternarTecnicoOutro() {
       const valor = document.getElementById('modalTecnicoResolucao').value;
       document.getElementById('modalTecnicoOutro').style.display = valor === 'Outro' ? 'block' : 'none';
+    }
+    function renderizarEmailsContato(lista) {
+      if (!lista || !Array.isArray(lista) || lista.length === 0) {
+        return '— não informado —';
+      }
+      return lista.map(d => {
+        const nome = d.nome || '';
+        const email = d.email || '';
+        if (!email) return '';
+        return `<a href="mailto:${email}" style="color:var(--blue); text-decoration:none;">${nome ? nome + ' — ' : ''}${email}</a>`;
+      }).filter(Boolean).join('<br>');
     }
     function fecharModal() { document.getElementById('modalOverlay').style.display = 'none'; chamadoAtual = null; }
     function salvarModal() {

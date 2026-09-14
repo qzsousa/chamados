@@ -440,6 +440,7 @@ footer{text-align:center;padding:16px;font-size:12px;color:var(--tinta-suave);bo
       <div class="excs">
         <div class="exc"><label>RG *</label><input type="text" id="pn-rg" placeholder="Número do RG" oninput="chkSistema()"></div>
         <div class="exc"><label>Nome completo *</label><input type="text" id="pn-nome" placeholder="Nome completo do servidor" oninput="chkSistema()"></div>
+        <div class="exc"><label>CIE *</label><input type="text" id="pn-cie" placeholder="Código CIE da escola" oninput="chkSistema()"></div>
         <div class="exc"><label>Atribuições / Transferência *</label>
           <textarea id="pn-atrib" placeholder="Ex.: Transferir de E.E. X para E.E. Y — atribuição de Coordenador Pedagógico..." oninput="chkSistema()"></textarea>
         </div>
@@ -1149,7 +1150,7 @@ function resetCat(id){
   }
   if(id==='sistema'){
     ST.sistema=null; $('sel-sistema').value=''; hide('q-portalnet');
-    ['pn-rg','pn-nome','pn-atrib'].forEach(id=>$(id).value='');
+    ['pn-rg','pn-nome','pn-cie','pn-atrib'].forEach(id=>$(id).value='');
     $('av-sistema').className='btn-av';
   }
   if(id==='email'){
@@ -1232,7 +1233,7 @@ function sFisico(v){
    ================================================================ */
 function onSistema(){
   const v=$('sel-sistema').value; ST.sistema=v; hide('q-portalnet');
-  ['pn-rg','pn-nome','pn-atrib'].forEach(id=>$(id).value='');
+  ['pn-rg','pn-nome','pn-cie','pn-atrib'].forEach(id=>$(id).value='');
   $('av-sistema').className='btn-av';
   if(!v) return;
   if(v===PORTALNET){ anim('q-portalnet'); }
@@ -1240,7 +1241,7 @@ function onSistema(){
 }
 function chkSistema(){
   if(ST.sistema===PORTALNET){
-    const ok=$('pn-rg').value.trim()&&$('pn-nome').value.trim()&&$('pn-atrib').value.trim();
+    const ok=$('pn-rg').value.trim()&&$('pn-nome').value.trim()&&$('pn-cie').value.trim()&&$('pn-atrib').value.trim();
     $('av-sistema').className='btn-av'+(ok?' on':'');
   }
 }
@@ -1329,7 +1330,7 @@ function mkDesc(extra){
     if(ST.modelo&&ST.modelo.garantia) L.push('[Garantia] Chamado aberto também com o fornecedor.');
   }
   if(ST.cat.id==='sistema'&&ST.sistema===PORTALNET){
-    L.push(`[PortalNet]\nRG: ${$('pn-rg').value.trim()}\nNome: ${$('pn-nome').value.trim()}\nAtribuições: ${$('pn-atrib').value.trim()}`);
+    L.push(`[PortalNet]\nRG: ${$('pn-rg').value.trim()}\nNome: ${$('pn-nome').value.trim()}\nCIE: ${$('pn-cie').value.trim()}\nAtribuições: ${$('pn-atrib').value.trim()}`);
   }
   if(ST.cat.id==='email'){
     L.push(`CIE: ${$('em-cie').value.trim()}\nNome da Escola / DE: ${$('em-escola').value.trim()}\nLogin: ${$('em-login').value.trim()}\nE-mail: ${$('em-email').value.trim()}`);

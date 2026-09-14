@@ -161,6 +161,101 @@ const LISTA_ESCOLAS_TECNICOS = [
   { escola: "E.E. ZÍPORA RUBISTEIN", tecnico: "VALDEIR" }
 ];
 
+// ==================== E-MAILS DE CONTATO POR ESCOLA ====================
+// Cada escola possui um e-mail fixo de contato.
+// Escolas que dividem o mesmo prédio (nome separado por "/") têm e-mails
+// próprios: cadastre cada escola de forma individual (a resolução trata o
+// nome composto automaticamente, retornando os dois e-mails com identificação).
+//
+// Formato: 'NOME DA ESCOLA (individual)': 'email@educacao.sp.gov.br'
+const LISTA_ESCOLAS_EMAILS = {
+  'E.E. ADHEMAR ANTONIO PRADO': 'e003244a@educacao.sp.gov.br',
+  'E.E. ALCIDES BOSCOLO': 'e003177a@educacao.sp.gov.br',
+  'E.E. ANDRÉ NUNES JUNIOR': 'e003311a@educacao.sp.gov.br',
+  'E.E. ANÍSIO TEIXEIRA': 'e037047a@educacao.sp.gov.br',
+  'E.E. ANTONIETA DE SOUZA ALCÂNTARA': 'e902615a@educacao.sp.gov.br',
+  'E.E. ANTONIO CARLOS BRASILEIRO DE ALMEIDA JOBIM - TOM JOBIM': 'e352573a@educacao.sp.gov.br',
+  'E.E. AQUILINO RIBEIRO': 'e904302a@educacao.sp.gov.br',
+  'E.E. BARRO BRANCO II': 'e926048a@educacao.sp.gov.br',
+  'E.E. BELIZE': 'e284324a@educacao.sp.gov.br',
+  'E.E. BENJAMIN SAMUEL BLOOM': 'e011788a@educacao.sp.gov.br',
+  'E.E. BERNADIM RIBEIRO': 'e906189a@educacao.sp.gov.br',
+  'E.E. BRENO ROSSI, MAESTRO': 'e916730a@educacao.sp.gov.br',
+  'E.E. CÂNDIDO PROCÓPIO F. CAMARGO': 'e904922a@educacao.sp.gov.br',
+  'E.E. CARLOS HENRIQUE LIBERALLI': 'e039251a@educacao.sp.gov.br',
+  'E.E. CARMELINDA M. PEREIRA': 'e909166a@educacao.sp.gov.br',
+  'E.E. CESAR DONATO CALABREZ': 'e902627a@educacao.sp.gov.br',
+  'E.E. CHARLOTTE MARIA SHAW MASON': 'e011791a@educacao.sp.gov.br',
+  'E.E. CHIQUINHA GONZAGA': 'e011795a@educacao.sp.gov.br',
+  'E.E. CLAUDIA DUTRA VIANA': 'e438112a@educacao.sp.gov.br',
+  'E.E. COHAB CARRÃOZINHO': 'e921464a@educacao.sp.gov.br',
+  'E.E. COHAB ITAQUERA IV': 'e916766a@educacao.sp.gov.br',
+  'E.E. DÉCIO FERRAZ ALVIM': 'e003128a@educacao.sp.gov.br',
+  'E.E. DJANIRA': 'e011787a@educacao.sp.gov.br',
+  'E.E. ERNESTINA DEL B. TRAMA': 'e037084a@educacao.sp.gov.br',
+  'E.E. ESTHER FIGUEIREDO FERRAZ': 'e925226a@educacao.sp.gov.br',
+  'E.E. FABIO AGAZZI': 'e907029a@educacao.sp.gov.br',
+  'E.E. FADLO HAIDAR': 'e044337a@educacao.sp.gov.br',
+  'E.E. FERNANDO MAURO P. ROCHA, DEPUTADO': 'e902724a@educacao.sp.gov.br',
+  'E.E. FERNANDO PESSOA': 'e904284a@educacao.sp.gov.br',
+  'E.E. FLORIANO PEIXOTO': 'e011786a@educacao.sp.gov.br',
+  'E.E. FRANCISCO DE ASSIS P. CORRÊA': 'e043746a@educacao.sp.gov.br',
+  'E.E. FREDERICO MARIANO': 'e048707a@educacao.sp.gov.br',
+  'E.E. GERALDINO DOS SANTOS, DEPUTADO': 'e910831a@educacao.sp.gov.br',
+  'E.E. GUERRA JUNQUEIRO': 'e904314a@educacao.sp.gov.br',
+  'E.E. HAYDEÉ HIDALGO': 'e922146a@educacao.sp.gov.br',
+  'E.E. HERBERT JOSÉ DE SOUZA - BETINHO': 'e011798a@educacao.sp.gov.br',
+  'E.E. HUMBERTO BAPTISTELLI': 'e447663a@educacao.sp.gov.br',
+  'E.E. HUMBERTO DANTAS': 'e037059a@educacao.sp.gov.br',
+  'E.E. INDIANA ZUYCHER S. DE JESUS': 'e048677a@educacao.sp.gov.br',
+  'E.E. ISAAC SCHIRAIBER': 'e909117a@educacao.sp.gov.br',
+  'E.E. JARDIM DOM ANGÉLICO': 'e267971a@educacao.sp.gov.br',
+  'E.E. JARDIM IGUATEMI': 'e923266a@educacao.sp.gov.br',
+  'E.E. JARDIM LIMOEIRO III': 'e925412a@educacao.sp.gov.br',
+  'E.E. JARDIM PEDRA BRANCA': 'e433482a@educacao.sp.gov.br',
+  'E.E. JARDIM WILMA FLOR': 'e922900a@educacao.sp.gov.br',
+  'E.E. JOÃO CASTELLANO': 'e902718a@educacao.sp.gov.br',
+  'E.E. JOAQUIM SILVÉRIO G. DOS REIS': 'e048665a@educacao.sp.gov.br',
+  'E.E. JORGE LUIS BORGES': 'e907017a@educacao.sp.gov.br',
+  'E.E. JOSUÉ DE CASTRO': 'e011797a@educacao.sp.gov.br',
+  'E.E. JUAN CARLOS ONETTI': 'e412173a@educacao.sp.gov.br',
+  'E.E. LEILA DINIZ': 'e011792a@educacao.sp.gov.br',
+  'E.E. LEÔNIDAS DA SILVA': 'e011799a@educacao.sp.gov.br',
+  'E.E. LIMA BARRETO': 'e011796a@educacao.sp.gov.br',
+  'E.E. LUIS VAZ DE CAMÕES': 'e902883a@educacao.sp.gov.br',
+  'E.E. LUIZ ROSANOVA': 'e003141a@educacao.sp.gov.br',
+  'E.E. MARCOS ANTONIO COSTA': 'e923916a@educacao.sp.gov.br',
+  'E.E. MARIA ANTONIETA FERRAZ BIBLIOTECARIA': 'e904582a@educacao.sp.gov.br',
+  'E.E. MARIA DE LOURDES A. A. PACHECO': 'e906980a@educacao.sp.gov.br',
+  'E.E. MARIA TEREZA SIMÕES DE ALMEIDA PROFESSORA': 'e011793a@educacao.sp.gov.br',
+  'E.E. MARIUMA BUAZAR MAUAD': 'e904296a@educacao.sp.gov.br',
+  'E.E. MOACYR AMARAL DOS SANTOS': 'e048653a@educacao.sp.gov.br',
+  'E.E. MOZART TAVARES DE LIMA': 'e036961a@educacao.sp.gov.br',
+  'E.E. OSWALDO GAGLIARDI': 'e908368a@educacao.sp.gov.br',
+  'E.E. PATRÍCIA GALVÃO - PAGU': 'e011789a@educacao.sp.gov.br',
+  'E.E. PAULO ROLIM ROSA': 'e922912a@educacao.sp.gov.br',
+  'E.E. PAULO SARASATE GOVERNADOR': 'e036812a@educacao.sp.gov.br',
+  'E.E. PEDRO TAQUES': 'e003256a@educacao.sp.gov.br',
+  'E.E. RECANTO VERDE SOL': 'e267983a@educacao.sp.gov.br',
+  'E.E. RITA PINTO DE ARAUJO': 'e003323a@educacao.sp.gov.br',
+  'E.E. ROCCA DORDALL': 'e037060a@educacao.sp.gov.br',
+  'E.E. ROQUE THEOPHILO': 'e268276a@educacao.sp.gov.br',
+  'E.E. ROSA PARKS': 'e011790a@educacao.sp.gov.br',
+  'E.E. RUY DE MELLO JUNQUEIRA': 'e920277a@educacao.sp.gov.br',
+  'E.E. SALIM FARAH MALUF': 'e044325a@educacao.sp.gov.br',
+  'E.E. SALVADOR ALLENDE GOSSENS': 'e906967a@educacao.sp.gov.br',
+  'E.E. SATURNINO PEREIRA': 'e909185a@educacao.sp.gov.br',
+  'E.E. SEBASTIÃO FARIAS ZIMBRES': 'e003268a@educacao.sp.gov.br',
+  'E.E. SERGIO ESTANISTLAU DE CAMARGO': 'e914712a@educacao.sp.gov.br',
+  'E.E. SERGIO ROCHA KIEHL': 'e916785a@educacao.sp.gov.br',
+  'E.E. SILVANA EVANGELISTA': 'e923278a@educacao.sp.gov.br',
+  'E.E. SIMÃO MATHIAS': 'e916742a@educacao.sp.gov.br',
+  'E.E. SUMIE IWATA': 'e909129a@educacao.sp.gov.br',
+  'E.E. VILA BELA': 'e923047a@educacao.sp.gov.br',
+  'E.E. YERVANT KISSAJIKIAN': 'e906207a@educacao.sp.gov.br',
+  'E.E. ZÍPORA RUBISTEIN': 'e914721a@educacao.sp.gov.br'
+};
+
 // ==================== ROTEAMENTO ====================
 function doGet(e) {
   const pagina = e.parameter.pagina
@@ -248,12 +343,21 @@ function getOrCreateSheetChamados() {
     sheet.appendRow([
       'ID', 'Timestamp', 'Unidade', 'Solicitante', 'Função', 'Tipo',
       'Descrição', 'Urgência', 'Anexo', 'Status', 'Responsável',
-      'Última Atualização', 'Histórico', 'Técnico Resolução'
+      'Última Atualização', 'Histórico', 'Técnico Resolução', 'Email'
     ]);
     sheet.setFrozenRows(1);
   }
   garantirColunaTecnicoResolucao(sheet);
+  garantirColunaEmail(sheet);
   return sheet;
+}
+
+function garantirColunaEmail(sheet) {
+  const ultimaColuna = sheet.getLastColumn();
+  const header = sheet.getRange(1, 1, 1, ultimaColuna).getValues()[0];
+  if (header.indexOf('Email') === -1) {
+    sheet.getRange(1, ultimaColuna + 1).setValue('Email');
+  }
 }
 
 function garantirColunaTecnicoResolucao(sheet) {
@@ -302,6 +406,45 @@ function getMapaTecnicos() {
 
 function getTecnicos() {
   return TECNICOS;
+}
+
+function getMapaEmails() {
+  const mapa = {};
+  Object.keys(LISTA_ESCOLAS_EMAILS).forEach(escola => {
+    const email = LISTA_ESCOLAS_EMAILS[escola];
+    const chave = normalizarNomeEscola(escola);
+    if (chave && email) mapa[chave] = { nome: escola, email: email };
+  });
+  return mapa;
+}
+
+/**
+ * Retorna a lista de e-mails de contato de uma escola.
+ * Escolas com nome composto (separadas por "/") retornam um e-mail por escola,
+ * cada um com seu nome de identificação.
+ * @param {string} escola - Nome da escola (como aparece no chamado).
+ * @returns {Array<{nome:string, email:string}>}
+ */
+function getEmailsContato(escola) {
+  const nome = String(escola || '').trim();
+  if (!nome) return [];
+  const mapa = getMapaEmails();
+
+  const chave = normalizarNomeEscola(nome);
+  if (mapa[chave]) return [mapa[chave]];
+
+  if (nome.includes('/')) {
+    const resultado = [];
+    nome.split('/').forEach(parte => {
+      const p = parte.trim();
+      if (!p) return;
+      const pChave = normalizarNomeEscola(p);
+      if (mapa[pChave]) resultado.push(mapa[pChave]);
+    });
+    return resultado;
+  }
+
+  return [];
 }
 
 function gerarProtocolo(sheet) {
@@ -795,6 +938,7 @@ function getChamadosMatriz() {
       const tecnico = mapaTecnicos[escolaNormalizada] || '';
       obj.TecnicoSetor = tecnico;
       obj.Inventario = inventario || 'Não informado';
+      obj.EmailsContato = getEmailsContato(obj.Unidade);
       mapaPorConteudo[chave] = obj;
     }
   });
@@ -1029,10 +1173,72 @@ function atualizarStatusChamado(protocolo, novoStatus, responsavel, tecnicoResol
       if (tecnicoResolucao) entradaHistorico += ` (técnico: ${tecnicoResolucao})`;
       sheet.getRange(i + 1, 13).setValue((`${historicoAtual}\n${entradaHistorico}`).trim());
 
+      const statusAnterior = dados[i][9];
+      if (String(novoStatus).trim().toUpperCase() === 'RESOLVIDO' && String(statusAnterior).trim().toUpperCase() !== 'RESOLVIDO') {
+        notificarChamadoConcluido(cabecalho, dados[i]);
+      }
+
       return { sucesso: true };
     }
   }
   return { sucesso: false, mensagem: 'Protocolo não encontrado.' };
+}
+
+function notificarChamadoConcluido(cabecalho, linha) {
+  const idxUnidade = cabecalho.indexOf('Unidade');
+  const idxSolicitante = cabecalho.indexOf('Solicitante');
+  const idxTipo = cabecalho.indexOf('Tipo');
+  const idxDescricao = cabecalho.indexOf('Descrição');
+  const idxEmail = cabecalho.indexOf('Email');
+
+  const protocolo = linha[0] || '';
+  const unidade = idxUnidade !== -1 ? linha[idxUnidade] : '';
+  const solicitante = idxSolicitante !== -1 ? linha[idxSolicitante] : '';
+  const tipo = idxTipo !== -1 ? linha[idxTipo] : '';
+  const descricao = idxDescricao !== -1 ? linha[idxDescricao] : '';
+
+  let destinatarios = getEmailsContato(unidade);
+
+  if (destinatarios.length === 0 && idxEmail !== -1) {
+    const emailForm = String(linha[idxEmail] || '').trim();
+    if (emailForm) destinatarios = [{ nome: solicitante, email: emailForm }];
+  }
+
+  if (destinatarios.length === 0) {
+    Logger.log('Nenhum e-mail de contato para notificar conclusão do chamado ' + protocolo);
+    return;
+  }
+
+  const assunto = `Chamado concluído — ${protocolo} (${unidade})`;
+  const textoAlternativoBase = `Seu chamado foi concluído.\n\nProtocolo: ${protocolo}\nUnidade: ${unidade}\nSolicitante: ${solicitante}\nTipo: ${tipo}\n\nObrigado por entrar em contato com o SETEC — URE Leste 3.`;
+
+  destinatarios.forEach(dest => {
+    const corpoHtml = `
+      <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 28px; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px;">
+        <div style="display: inline-block; background: #ecfdf5; color: #065f46; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 20px; margin-bottom: 14px;">Chamado concluído</div>
+        <h2 style="font-size: 18px; color: #111827; margin: 0 0 4px;">Seu chamado foi resolvido</h2>
+        <p style="font-family: 'Courier New', monospace; font-size: 13px; color: #6b7280; margin: 0 0 20px;">${protocolo}</p>
+        <table style="width: 100%; font-size: 14px; color: #374151; border-collapse: collapse;">
+          <tr><td style="padding: 6px 0; color: #9ca3af; width: 110px;">Unidade</td><td style="padding: 6px 0;">${unidade}</td></tr>
+          <tr><td style="padding: 6px 0; color: #9ca3af;">Solicitante</td><td style="padding: 6px 0;">${solicitante}</td></tr>
+          <tr><td style="padding: 6px 0; color: #9ca3af;">Tipo</td><td style="padding: 6px 0;">${tipo}</td></tr>
+          <tr><td style="padding: 6px 0; color: #9ca3af; vertical-align: top;">Descrição</td><td style="padding: 6px 0;">${descricao}</td></tr>
+        </table>
+        <p style="font-size: 12.5px; color: #9ca3af; margin-top: 22px;">Agradecemos o contato. Em caso de dúvidas, fale conosco pelo e-mail lt3.setec@educacao.sp.gov.br.</p>
+      </div>`;
+
+    try {
+      MailApp.sendEmail({
+        to: dest.email,
+        subject: assunto,
+        body: textoAlternativoBase,
+        htmlBody: corpoHtml,
+        name: 'Sistema de Chamados — URE Leste 3'
+      });
+    } catch (e) {
+      Logger.log('Erro ao enviar e-mail de conclusão para ' + dest.email + ': ' + e.message);
+    }
+  });
 }
 
 function responderChamado(protocolo, textoResposta, responsavel) {
@@ -1083,6 +1289,12 @@ function atualizarChamadosEmLote(payload) {
       if (tecnicoResolucao) entrada += ` (técnico: ${tecnicoResolucao})`;
       if (resposta) entrada += `\n[${agora.toLocaleString('pt-BR')}] ${responsavel}: ${resposta}`;
       sheet.getRange(i + 1, idxHistorico + 1).setValue((historicoAtual + '\n' + entrada).trim());
+
+      const statusAnterior = dados[i][idxStatus];
+      if (String(novoStatus).trim().toUpperCase() === 'RESOLVIDO' && String(statusAnterior).trim().toUpperCase() !== 'RESOLVIDO') {
+        notificarChamadoConcluido(cabecalho, dados[i]);
+      }
+
       atualizados++;
     }
   }
@@ -1137,6 +1349,8 @@ function criarChamado(payload) {
 
   const tecnicoSetor = getTecnicoPorEscola(payload.unidade);
 
+  const emailContato = (payload.emailSolic || payload.email || '').trim();
+
   sheet.appendRow([
     protocolo,
     timestamp,
@@ -1151,14 +1365,52 @@ function criarChamado(payload) {
     '',
     timestamp,
     `Chamado criado via HTML Form em ${timestamp.toLocaleString('pt-BR')}`,
-    tecnicoSetor
+    tecnicoSetor,
+    emailContato
   ]);
 
   if (payload.urgencia === URGENCIA_ALTA) {
     notificarAltaPrioridadeHtml(protocolo, payload);
   }
 
+  notificarChamadoCriado(protocolo, payload);
+
   return protocolo;
+}
+
+function notificarChamadoCriado(protocolo, payload) {
+  const emailSolicitante = (payload.emailSolic || payload.email || '').trim();
+  if (!emailSolicitante) return;
+
+  const assunto = `Chamado registrado — ${protocolo}`;
+  const textoAlternativo = `Seu chamado foi registrado com sucesso.\n\nProtocolo: ${protocolo}\nUnidade: ${payload.unidade || ''}\nSolicitante: ${payload.solicitante || ''}\nTipo: ${payload.tipo || ''}\n\nGuarde o número de protocolo. Esta é uma mensagem automática, não responda.`;
+
+  const corpoHtml = `
+    <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 28px; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px;">
+      <div style="display: inline-block; background: #eff6ff; color: #1e40af; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 20px; margin-bottom: 14px;">Chamado registrado</div>
+      <h2 style="font-size: 18px; color: #111827; margin: 0 0 4px;">Recebemos seu chamado</h2>
+      <p style="font-family: 'Courier New', monospace; font-size: 13px; color: #6b7280; margin: 0 0 20px;">${protocolo}</p>
+      <table style="width: 100%; font-size: 14px; color: #374151; border-collapse: collapse;">
+        <tr><td style="padding: 6px 0; color: #9ca3af; width: 110px;">Unidade</td><td style="padding: 6px 0;">${payload.unidade || ''}</td></tr>
+        <tr><td style="padding: 6px 0; color: #9ca3af;">Solicitante</td><td style="padding: 6px 0;">${payload.solicitante || ''}</td></tr>
+        <tr><td style="padding: 6px 0; color: #9ca3af;">Tipo</td><td style="padding: 6px 0;">${payload.tipo || ''}</td></tr>
+        <tr><td style="padding: 6px 0; color: #9ca3af; vertical-align: top;">Descrição</td><td style="padding: 6px 0;">${payload.descricao || ''}</td></tr>
+      </table>
+      <p style="font-size: 12.5px; color: #9ca3af; margin-top: 22px;">Guarde o protocolo acima. Esta é uma mensagem automática, por favor não responda.</p>
+    </div>`;
+
+  try {
+    MailApp.sendEmail({
+      to: emailSolicitante,
+      subject: assunto,
+      body: textoAlternativo,
+      htmlBody: corpoHtml,
+      name: 'Sistema de Chamados — URE Leste 3',
+      noReply: true
+    });
+  } catch (e) {
+    Logger.log('Erro ao enviar e-mail de confirmação para ' + emailSolicitante + ': ' + e.message);
+  }
 }
 
 function obterOuCriarPastaAnexos() {
@@ -1528,6 +1780,7 @@ function getChamadosFiltrados(token) {
       const tecnico = mapaTecnicos[escolaNormalizada] || '';
       obj.TecnicoSetor = tecnico;
       obj.Inventario = mapaInventario[escolaNormalizada] || 'Não informado';
+      obj.EmailsContato = getEmailsContato(obj.Unidade);
       mapaPorConteudo[chave] = obj;
     }
   });

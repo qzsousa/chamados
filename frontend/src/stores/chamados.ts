@@ -52,6 +52,11 @@ export const useChamadosStore = defineStore('chamados', () => {
     return data
   }
 
+  async function deletar(id: string) {
+    await api.delete(`/chamados/${id}`)
+    lista.value = lista.value.filter((c: Chamado) => c.id !== id)
+  }
+
   async function atualizarLote(payload: BatchUpdateChamados) {
     const { data } = await api.patch<{ atualizados: number }>('/chamados/batch', payload)
     await carregar()
@@ -61,6 +66,12 @@ export const useChamadosStore = defineStore('chamados', () => {
   async function deletarLote(payload: BatchDeleteChamados) {
     const { data } = await api.delete<{ removidos: number }>('/chamados/batch', { data: payload })
     await carregar()
+    return data
+  }
+
+  async function deletar(id: string) {
+    const { data } = await api.delete<{ success: boolean }>(`/chamados/${id}`)
+    lista.value = lista.value.filter((c) => c.id !== id)
     return data
   }
 
@@ -94,7 +105,7 @@ export const useChamadosStore = defineStore('chamados', () => {
     stats.value = data
   }
 
-  return {
+return {
     lista,
     filtros,
     loading,
@@ -109,6 +120,7 @@ export const useChamadosStore = defineStore('chamados', () => {
     responder,
     atualizarLote,
     deletarLote,
+    deletar,
     carregarMatriz,
     carregarFiltrado,
     carregarStats

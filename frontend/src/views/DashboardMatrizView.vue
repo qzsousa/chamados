@@ -66,9 +66,9 @@
           <div class="table-container">
             <div class="table-wrapper">
               <table class="table">
-                <thead><tr><th>Protocolo</th><th>Urgência</th><th>Unidade</th><th>Categoria</th><th>Descrição</th><th>Técnico</th><th>Inventário</th><th>Status</th><th>Aberto</th></tr></thead>
+                <thead><tr><th>Protocolo</th><th>Urgência</th><th>Unidade</th><th>Categoria</th><th>Descrição</th><th>Técnico</th><th>Inventário</th><th>Status</th><th>Aberto</th><th>Ações</th></tr></thead>
                 <tbody>
-                  <tr v-for="c in chamadosFiltrados" :key="c.id" @click="abrirModal(c)" class="linha-chamado">
+                  <tr v-for="c in chamadosFiltrados" :key="c.id" class="linha-chamado">
                     <td class="cell-protocolo">{{ c.protocolo }}</td>
                     <td><span class="cell-urgency" :class="classeUrgencia(c.urgencia)">{{ c.urgencia.split(' ')[0] }}</span></td>
                     <td>{{ truncar(c.unidade, 30) }}</td>
@@ -78,8 +78,13 @@
                     <td class="text-center"><span class="inventario-badge" :class="classeInventario(c.inventarioStatus)">{{ c.inventarioStatus || '—' }}</span></td>
                     <td class="text-center"><span class="status-badge" :class="classeStatus(c.status)">{{ c.status }}</span></td>
                     <td class="text-right" :class="{ critico: isCritico(c) }">{{ tempoDecorrido(c.timestamp) }}</td>
+                    <td class="text-center">
+                      <button class="btn-danger" @click.stop="confirmarExcluir(c)" title="Excluir chamado">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                      </button>
+                    </td>
                   </tr>
-                  <tr v-if="chamadosFiltrados.length === 0"><td colspan="9" class="text-center" style="padding: 48px 20px; color: var(--text-muted);">Nenhum chamado encontrado</td></tr>
+                  <tr v-if="chamadosFiltrados.length === 0"><td colspan="10" class="text-center" style="padding: 48px 20px; color: var(--text-muted);">Nenhum chamado encontrado</td></tr>
                 </tbody>
               </table>
             </div>
@@ -310,6 +315,16 @@ async function salvarStatus(){
 }
 
 function copiarChamado(){if(!chamadoAtual.value)return;const d=chamadoAtual.value;const txt=`PROTOCOLO: ${d.protocolo}\nUNIDADE: ${d.unidade}\nSOLICITANTE: ${d.solicitante}\nCARGO: ${d.funcao||'—'}\nTIPO: ${d.tipo}\nURGÊNCIA: ${d.urgencia}\nSTATUS: ${d.status}\nTÉCNICO: ${d.tecnicoSetor||'—'}\nINVENTÁRIO: ${d.inventarioStatus||'—'}\nABERTO: ${formatDate(d.timestamp)}\nDESCRIÇÃO:\n${d.descricao||'—'}`;navigator.clipboard.writeText(txt)}
+
+async function confirmarExcluir(c: any){
+  if(!confirm(`Tem certeza que deseja excluir o chamado ${c.protocolo}?`)) return
+  try {
+    await chamados.deletar(c.id)
+    ui.showToast('success', 'Chamado excluído com sucesso')
+  } catch (err: any) {
+    ui.showToast('error', err.response?.data?.message || 'Erro ao excluir chamado')
+  }
+}
 
 function classeUrgencia(u:string){if(u.startsWith('Alta'))return'urgency-critica';if(u.startsWith('Média'))return'urgency-media';return'urgency-baixa'}
 function classeUrgenciaBadge(u:string){if(u.startsWith('Alta'))return'urg-pill-alta';if(u.startsWith('Média'))return'urg-pill-media';return'urg-pill-baixa'}

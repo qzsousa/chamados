@@ -312,6 +312,45 @@ router.patch('/batch', authMiddleware, requireRole('ADMIN', 'TECNICO'), async (r
   }
 })
 
+router.delete('/:id', authMiddleware, requireRole('ADMIN'), async (req: AuthenticatedRequest, res) => {
+  try {
+    await prisma.chamado.delete({ where: { id: req.params.id } })
+    return res.json({ removido: true })
+  } catch (err) {
+    if (err instanceof ZodError) {
+      return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: err.flatten().fieldErrors })
+    }
+    throw err
+  }
+})
+
+router.delete('/:id', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GESTOR'), async (req: AuthenticatedRequest, res) => {
+  try {
+    const chamado = await prisma.chamado.findUnique({ where: { id: req.params.id } })
+    if (!chamado) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'Chamado não encontrado' })
+    }
+
+    if (req.userRecord && req.userRecord.nivel !== 'ADMIN') {
+      const canDelete =
+        req.userRecord.nivel === 'TECNICO' && (chamado.tecnicoSetor === req.userRecord.filial || chamado.responsavel === req.userRecord.nome) ||
+        (req.userRecord.nivel === 'GESTOR') && chamado.unidade === req.userRecord.filial
+
+      if (!canDelete) {
+        return res.status(403).json({ error: 'FORBIDDEN', message: 'Sem permissão para excluir este chamado' })
+      }
+    }
+
+    await prisma.chamado.delete({ where: { id: req.params.id } })
+    return res.json({ success: true })
+  } catch (err) {
+    if (err instanceof ZodError) {
+      return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: err.flatten().fieldErrors })
+    }
+    throw err
+  }
+})
+
 router.delete('/batch', authMiddleware, requireRole('ADMIN'), async (req: AuthenticatedRequest, res) => {
   try {
     const { ids } = BatchDeleteChamadosSchema.parse(req.body)
