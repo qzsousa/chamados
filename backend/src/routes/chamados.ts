@@ -19,9 +19,6 @@ function getTecnicoSetor(unidade: string): string {
   return mapa[chave] || ''
 }
 
-// sempre ignorar chamados marcados como excluídos
-const filtroExcluido = { excluido: false }
-
 async function getInventarioStatus(unidade: string): Promise<string | null> {
   const mapa = await getMapaInventario()
   const chave = normalizarNomeEscola(unidade)
