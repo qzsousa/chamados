@@ -68,7 +68,7 @@
               <table class="table">
                 <thead><tr><th>Protocolo</th><th>Urgência</th><th>Unidade</th><th>Categoria</th><th>Descrição</th><th>Técnico</th><th>Inventário</th><th>Status</th><th>Aberto</th><th>Ações</th></tr></thead>
                 <tbody>
-                  <tr v-for="c in chamadosFiltrados" :key="c.id" class="linha-chamado">
+                  <tr v-for="c in chamadosFiltrados" :key="c.id" @click="abrirModal(c)" class="linha-chamado">
                     <td class="cell-protocolo">{{ c.protocolo }}</td>
                     <td><span class="cell-urgency" :class="classeUrgencia(c.urgencia)">{{ c.urgencia.split(' ')[0] }}</span></td>
                     <td>{{ truncar(c.unidade, 30) }}</td>
@@ -530,6 +530,8 @@ onUnmounted(() => {
   .sidebar-left.open{transform:translateX(0)}
 }
 /* End of styles */
-</style> 
-  
+</style>
+ 
+ 
+ 
  
