@@ -127,7 +127,7 @@
           <div class="campo"><label>Urgência *</label><div class="urgs"><button v-for="u in urgenciaOptions" :key="u" type="button" class="urg" :class="{ sel: form.urgencia === u }" @click="form.urgencia = u">{{ u }}</button></div><p v-if="errors.urgencia" class="etxt">{{ errors.urgencia }}</p></div>
           <div class="campo"><label for="id-anexo">Anexo <span class="opc">(opcional — print ou foto do problema)</span></label><input id="id-anexo" type="file" accept="image/*,.pdf" @change="handleAnexo" /><p v-if="errors.anexo" class="etxt">{{ errors.anexo }}</p></div>
         </Card>
-        <div class="acoes"><Button variant="secondary" @click="voltarQ">← Voltar</Button><Button variant="primary" @click="enviar" :loading="submitting">Enviar chamado</Button></div>
+        <div class="acoes"><Button variant="secondary" @click="voltarQ">← Voltar</Button><Button variant="primary" @click="enviar" :loading="submitting" :disabled="submitting">Enviar chamado</Button></div>
       </section>
 
       <section v-show="currentView === 'success'" class="view active"><div class="suc"><div class="selo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 12l5 5L20 6"/></svg></div><h2>Chamado registrado!</h2><p>Seu protocolo é:</p><div class="protocolo">{{ protocolo }}</div><p>Guarde este número. A equipe do SETEC foi notificada e entrará em contato.</p><Button variant="primary" @click="voltarHome" class="btn-av">Abrir outro chamado</Button></div></section>
@@ -213,7 +213,7 @@ const modelosEquip = ref<Array<{value: string, label: string}>>([])
 const customMarca = ref('')
 const customModelo = ref('')
 let equipSelecionado: any = null
-let submitting = false
+const submitting = ref(false)
 
 const OUTRO = '__OUTRO__'
 
@@ -301,7 +301,7 @@ const resumoTags=computed(()=>{const tags:string[]=[];if(activeCategory.value)ta
 
 function handleAnexo(e:Event){const t=e.target as HTMLInputElement;if(t.files&&t.files[0]){form.anexo=t.files[0];errors.anexo=''}}
 
-async function enviar(){errors.nome=form.nome?'':'Informe seu nome';errors.cargo=form.cargo?'':'Selecione seu cargo';errors.email=form.email&&form.email.includes('@')?'':'E-mail inválido';errors.escola=form.escola?'':'Selecione a escola';errors.urgencia=form.urgencia?'':'Selecione a urgência';if(errors.nome||errors.cargo||errors.email||errors.escola||errors.urgencia)return;submitting=true;try{const anexoBase64=form.anexo?await fileToBase64(form.anexo):undefined;const result=await chamados.criar({unidade:form.escola,solicitante:form.nome,funcao:form.cargo,tipo:activeCategory.value?.titulo||'Outro',descricao:form.descAdicional||buildDescricao(),urgencia:form.urgencia,email:form.email,anexoBase64,anexoNome:form.anexo?.name,anexoTipo:form.anexo?.type});protocolo.value=result.protocolo;currentView.value='success'}catch(err:any){ui.showToast('error',err.response?.data?.message||'Erro ao enviar chamado')}finally{submitting=false}}
+async function enviar(){if(submitting.value)return;errors.nome=form.nome?'':'Informe seu nome';errors.cargo=form.cargo?'':'Selecione seu cargo';errors.email=form.email&&form.email.includes('@')?'':'E-mail inválido';errors.escola=form.escola?'':'Selecione a escola';errors.urgencia=form.urgencia?'':'Selecione a urgência';if(errors.nome||errors.cargo||errors.email||errors.escola||errors.urgencia)return;submitting.value=true;try{const anexoBase64=form.anexo?await fileToBase64(form.anexo):undefined;const result=await chamados.criar({unidade:form.escola,solicitante:form.nome,funcao:form.cargo,tipo:activeCategory.value?.titulo||'Outro',descricao:form.descAdicional||buildDescricao(),urgencia:form.urgencia,email:form.email,anexoBase64,anexoNome:form.anexo?.name,anexoTipo:form.anexo?.type});protocolo.value=result.protocolo;currentView.value='success'}catch(err:any){ui.showToast('error',err.response?.data?.message||'Erro ao enviar chamado')}finally{submitting.value=false}}
 
 function buildDescricao(){const parts:string[]=[];if(form.rede)parts.push(`Rede: ${form.rede}`);if(form.energia)parts.push(`Energia: ${form.energia}`);if(form.locais)parts.push(`Locais: ${form.locais}`);if(form.equip)parts.push(`Equip: ${form.equip}`);if(form.tipoFisico)parts.push(`Físico: ${form.tipoFisico}`);if(form.sistema)parts.push(`Sistema: ${form.sistema}`);if(form.outro)parts.push(`Outro: ${form.outro}`);if(form.pnRg)parts.push(`RG: ${form.pnRg}`);if(form.pnNome)parts.push(`Nome: ${form.pnNome}`);if(form.pnCie)parts.push(`CIE: ${form.pnCie}`);if(form.pnAtrib)parts.push(`Atrib: ${form.pnAtrib}`);if(form.emCie)parts.push(`CIE: ${form.emCie}`);if(form.emEscola)parts.push(`Esc: ${form.emEscola}`);if(form.emLogin)parts.push(`Login: ${form.emLogin}`);if(form.emEmail)parts.push(`Email: ${form.emEmail}`);if(form.categoria)parts.push(`Cat: ${form.categoria}`);if(form.marca)parts.push(`Marca: ${form.marca}`);if(form.modelo)parts.push(`Mod: ${form.modelo}`);return parts.join(' | ')}
 
