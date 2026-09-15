@@ -25,6 +25,12 @@ const routes: RouteRecordRaw[] = [
     meta: { public: true }
   },
   {
+    path: '/dirigente',
+    name: 'dirigente',
+    component: () => import('@/views/DashboardDirigenteView.vue'),
+    meta: { public: true }
+  },
+  {
     path: '/chamado/novo',
     name: 'novo-chamado',
     component: () => import('@/views/FormsView.vue'),
