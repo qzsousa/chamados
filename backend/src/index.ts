@@ -42,6 +42,11 @@ if (env.SENTRY_DSN) {
 
 const app = express()
 
+// Render roda atrás de load balancer (sempre envia X-Forwarded-For).
+// Sem isso, o express-rate-limit lança ERR_ERL_UNEXPECTED_X_FORWARDED_FOR
+// e cookies secure não são identificados corretamente.
+app.set('trust proxy', 1)
+
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' }
 }))
