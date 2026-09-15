@@ -105,8 +105,10 @@ app.get('/health', async (_req, res) => {
   }
 })
 
-app.use('/api/auth', authLimiter, authRoutes)
+// Auth: rate-limit apenas login e refresh (gerar senha e me passam pelo generalLimiter)
+app.use('/api/auth/login', authLimiter)
 app.use('/api/auth/refresh', refreshLimiter)
+app.use('/api/auth', authRoutes)
 
 // Public endpoints para cascata do Forms (sem auth)
 app.get('/api/equipamentos/categorias', async (_req, res) => {

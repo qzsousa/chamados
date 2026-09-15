@@ -76,8 +76,14 @@ api.interceptors.response.use(
         return api(originalRequest)
       } catch (err) {
         processQueue(null, err as Error)
-        const authStore = getAuthStore()
-        authStore.logout()
+        // Só desloga quando o refresh é RECUSADO de fato (401/403).
+        // Erros de rede/5xx (cold start do Render, deploy em andamento)
+        // não devem derrubar a sessão do usuário.
+        const status = (err as AxiosError).response?.status
+        if (status === 401 || status === 403) {
+          const authStore = getAuthStore()
+          authStore.logout()
+        }
         return Promise.reject(err)
       } finally {
         isRefreshing = false

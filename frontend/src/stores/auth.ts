@@ -16,6 +16,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   function setTokens(newAccessToken: string, newRefreshToken: string) {
     accessToken.value = newAccessToken
+    localStorage.setItem('accessToken', newAccessToken)
     if (newRefreshToken) localStorage.setItem('refreshToken', newRefreshToken)
   }
 
