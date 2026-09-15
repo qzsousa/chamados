@@ -22,12 +22,16 @@ vi.mock('../config/prisma', () => ({
   }
 }))
 
-vi.mock('../utils/tokens', () => ({
-  passwordPolicy: {
-    generateTemp: vi.fn(() => 'TempPass123!'),
-    validate: vi.fn(() => ({ valid: true, errors: [] }))
+vi.mock('../utils/tokens', async (importOriginal) => {
+  const original = await importOriginal<Record<string, unknown>>()
+  return {
+    ...original,
+    passwordPolicy: {
+      generateTemp: vi.fn(() => 'TempPass123!'),
+      validate: vi.fn(() => ({ valid: true, errors: [] }))
+    }
   }
-}))
+})
 
 vi.mock('bcryptjs', () => ({
   default: {

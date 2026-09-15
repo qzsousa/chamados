@@ -90,16 +90,17 @@ router.post('/refresh', async (req, res) => {
       return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Refresh token inválido' })
     }
 
+    // O tokenHash é gravado com SHA-256 (hashToken) no login; a validação
+    // precisa usar o mesmo hash — bcrypt.compare nunca bateria com SHA-256.
     const storedToken = await prisma.refreshToken.findFirst({
-      where: { usuarioId: payload.sub }
+      where: { usuarioId: payload.sub, tokenHash: hashToken(refreshToken) }
     })
 
     if (!storedToken) {
       return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Sessão inválida' })
     }
 
-    const tokenValid = await bcrypt.compare(refreshToken, storedToken.tokenHash)
-    if (!tokenValid || storedToken.expiraEm < new Date()) {
+    if (storedToken.expiraEm < new Date()) {
       await prisma.refreshToken.delete({ where: { id: storedToken.id } })
       return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Refresh token expirado ou inválido' })
     }
