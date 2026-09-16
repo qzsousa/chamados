@@ -1,5 +1,5 @@
 <template>
-  <button :class="buttonClasses" :disabled="disabled" :type="type" @click="$emit('click', $event)">
+  <button :class="buttonClasses" :disabled="disabled" :type="type" @click="emit('click', $event)">
     <slot v-if="!loading">
       <component v-if="icon" :is="icon" class="btn-icon" />
       <span v-if="$slots.default"><slot /></span>
@@ -22,6 +22,11 @@ interface Props {
   type?: 'button' | 'submit' | 'reset'
   icon?: any
 }
+
+// Declarar 'click' é obrigatório: sem isso o listener do pai cai como listener
+// nativo no <button> raiz (fallthrough) E o emit interno dispara também,
+// executando o handler do pai duas vezes por clique.
+const emit = defineEmits<{ (e: 'click', event: MouseEvent): void }>()
 
 const props = withDefaults(defineProps<Props>(), {
   variant: 'primary',

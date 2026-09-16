@@ -1,6 +1,6 @@
 <template>
   <div class="toast-container" role="region" aria-live="polite" aria-label="Notificações">
-    <div v-for="toast in toasts" :key="toast.id" :class="['toast', toast.type]" @click="remove(toast.id)">
+    <div v-for="toast in toasts" :key="toast.id" :class="['toast', toast.type, { persistent: toast.persistent }]" @click="!toast.persistent && remove(toast.id)">
       <div class="toast-icon">
         <svg v-if="toast.type === 'success'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
         <svg v-else-if="toast.type === 'error'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
@@ -52,6 +52,11 @@ const remove = ui.removeToast
   from { opacity: 0; transform: translateX(20px); }
   to { opacity: 1; transform: translateX(0); }
 }
+
+/* Toast persistente: não fecha no clique do corpo (permite selecionar/copiar),
+   só fecha no botão X */
+.toast.persistent { cursor: default; }
+.toast.persistent .toast-message { user-select: text; cursor: text; }
 
 .toast.success { border-left: 3px solid var(--accent-secondary); }
 .toast.error { border-left: 3px solid var(--accent-danger); }

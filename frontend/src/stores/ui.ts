@@ -5,6 +5,7 @@ export interface Toast {
   id: string
   type: 'success' | 'error' | 'info' | 'warning'
   message: string
+  persistent?: boolean
 }
 
 export const useUIStore = defineStore('ui', () => {
@@ -12,10 +13,10 @@ export const useUIStore = defineStore('ui', () => {
   const toasts = ref<Toast[]>([])
   const modals = ref<Record<string, boolean>>({})
 
-  function showToast(type: Toast['type'], message: string) {
+  function showToast(type: Toast['type'], message: string, options?: { persistent?: boolean }) {
     const id = `toast_${Date.now()}_${Math.random().toString(36).slice(2)}`
-    toasts.value.push({ id, type, message })
-    setTimeout(() => removeToast(id), 4000)
+    toasts.value.push({ id, type, message, persistent: options?.persistent === true })
+    if (!options?.persistent) setTimeout(() => removeToast(id), 4000)
   }
 
   function removeToast(id: string) {

@@ -47,7 +47,7 @@
                 <div class="acoes-cell">
                   <Button variant="ghost" size="sm" @click="abrirModalEditar(u)" title="Editar"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5a2.121 2.121 0 0 1 3 3z"/></svg></Button>
                   <Button variant="ghost" size="sm" class="btn-danger" @click="confirmarDesativar(u)" title="Desativar"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></Button>
-                  <Button variant="ghost" size="sm" class="btn-warning" @click="gerarSenhaTemporaria(u)" title="Gerar senha temporária"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></Button>
+                  <Button variant="ghost" size="sm" class="btn-warning" :disabled="gerandoSenha" @click="gerarSenhaTemporaria(u)" title="Gerar senha temporária"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></Button>
                 </div>
               </td>
             </tr>
@@ -105,6 +105,7 @@ const ui = useUIStore()
 const modalAberto = ref(false)
 const editando = ref(false)
 const salvando = ref(false)
+const gerandoSenha = ref(false)
 const senhaTemporaria = ref('')
 const usuarioId = ref('')
 
@@ -215,11 +216,15 @@ async function confirmarDesativar(u:any){
 }
 
 async function gerarSenhaTemporaria(u:any){
+  if (gerandoSenha.value) return  // evita clique duplo gerar 2 senhas
+  gerandoSenha.value = true
   try{
     const {data} = await api.post('/auth/admin/gerar-senha-temporaria',{email:u.email})
-    ui.showToast('success',`Senha temporária gerada: ${data.senhaTemporaria}`)
+    ui.showToast('success',`Senha temporária de ${u.nome}: ${data.senhaTemporaria}`, { persistent: true })
   }catch(err:any){
     ui.showToast('error', err.response?.data?.message || 'Erro ao gerar senha')
+  }finally{
+    gerandoSenha.value = false
   }
 }
 
