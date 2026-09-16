@@ -2,7 +2,7 @@
   <div class="admin-usuarios">
     <header class="header">
       <div class="header-left">
-        <Button variant="ghost" size="sm" @click="router.push('/dashboard')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg></Button>
+        <Button variant="ghost" size="sm" @click="router.push('/matriz')" title="Voltar para a matriz"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg></Button>
         <h1>Administração de Usuários</h1>
       </div>
       <div class="header-right">
