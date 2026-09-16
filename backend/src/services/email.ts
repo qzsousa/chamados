@@ -23,25 +23,36 @@ function getSender() {
 }
 
 async function sendBrevoEmail(to: string, subject: string, text: string, html: string): Promise<void> {
-  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
-    method: 'POST',
-    headers: {
-      'api-key': env.BREVO_API_KEY!,
-      'content-type': 'application/json',
-      accept: 'application/json',
-    },
-    body: JSON.stringify({
-      sender: { name: 'SETEC URE Leste 3', email: 'chamadossetec@gmail.com' },
-      to: [{ email: to }],
-      subject,
-      htmlContent: html,
-      textContent: text,
-    }),
-  })
+  if (!env.BREVO_API_KEY) {
+    console.warn('[email] BREVO_API_KEY não configurada — envio ignorado')
+    return
+  }
 
-  if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`Brevo ${res.status}: ${err}`)
+  try {
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'api-key': env.BREVO_API_KEY!,
+        'content-type': 'application/json',
+        accept: 'application/json',
+      },
+      body: JSON.stringify({
+        sender: { name: 'SETEC URE Leste 3', email: 'chamadossetec@gmail.com' },
+        to: [{ email: to }],
+        subject,
+        htmlContent: html,
+        textContent: text,
+      }),
+    })
+
+    if (!res.ok) {
+      const err = await res.text()
+      console.error(`[email] Falha ao enviar para ${to}: Brevo ${res.status}: ${err}`)
+    }
+  } catch (err) {
+    // Nunca propagar exceção: falha de e-mail não deve derrubar a requisição
+    // (Express 4 + erro async não tratado = processo Node inteiro crasha)
+    console.error(`[email] Falha ao enviar para ${to}:`, err)
   }
 }
 

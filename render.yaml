@@ -36,6 +36,10 @@ services:
         value: 1HyfNcETaINc0ZKcvM0pUPqlv94gwkNlYlwIpvCBxV8o
       - key: GOOGLE_INVENTARIO_SHEETS_ID
         value: 1W9_Q8F6k0Ic7OG5dpgEIGbEzmJwjExv-S07gJptv9SY
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_SENDER_EMAIL
+        sync: false
       - key: SMTP_HOST
         sync: false
       - key: SMTP_PORT

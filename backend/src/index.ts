@@ -185,6 +185,17 @@ const server = app.listen(env.PORT, () => {
   logger.info(`🚀 Server running on port ${env.PORT} (${env.NODE_ENV})`)
 })
 
+// Rede de segurança: Express 4 não captura erros de handlers async.
+// Sem isso, qualquer exceção não tratada crasha o processo inteiro
+// (Render responde 502 enquanto a instância reinicia).
+process.on('unhandledRejection', (reason) => {
+  logger.error({ err: reason }, 'Unhandled rejection capturada — processo mantido vivo')
+})
+
+process.on('uncaughtException', (err) => {
+  logger.error({ err }, 'Uncaught exception capturada — processo mantido vivo')
+})
+
 // Sincronização automática de inventário (escolas + status)
 const SYNC_INTERVAL_MS = 6 * 60 * 60 * 1000
 async function autoSyncInventario() {
