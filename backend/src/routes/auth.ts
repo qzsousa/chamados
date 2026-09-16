@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs'
 import { prisma } from '../config/prisma'
 import { signAccessToken, signRefreshToken, hashToken, verifyRefreshToken } from '../utils/jwt'
 import { passwordPolicy } from '../utils/tokens'
-import { authMiddleware, AuthenticatedRequest, requireRole } from '../middleware/auth'
+import { authMiddleware, AuthenticatedRequest, requireRole, attachUserRecord } from '../middleware/auth'
 import { LoginRequestSchema, ChangePasswordSchema, GerarSenhaTemporariaSchema, LoginResponseSchema } from '@shared/api'
 import { ZodError } from 'zod'
 
@@ -229,7 +229,10 @@ router.post('/change-password', authMiddleware, async (req: AuthenticatedRequest
   }
 })
 
-router.post('/admin/gerar-senha-temporaria', authMiddleware, requireRole('ADMIN'), async (req: AuthenticatedRequest, res) => {
+// attachUserRecord é obrigatório aqui: rotas /api/auth são montadas ANTES do
+// app.use('/api', authMiddleware, attachUserRecord) global, então sem ele o
+// requireRole nunca vê req.userRecord e responde 401 "Usuário não autenticado".
+router.post('/admin/gerar-senha-temporaria', authMiddleware, attachUserRecord, requireRole('ADMIN'), async (req: AuthenticatedRequest, res) => {
   try {
     const { email } = GerarSenhaTemporariaSchema.parse(req.body)
 
