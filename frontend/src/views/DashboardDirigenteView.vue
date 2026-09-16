@@ -7,7 +7,7 @@
           <div class="divisor"></div>
           <div>
             <p class="topo-eyebrow">Unidade Regional de Ensino — Leste 3</p>
-            <h1 class="topo-titulo">Painel do Dirigente</h1>
+            <h1 class="topo-titulo">Painel do Setor</h1>
           </div>
         </div>
         <div class="topo-acoes">
