@@ -1,6 +1,6 @@
 import { Router, Response } from 'express'
 import { prisma } from '../config/prisma'
-import { authMiddleware, AuthenticatedRequest } from '../middleware/auth'
+import { authMiddleware, attachUserRecord, AuthenticatedRequest } from '../middleware/auth'
 import { DashboardKPIsSchema, DashboardMatrizResponseSchema, DashboardFiltradoResponseSchema } from '@shared/api'
 import { normalizarNomeEscola, getMapaTecnicos, getEmailsContato } from '../services/normalization'
 import { getMapaInventario } from '../services/migration'
@@ -74,7 +74,7 @@ router.get('/matriz', async (_req, res) => {
   }
 })
 
-router.get('/filtrado', authMiddleware, async (req: AuthenticatedRequest, res) => {
+router.get('/filtrado', authMiddleware, attachUserRecord, async (req: AuthenticatedRequest, res) => {
   try {
     const { chamados, kpis, mapaInventario } = await getDashboardData(
       req.userRecord?.filial,
@@ -135,7 +135,7 @@ router.get('/filtrado', authMiddleware, async (req: AuthenticatedRequest, res) =
   }
 })
 
-router.get('/stats', authMiddleware, async (req: AuthenticatedRequest, res) => {
+router.get('/stats', authMiddleware, attachUserRecord, async (req: AuthenticatedRequest, res) => {
   try {
     const where: any = {}
     if (req.userRecord && req.userRecord.nivel !== 'ADMIN') {

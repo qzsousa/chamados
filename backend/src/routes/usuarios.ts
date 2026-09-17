@@ -4,6 +4,7 @@ import { prisma } from '../config/prisma'
 import { authMiddleware, AuthenticatedRequest, requireRole } from '../middleware/auth'
 import { UserCreateSchema, UserUpdateSchema, UserWithTempPasswordSchema, PaginatedResponseSchema, UserSchema } from '@shared/api'
 import { passwordPolicy } from '../utils/tokens'
+import { syncUsuarioParaSce } from '../services/sceSync'
 import { ZodError } from 'zod'
 
 const router = Router()
@@ -71,6 +72,9 @@ router.post('/', authMiddleware, requireRole('ADMIN'), async (req: Authenticated
       select: { id: true, email: true, nome: true, nivel: true, filial: true, status: true, primeiroLogin: true, createdAt: true, updatedAt: true }
     })
 
+    // Mantém a tabela `usuarios` do SCE sincronizada (portal usa um login só)
+    syncUsuarioParaSce(user).catch(() => {})
+
     return res.status(201).json({ ...user, senhaTemporaria })
   } catch (err) {
     if (err instanceof ZodError) {
@@ -121,6 +125,8 @@ router.patch('/:id', authMiddleware, requireRole('ADMIN'), async (req: Authentic
       await prisma.refreshToken.deleteMany({ where: { usuarioId: updated.id } })
     }
 
+    syncUsuarioParaSce(updated).catch(() => {})
+
     return res.json(updated)
   } catch (err) {
     if (err instanceof ZodError) {
@@ -147,6 +153,8 @@ router.delete('/:id', authMiddleware, requireRole('ADMIN'), async (req: Authenti
     })
 
     await prisma.refreshToken.deleteMany({ where: { usuarioId: req.params.id } })
+
+    syncUsuarioParaSce({ ...user, status: 'INATIVO' }).catch(() => {})
 
     return res.json({ success: true })
   } catch (err) {
