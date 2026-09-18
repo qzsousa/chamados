@@ -11,7 +11,13 @@ async function getDashboardData(filtroFilial?: string, filtroNivel?: string) {
   const where: any = { excluido: false }
 
   if (filtroFilial && filtroNivel !== 'ADMIN') {
-    where.unidade = filtroFilial
+    // casamento tolerante: unidades geminadas ("E.E. A / E.E. B")
+    const partes = filtroFilial.split('/').map((p) => p.trim()).filter(Boolean)
+    where.OR = [
+      { unidade: filtroFilial },
+      { unidade: { contains: filtroFilial, mode: 'insensitive' } },
+      ...partes.map((p) => ({ unidade: { contains: p, mode: 'insensitive' } })),
+    ]
   }
 
   const [chamados, totalCount] = await Promise.all([
@@ -139,7 +145,14 @@ router.get('/stats', authMiddleware, attachUserRecord, async (req: Authenticated
   try {
     const where: any = {}
     if (req.userRecord && req.userRecord.nivel !== 'ADMIN') {
-      where.unidade = req.userRecord.filial
+      // match tolerante com unidades geminadas
+      const f = req.userRecord.filial
+      const partes = f.split('/').map((p: string) => p.trim()).filter(Boolean)
+      where.OR = [
+        { unidade: f },
+        { unidade: { contains: f, mode: 'insensitive' } },
+        ...partes.map((p: string) => ({ unidade: { contains: p, mode: 'insensitive' } })),
+      ]
     }
 
     const [total, abertos, andamento, comunicado, resolvidos, altaPrioridade] = await Promise.all([

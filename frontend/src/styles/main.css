@@ -16,6 +16,17 @@
   --accent-warning: #f59e0b;
   --accent-danger: #ef4444;
   --accent-purple: #a855f7;
+  /* Fonte única de identidade visual — status de chamado */
+  --status-aberto: #eab308;
+  --status-andamento: #3b82f6;
+  --status-comunicado: #f59e0b;
+  --status-resolvido: #10b981;
+  /* Fonte única de identidade visual — categorias de chamado */
+  --cat-rede: #38bdf8;
+  --cat-equipamento: #34d399;
+  --cat-sistema: #a78bfa;
+  --cat-email: #fb923c;
+  --cat-outro: #94a3b8;
   --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
   --shadow-md: 0 4px 6px rgba(0,0,0,0.3);
   --shadow-lg: 0 10px 15px rgba(0,0,0,0.3);
