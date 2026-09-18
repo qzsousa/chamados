@@ -4,12 +4,29 @@ import { prisma } from '../config/prisma'
 import { authMiddleware, AuthenticatedRequest, requireRole } from '../middleware/auth'
 import { UserCreateSchema, UserUpdateSchema, UserWithTempPasswordSchema, PaginatedResponseSchema, UserSchema } from '@shared/api'
 import { passwordPolicy } from '../utils/tokens'
+import { syncUsuarioParaSce } from '../services/sceSync'
 import { ZodError } from 'zod'
 
 const router = Router()
 const BCRYPT_COST = 12
 
-router.get('/', authMiddleware, requireRole('ADMIN'), async (req: AuthenticatedRequest, res) => {
+/** Limite de visualizadores ativos por unidade (regra vinda do SCE: gestor + 2). */
+const MAX_GESTORES_UNIDADE = 2
+
+/** ADMIN ou GESTOR (gestor fica restrito à própria filial nas regras abaixo). */
+function adminOuGestor(req: AuthenticatedRequest, res: Response, next: () => void): void {
+  if (!req.userRecord) {
+    res.status(401).json({ error: 'UNAUTHORIZED', message: 'Não autenticado' })
+    return
+  }
+  if (req.userRecord.nivel === 'ADMIN' || req.userRecord.nivel === 'GESTOR') {
+    next()
+    return
+  }
+  res.status(403).json({ error: 'FORBIDDEN', message: 'Apenas Administrador ou Gestor podem gerenciar usuários' })
+}
+
+router.get('/', authMiddleware, adminOuGestor, async (req: AuthenticatedRequest, res) => {
   try {
     const page = Math.max(1, parseInt(req.query.page as string) || 1)
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 20))
@@ -18,6 +35,9 @@ router.get('/', authMiddleware, requireRole('ADMIN'), async (req: AuthenticatedR
     const status = req.query.status as string
 
     const where: any = {}
+    if (req.userRecord?.nivel === 'GESTOR') {
+      where.filial = req.userRecord.filial
+    }
     if (search) {
       where.OR = [
         { email: { contains: search, mode: 'insensitive' } },
@@ -47,9 +67,25 @@ router.get('/', authMiddleware, requireRole('ADMIN'), async (req: AuthenticatedR
   }
 })
 
-router.post('/', authMiddleware, requireRole('ADMIN'), async (req: AuthenticatedRequest, res) => {
+router.post('/', authMiddleware, adminOuGestor, async (req: AuthenticatedRequest, res) => {
   try {
     const data = UserCreateSchema.parse(req.body)
+
+    // GESTOR cria apenas VISUALIZADOR da própria unidade, máx. 2 ativos além dele
+    if (req.userRecord?.nivel === 'GESTOR') {
+      data.nivel = 'VISUALIZADOR'
+      data.filial = req.userRecord.filial
+
+      const ativosNaUnidade = await prisma.usuario.count({
+        where: { filial: req.userRecord.filial, status: 'ATIVO' }
+      })
+      if (ativosNaUnidade >= MAX_GESTORES_UNIDADE + 1) {
+        return res.status(400).json({
+          error: 'VALIDATION_ERROR',
+          message: `Limite de ${MAX_GESTORES_UNIDADE} usuários por unidade atingido. Desative um usuário existente antes.`
+        })
+      }
+    }
 
     const existing = await prisma.usuario.findUnique({ where: { email: data.email.toLowerCase() } })
     if (existing) {
@@ -70,6 +106,9 @@ router.post('/', authMiddleware, requireRole('ADMIN'), async (req: Authenticated
       },
       select: { id: true, email: true, nome: true, nivel: true, filial: true, status: true, primeiroLogin: true, createdAt: true, updatedAt: true }
     })
+
+    // Mantém a tabela `usuarios` do SCE sincronizada (portal usa um login só)
+    syncUsuarioParaSce(user).catch(() => {})
 
     return res.status(201).json({ ...user, senhaTemporaria })
   } catch (err) {
@@ -97,7 +136,7 @@ router.get('/:id', authMiddleware, requireRole('ADMIN'), async (req: Authenticat
   }
 })
 
-router.patch('/:id', authMiddleware, requireRole('ADMIN'), async (req: AuthenticatedRequest, res) => {
+router.patch('/:id', authMiddleware, adminOuGestor, async (req: AuthenticatedRequest, res) => {
   try {
     const data = UserUpdateSchema.parse(req.body)
 
@@ -106,6 +145,16 @@ router.patch('/:id', authMiddleware, requireRole('ADMIN'), async (req: Authentic
       return res.status(404).json({ error: 'NOT_FOUND', message: 'Usuário não encontrado' })
     }
 
+    // GESTOR: só usuários da própria filial, sem mudar nível, e sem tocar ADMIN/outro GESTOR
+    if (req.userRecord?.nivel === 'GESTOR') {
+      const mesmaFilial = user.filial === req.userRecord.filial
+      const alvoRestrito = user.nivel === 'VISUALIZADOR'
+      if (!mesmaFilial || !alvoRestrito) {
+        return res.status(403).json({ error: 'FORBIDDEN', message: 'Gestores só podem editar visualizadores da própria unidade' })
+      }
+      data.nivel = undefined
+      data.filial = undefined
+    }
     const updated = await prisma.usuario.update({
       where: { id: req.params.id },
       data: {
@@ -121,6 +170,8 @@ router.patch('/:id', authMiddleware, requireRole('ADMIN'), async (req: Authentic
       await prisma.refreshToken.deleteMany({ where: { usuarioId: updated.id } })
     }
 
+    syncUsuarioParaSce(updated).catch(() => {})
+
     return res.json(updated)
   } catch (err) {
     if (err instanceof ZodError) {
@@ -130,7 +181,7 @@ router.patch('/:id', authMiddleware, requireRole('ADMIN'), async (req: Authentic
   }
 })
 
-router.delete('/:id', authMiddleware, requireRole('ADMIN'), async (req: AuthenticatedRequest, res) => {
+router.delete('/:id', authMiddleware, adminOuGestor, async (req: AuthenticatedRequest, res) => {
   try {
     const user = await prisma.usuario.findUnique({ where: { id: req.params.id } })
     if (!user) {
@@ -141,12 +192,21 @@ router.delete('/:id', authMiddleware, requireRole('ADMIN'), async (req: Authenti
       return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Não pode desativar a si mesmo' })
     }
 
+    // GESTOR: só visualizadores da própria filial
+    if (req.userRecord?.nivel === 'GESTOR') {
+      if (user.filial !== req.userRecord.filial || user.nivel !== 'VISUALIZADOR') {
+        return res.status(403).json({ error: 'FORBIDDEN', message: 'Gestores só podem desativar visualizadores da própria unidade' })
+      }
+    }
+
     await prisma.usuario.update({
       where: { id: req.params.id },
       data: { status: 'INATIVO' }
     })
 
     await prisma.refreshToken.deleteMany({ where: { usuarioId: req.params.id } })
+
+    syncUsuarioParaSce({ ...user, status: 'INATIVO' }).catch(() => {})
 
     return res.json({ success: true })
   } catch (err) {

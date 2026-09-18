@@ -31,6 +31,10 @@ const envSchema = z.object({
   BREVO_API_KEY: z.string().optional(),
   BREVO_SENDER_EMAIL: z.string().optional(),
 
+  // Sync de usuários para o SCE (sistema de equipamentos)
+  SCE_API_URL: z.string().url().optional(),
+  SCE_SYNC_KEY: z.string().optional(),
+
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info')
 })
 

@@ -261,9 +261,10 @@ function doGet(e) {
   const pagina = e.parameter.pagina
   const token = e.parameter.token || '';
 
+  // URL antiga do forms: exibe aviso de redirecionamento para o novo endereço
   if (pagina === 'forms'){
-  return HtmlService.createHtmlOutputFromFile('FormsIndex')
-    .setTitle('Atende Leste 3')
+  return HtmlService.createHtmlOutputFromFile('Index')
+    .setTitle('Atende Leste 3 — Novo endereço')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
   }
 

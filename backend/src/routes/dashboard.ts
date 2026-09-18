@@ -1,6 +1,6 @@
 import { Router, Response } from 'express'
 import { prisma } from '../config/prisma'
-import { authMiddleware, AuthenticatedRequest } from '../middleware/auth'
+import { authMiddleware, attachUserRecord, AuthenticatedRequest } from '../middleware/auth'
 import { DashboardKPIsSchema, DashboardMatrizResponseSchema, DashboardFiltradoResponseSchema } from '@shared/api'
 import { normalizarNomeEscola, getMapaTecnicos, getEmailsContato } from '../services/normalization'
 import { getMapaInventario } from '../services/migration'
@@ -11,7 +11,13 @@ async function getDashboardData(filtroFilial?: string, filtroNivel?: string) {
   const where: any = { excluido: false }
 
   if (filtroFilial && filtroNivel !== 'ADMIN') {
-    where.unidade = filtroFilial
+    // casamento tolerante: unidades geminadas ("E.E. A / E.E. B")
+    const partes = filtroFilial.split('/').map((p) => p.trim()).filter(Boolean)
+    where.OR = [
+      { unidade: filtroFilial },
+      { unidade: { contains: filtroFilial, mode: 'insensitive' } },
+      ...partes.map((p) => ({ unidade: { contains: p, mode: 'insensitive' } })),
+    ]
   }
 
   const [chamados, totalCount] = await Promise.all([
@@ -74,7 +80,7 @@ router.get('/matriz', async (_req, res) => {
   }
 })
 
-router.get('/filtrado', authMiddleware, async (req: AuthenticatedRequest, res) => {
+router.get('/filtrado', authMiddleware, attachUserRecord, async (req: AuthenticatedRequest, res) => {
   try {
     const { chamados, kpis, mapaInventario } = await getDashboardData(
       req.userRecord?.filial,
@@ -135,11 +141,18 @@ router.get('/filtrado', authMiddleware, async (req: AuthenticatedRequest, res) =
   }
 })
 
-router.get('/stats', authMiddleware, async (req: AuthenticatedRequest, res) => {
+router.get('/stats', authMiddleware, attachUserRecord, async (req: AuthenticatedRequest, res) => {
   try {
     const where: any = {}
     if (req.userRecord && req.userRecord.nivel !== 'ADMIN') {
-      where.unidade = req.userRecord.filial
+      // match tolerante com unidades geminadas
+      const f = req.userRecord.filial
+      const partes = f.split('/').map((p: string) => p.trim()).filter(Boolean)
+      where.OR = [
+        { unidade: f },
+        { unidade: { contains: f, mode: 'insensitive' } },
+        ...partes.map((p: string) => ({ unidade: { contains: p, mode: 'insensitive' } })),
+      ]
     }
 
     const [total, abertos, andamento, comunicado, resolvidos, altaPrioridade] = await Promise.all([

@@ -230,7 +230,7 @@ router.get('/:id', authMiddleware, async (req: AuthenticatedRequest, res) => {
   }
 })
 
-router.patch('/:id/status', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GESTOR'), async (req: AuthenticatedRequest, res) => {
+router.patch('/:id/status', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GESTOR', 'VISUALIZADOR'), async (req: AuthenticatedRequest, res) => {
   try {
     const { status, tecnicoResolucao, descricaoResolucao, responsavel } = AtualizarStatusChamadoSchema.parse(req.body)
 
@@ -278,7 +278,7 @@ router.patch('/:id/status', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GES
   }
 })
 
-router.post('/:id/resposta', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GESTOR'), async (req: AuthenticatedRequest, res) => {
+router.post('/:id/resposta', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GESTOR', 'VISUALIZADOR'), async (req: AuthenticatedRequest, res) => {
   try {
     const { texto } = ResponderChamadoSchema.parse(req.body)
 
@@ -379,7 +379,7 @@ router.delete('/:id', authMiddleware, requireRole('ADMIN'), async (req: Authenti
   }
 })
 
-router.delete('/:id', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GESTOR'), async (req: AuthenticatedRequest, res) => {
+router.delete('/:id', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GESTOR', 'VISUALIZADOR'), async (req: AuthenticatedRequest, res) => {
   try {
     const chamado = await prisma.chamado.findUnique({ where: { id: req.params.id } })
     if (!chamado) {
@@ -389,7 +389,7 @@ router.delete('/:id', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GESTOR'),
     if (req.userRecord && req.userRecord.nivel !== 'ADMIN') {
       const canDelete =
         req.userRecord.nivel === 'TECNICO' && (chamado.tecnicoSetor === req.userRecord.filial || chamado.responsavel === req.userRecord.nome) ||
-        (req.userRecord.nivel === 'GESTOR') && chamado.unidade === req.userRecord.filial
+        ['GESTOR','VISUALIZADOR'].includes(req.userRecord.nivel) && chamado.unidade === req.userRecord.filial
 
       if (!canDelete) {
         return res.status(403).json({ error: 'FORBIDDEN', message: 'Sem permissão para excluir este chamado' })
