@@ -13,6 +13,45 @@ const filtroExcluido = { excluido: false }
 
 const router = Router()
 
+/**
+ * Casamento tolerante de unidade — necessário porque escolas que dividem o
+ * mesmo prédio aparecem compostas ("E.E. A / E.E. B") enquanto os chamados
+ * podem trazer só uma delas (ou vice-versa).
+ */
+function normUnidade(s: string): string {
+  return String(s || '')
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function unidadeCasa(unidade: string | null | undefined, filial: string): boolean {
+  if (!unidade || !filial) return false
+  if (unidade === filial) return true
+  const u = normUnidade(unidade)
+  const f = normUnidade(filial)
+  if (!u || !f) return false
+  if (u.includes(f) || f.includes(u)) return true
+  return filial.split('/').some((p) => {
+    const pn = normUnidade(p)
+    return pn.length > 3 && u.includes(pn)
+  })
+}
+
+/** Condição Prisma tolerante para filtrar listas por unidade. */
+function filtroUnidadeTolerante(filial: string) {
+  const partes = filial.split('/').map((p) => p.trim()).filter(Boolean)
+  return {
+    OR: [
+      { unidade: filial },
+      { unidade: { contains: filial, mode: 'insensitive' as const } },
+      ...partes.map((p) => ({ unidade: { contains: p, mode: 'insensitive' as const } })),
+    ],
+  }
+}
+
 function getTecnicoSetor(unidade: string): string {
   const mapa = getMapaTecnicos()
   const chave = normalizarNomeEscola(unidade)
@@ -58,31 +97,44 @@ export async function criarChamadoPublic(req: Request, res: Response) {
   try {
     const data = CriarChamadoSchema.parse(req.body)
 
-    const protocolo = await gerarProtocolo()
     const tecnicoSetor = getTecnicoSetor(data.unidade)
     const inventarioStatus = await getInventarioStatus(data.unidade)
 
-    let anexoUrl: string | null = null
-    if (data.anexoBase64 && data.anexoNome) {
-      anexoUrl = await salvarAnexo(data.anexoBase64, data.anexoNome, data.anexoTipo || '', protocolo)
-    }
+    // Protocolo é sequencial por dia; duas requisições simultâneas podem gerar o
+    // mesmo número e estourar o unique (P2002). Nesse caso regera e tenta de novo.
+    let chamado: any = null
+    let ultimoErro: any = null
+    for (let tentativa = 0; tentativa < 5 && !chamado; tentativa++) {
+      const protocolo = await gerarProtocolo()
 
-    const chamado = await prisma.chamado.create({
-      data: {
-        protocolo,
-        unidade: data.unidade,
-        solicitante: data.solicitante,
-        funcao: data.funcao,
-        tipo: data.tipo,
-        descricao: data.descricao,
-        urgencia: data.urgencia,
-        anexoUrl,
-        email: data.email || null,
-        tecnicoSetor,
-        inventarioStatus: inventarioStatus as any,
-        historico: `Chamado criado em ${new Date().toLocaleString('pt-BR')}`
+      let anexoUrl: string | null = null
+      if (data.anexoBase64 && data.anexoNome) {
+        anexoUrl = await salvarAnexo(data.anexoBase64, data.anexoNome, data.anexoTipo || '', protocolo)
       }
-    })
+
+      try {
+        chamado = await prisma.chamado.create({
+          data: {
+            protocolo,
+            unidade: data.unidade,
+            solicitante: data.solicitante,
+            funcao: data.funcao,
+            tipo: data.tipo,
+            descricao: data.descricao,
+            urgencia: data.urgencia,
+            anexoUrl,
+            email: data.email || null,
+            tecnicoSetor,
+            inventarioStatus: inventarioStatus as any,
+            historico: `Chamado criado em ${new Date().toLocaleString('pt-BR')}`
+          }
+        })
+      } catch (err) {
+        if ((err as any)?.code === 'P2002') { ultimoErro = err; continue }
+        throw err
+      }
+    }
+    if (!chamado) throw ultimoErro
 
     if (data.urgencia.startsWith('Alta')) {
       await notificarAltaPrioridade(chamado)
@@ -116,7 +168,7 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res) => {
           { responsavel: req.userRecord.nome }
         ]
       } else if (req.userRecord.nivel === 'GESTOR' || req.userRecord.nivel === 'VISUALIZADOR') {
-        where.unidade = req.userRecord.filial
+        Object.assign(where, filtroUnidadeTolerante(req.userRecord.filial))
       }
     }
 
@@ -165,7 +217,7 @@ router.get('/:id', authMiddleware, async (req: AuthenticatedRequest, res) => {
     if (req.userRecord && req.userRecord.nivel !== 'ADMIN') {
       const canAccess =
         req.userRecord.nivel === 'TECNICO' && (chamado.tecnicoSetor === req.userRecord.filial || chamado.responsavel === req.userRecord.nome) ||
-        (req.userRecord.nivel === 'GESTOR' || req.userRecord.nivel === 'VISUALIZADOR') && chamado.unidade === req.userRecord.filial
+        (req.userRecord.nivel === 'GESTOR' || req.userRecord.nivel === 'VISUALIZADOR') && unidadeCasa(chamado.unidade, req.userRecord.filial)
 
       if (!canAccess) {
         return res.status(403).json({ error: 'FORBIDDEN', message: 'Sem acesso a este chamado' })
@@ -190,7 +242,7 @@ router.patch('/:id/status', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GES
     if (req.userRecord && req.userRecord.nivel !== 'ADMIN') {
       const canUpdate =
         req.userRecord.nivel === 'TECNICO' && (chamado.tecnicoSetor === req.userRecord.filial || chamado.responsavel === req.userRecord.nome) ||
-        ['GESTOR','VISUALIZADOR'].includes(req.userRecord.nivel) && chamado.unidade === req.userRecord.filial
+        ['GESTOR','VISUALIZADOR'].includes(req.userRecord.nivel) && unidadeCasa(chamado.unidade, req.userRecord.filial)
 
       if (!canUpdate) {
         return res.status(403).json({ error: 'FORBIDDEN', message: 'Sem permissão para alterar este chamado' })
@@ -374,17 +426,16 @@ router.delete('/batch', authMiddleware, requireRole('ADMIN'), async (req: Authen
 })
 
 async function gerarProtocolo(): Promise<string> {
-  const hoje = new Date()
-  const dataStr = hoje.toISOString().slice(0, 10).replace(/-/g, '')
-  const count = await prisma.chamado.count({
-    where: {
-      timestamp: {
-        gte: new Date(hoje.setHours(0, 0, 0, 0)),
-        lt: new Date(hoje.setHours(23, 59, 59, 999))
-      }
-    }
+  const dataStr = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+  const prefixo = `CH-${dataStr}-`
+  // pega o último protocolo do dia (não count): resistente a exclusões manuais
+  const ultimo = await prisma.chamado.findFirst({
+    where: { protocolo: { startsWith: prefixo } },
+    orderBy: { protocolo: 'desc' },
+    select: { protocolo: true }
   })
-  return `CH-${dataStr}-${String(count + 1).padStart(4, '0')}`
+  const seq = ultimo ? parseInt(ultimo.protocolo.slice(prefixo.length), 10) + 1 : 1
+  return `${prefixo}${String(seq).padStart(4, '0')}`
 }
 
 async function salvarAnexo(base64: string, nome: string, tipo: string, protocolo: string): Promise<string> {
