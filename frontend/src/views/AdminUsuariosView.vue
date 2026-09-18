@@ -140,8 +140,18 @@ onMounted(async()=>{
 
 async function carregarUsuarios(){
   try{
-    const {data} = await api.get('/usuarios')
-    usuarios.value = data?.data || data || []
+    // backend pagina em blocos de até 100 — varre todas as páginas
+    const todos:any[]=[]
+    let page=1
+    while(true){
+      const {data} = await api.get('/usuarios',{params:{page,limit:100}})
+      const lote:any[]=data?.data||data||[]
+      todos.push(...lote)
+      const totalPages=data?.meta?.totalPages||1
+      if(page>=totalPages||lote.length===0) break
+      page++
+    }
+    usuarios.value = todos
   }catch{}
 }
 
