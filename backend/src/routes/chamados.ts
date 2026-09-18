@@ -19,12 +19,16 @@ const router = Router()
  * podem trazer só uma delas (ou vice-versa).
  */
 function normUnidade(s: string): string {
-  return String(s || '')
+  let n = String(s || '')
     .toUpperCase()
+    .replace(/^E\.?E\.?\s*/i, '')
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
+  // remove sufixos honoríficos comuns (Prof, Profa, Dr, Presidente...)
+  n = n.replace(/(\s+(PROF(A)?|DR(A)?|DEPUTAD[OA]|PRESIDENTE|MAESTRO))+\s*$/, '').trim()
+  return n
 }
 
 function unidadeCasa(unidade: string | null | undefined, filial: string): boolean {
@@ -42,13 +46,11 @@ function unidadeCasa(unidade: string | null | undefined, filial: string): boolea
 
 /** Condição Prisma tolerante para filtrar listas por unidade. */
 function filtroUnidadeTolerante(filial: string) {
-  const partes = filial.split('/').map((p) => p.trim()).filter(Boolean)
+  const partes = [filial, ...filial.split('/')]
+    .map((p) => normUnidade(p))
+    .filter(Boolean)
   return {
-    OR: [
-      { unidade: filial },
-      { unidade: { contains: filial, mode: 'insensitive' as const } },
-      ...partes.map((p) => ({ unidade: { contains: p, mode: 'insensitive' as const } })),
-    ],
+    OR: partes.map((p) => ({ unidade: { contains: p, mode: 'insensitive' as const } })),
   }
 }
 
