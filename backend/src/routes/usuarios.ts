@@ -15,11 +15,13 @@ const MAX_GESTORES_UNIDADE = 2
 
 /** ADMIN ou GESTOR (gestor fica restrito à própria filial nas regras abaixo). */
 function adminOuGestor(req: AuthenticatedRequest, res: Response, next: () => void): void {
-  if (!req.userRecord) {
+  // userRecord (attachUserRecord) em produção; req.user é o fallback
+  const nivel = req.userRecord?.nivel || req.user?.nivel
+  if (!nivel) {
     res.status(401).json({ error: 'UNAUTHORIZED', message: 'Não autenticado' })
     return
   }
-  if (req.userRecord.nivel === 'ADMIN' || req.userRecord.nivel === 'GESTOR') {
+  if (nivel === 'ADMIN' || nivel === 'GESTOR') {
     next()
     return
   }
@@ -35,8 +37,8 @@ router.get('/', authMiddleware, adminOuGestor, async (req: AuthenticatedRequest,
     const status = req.query.status as string
 
     const where: any = {}
-    if (req.userRecord?.nivel === 'GESTOR') {
-      where.filial = req.userRecord.filial
+    if ((req.userRecord?.nivel || req.user?.nivel) === 'GESTOR') {
+      where.filial = (req.userRecord?.filial || req.user?.filial || '')
     }
     if (search) {
       where.OR = [
@@ -72,12 +74,12 @@ router.post('/', authMiddleware, adminOuGestor, async (req: AuthenticatedRequest
     const data = UserCreateSchema.parse(req.body)
 
     // GESTOR cria apenas VISUALIZADOR da própria unidade, máx. 2 ativos além dele
-    if (req.userRecord?.nivel === 'GESTOR') {
+    if ((req.userRecord?.nivel || req.user?.nivel) === 'GESTOR') {
       data.nivel = 'VISUALIZADOR'
-      data.filial = req.userRecord.filial
+      data.filial = (req.userRecord?.filial || req.user?.filial || '')
 
       const ativosNaUnidade = await prisma.usuario.count({
-        where: { filial: req.userRecord.filial, status: 'ATIVO' }
+        where: { filial: (req.userRecord?.filial || req.user?.filial || ''), status: 'ATIVO' }
       })
       if (ativosNaUnidade >= MAX_GESTORES_UNIDADE + 1) {
         return res.status(400).json({
@@ -146,8 +148,8 @@ router.patch('/:id', authMiddleware, adminOuGestor, async (req: AuthenticatedReq
     }
 
     // GESTOR: só usuários da própria filial, sem mudar nível, e sem tocar ADMIN/outro GESTOR
-    if (req.userRecord?.nivel === 'GESTOR') {
-      const mesmaFilial = user.filial === req.userRecord.filial
+    if ((req.userRecord?.nivel || req.user?.nivel) === 'GESTOR') {
+      const mesmaFilial = user.filial === (req.userRecord?.filial || req.user?.filial || '')
       const alvoRestrito = user.nivel === 'VISUALIZADOR'
       if (!mesmaFilial || !alvoRestrito) {
         return res.status(403).json({ error: 'FORBIDDEN', message: 'Gestores só podem editar visualizadores da própria unidade' })
@@ -193,8 +195,8 @@ router.delete('/:id', authMiddleware, adminOuGestor, async (req: AuthenticatedRe
     }
 
     // GESTOR: só visualizadores da própria filial
-    if (req.userRecord?.nivel === 'GESTOR') {
-      if (user.filial !== req.userRecord.filial || user.nivel !== 'VISUALIZADOR') {
+    if ((req.userRecord?.nivel || req.user?.nivel) === 'GESTOR') {
+      if (user.filial !== (req.userRecord?.filial || req.user?.filial || '') || user.nivel !== 'VISUALIZADOR') {
         return res.status(403).json({ error: 'FORBIDDEN', message: 'Gestores só podem desativar visualizadores da própria unidade' })
       }
     }

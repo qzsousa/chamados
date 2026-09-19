@@ -16,7 +16,9 @@ import { requestLogger } from './middleware/requestLogger'
 
 import authRoutes from './routes/auth'
 import usuarioRoutes from './routes/usuarios'
-import chamadoRoutes, { criarChamadoPublic, consultarChamadoPublic } from './routes/chamados'
+import chamadoRoutes, { criarChamadoPublic, consultarChamadoPublic, avaliarChamadoPublic } from './routes/chamados'
+import feedbackRoutes, { criarFeedbackPublic } from './routes/feedback'
+import notificacaoRoutes from './routes/notificacoes'
 import escolaRoutes from './routes/escolas'
 import equipamentoRoutes from './routes/equipamentos'
 import inventarioRoutes from './routes/inventario'
@@ -166,6 +168,10 @@ app.get('/api/escolas/nomes', async (_req, res) => {
 app.post('/api/chamados', criarChamadoPublic)
 // Consulta pública de chamado por protocolo
 app.get('/api/chamados/protocolo/:protocolo', consultarChamadoPublic)
+// Avaliação pública do atendimento (escola avalia chamado concluído)
+app.post('/api/chamados/protocolo/:protocolo/avaliar', avaliarChamadoPublic)
+// Elogios e sugestões (público)
+app.post('/api/feedback', criarFeedbackPublic)
 
 app.use('/api/dashboard', dashboardRoutes)
 app.use('/api', authMiddleware, attachUserRecord)
@@ -174,6 +180,8 @@ app.use('/api/chamados', chamadoRoutes)
 app.use('/api/escolas', escolaRoutes)
 app.use('/api/equipamentos', equipamentoRoutes)
 app.use('/api/inventario', inventarioRoutes)
+app.use('/api/feedback', feedbackRoutes)
+app.use('/api/notificacoes', notificacaoRoutes)
 
 if (env.SENTRY_DSN) {
   app.use(Sentry.expressErrorHandler())

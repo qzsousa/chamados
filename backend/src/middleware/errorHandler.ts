@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express'
 import { ZodError } from 'zod'
 import { Prisma } from '@prisma/client'
 import pino from 'pino'
+import { notificarAdmins } from '../services/notificacoes'
 
 export function errorHandler(logger: pino.Logger) {
   return (err: Error, req: Request, res: Response, _next: NextFunction): void => {
@@ -41,6 +42,14 @@ export function errorHandler(logger: pino.Logger) {
     }
 
     logger.error({ requestId, err: err.message, stack: err.stack }, 'Internal error')
+
+    // Notifica a administração — nunca deixe isso derrubar a resposta de erro
+    notificarAdmins(
+      'ERRO_SISTEMA',
+      'Erro interno na API de chamados',
+      `${req.method} ${req.originalUrl} — ${err.message}`.slice(0, 400),
+      '/painel'
+    ).catch(() => {})
 
     if (env.NODE_ENV === 'production') {
       res.status(500).json({

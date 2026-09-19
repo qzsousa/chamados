@@ -66,6 +66,8 @@ model Chamado {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
+  avaliacao          Avaliacao?
+
   @@index([unidade])
   @@index([status])
   @@index([tecnicoSetor])
@@ -107,4 +109,37 @@ model RefreshToken {
 
   @@index([usuarioId])
   @@index([expiraEm])
+}
+
+model Avaliacao {
+  id         String   @id @default(cuid())
+  chamadoId  String   @unique
+  chamado    Chamado  @relation(fields: [chamadoId], references: [id], onDelete: Cascade)
+  nota       Int
+  comentario String?
+  criadoEm   DateTime @default(now())
+}
+
+model Feedback {
+  id       String   @id @default(cuid())
+  tipo     String   // 'ELOGIO' | 'SUGESTAO'
+  nome     String?
+  unidade  String?
+  mensagem String
+  criadoEm DateTime @default(now())
+}
+
+model Notificacao {
+  id        String   @id @default(cuid())
+  usuarioId String?
+  filial    String?
+  tipo      String   // CHAMADO_NOVO | CHAMADO_RESPONDIDO | CHAMADO_FINALIZADO | ERRO_SISTEMA
+  titulo    String
+  mensagem  String
+  link      String?
+  lida      Boolean  @default(false)
+  criadoEm  DateTime @default(now())
+
+  @@index([usuarioId, lida])
+  @@index([filial])
 }

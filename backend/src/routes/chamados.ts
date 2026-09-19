@@ -6,6 +6,7 @@ import { ZodError } from 'zod'
 import { normalizarNomeEscola, getMapaTecnicos } from '../services/normalization'
 import { getMapaInventario } from '../services/migration'
 import { notificarChamadoStatusAlterado, notificarChamadoCriado } from '../services/email'
+import { notificarAdmins, notificarUnidade } from '../services/notificacoes'
 import { supabase } from '../config/supabase'
 
 // sempre ignorar chamados marcados como excluídos
@@ -19,12 +20,16 @@ const router = Router()
  * podem trazer só uma delas (ou vice-versa).
  */
 function normUnidade(s: string): string {
-  return String(s || '')
+  let n = String(s || '')
     .toUpperCase()
+    .replace(/^E\.?E\.?\s*/i, '')
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
+  // remove sufixos honoríficos comuns (Prof, Profa, Dr, Presidente...)
+  n = n.replace(/(\s+(PROF(A)?|DR(A)?|DEPUTAD[OA]|PRESIDENTE|MAESTRO))+\s*$/, '').trim()
+  return n
 }
 
 function unidadeCasa(unidade: string | null | undefined, filial: string): boolean {
@@ -42,13 +47,11 @@ function unidadeCasa(unidade: string | null | undefined, filial: string): boolea
 
 /** Condição Prisma tolerante para filtrar listas por unidade. */
 function filtroUnidadeTolerante(filial: string) {
-  const partes = filial.split('/').map((p) => p.trim()).filter(Boolean)
+  const partes = [filial, ...filial.split('/')]
+    .map((p) => normUnidade(p))
+    .filter(Boolean)
   return {
-    OR: [
-      { unidade: filial },
-      { unidade: { contains: filial, mode: 'insensitive' as const } },
-      ...partes.map((p) => ({ unidade: { contains: p, mode: 'insensitive' as const } })),
-    ],
+    OR: partes.map((p) => ({ unidade: { contains: p, mode: 'insensitive' as const } })),
   }
 }
 
@@ -71,7 +74,7 @@ export async function consultarChamadoPublic(req: Request, res: Response) {
       return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Informe o protocolo' })
     }
 
-    const chamado = await prisma.chamado.findUnique({ where: { protocolo } })
+    const chamado = await prisma.chamado.findUnique({ where: { protocolo }, include: { avaliacao: true } })
     if (!chamado || chamado.excluido) {
       return res.status(404).json({ error: 'NOT_FOUND', message: 'Chamado não encontrado' })
     }
@@ -86,8 +89,43 @@ export async function consultarChamadoPublic(req: Request, res: Response) {
       descricaoResolucao: chamado.descricaoResolucao,
       anexoUrl: chamado.anexoUrl,
       timestamp: chamado.timestamp,
-      ultimaAtualizacao: chamado.ultimaAtualizacao
+      ultimaAtualizacao: chamado.ultimaAtualizacao,
+      avaliacao: chamado.avaliacao ? { nota: chamado.avaliacao.nota, comentario: chamado.avaliacao.comentario } : null
     })
+  } catch (err) {
+    throw err
+  }
+}
+
+/** Público — a escola avalia o atendimento de um chamado concluído (1x por chamado). */
+export async function avaliarChamadoPublic(req: Request, res: Response) {
+  try {
+    const protocolo = String(req.params.protocolo || '').trim()
+    const nota = Number(req.body?.nota)
+    const comentario = typeof req.body?.comentario === 'string' ? req.body.comentario.trim().slice(0, 1000) : undefined
+
+    if (!protocolo || !Number.isInteger(nota) || nota < 1 || nota > 5) {
+      return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Informe o protocolo e uma nota de 1 a 5' })
+    }
+
+    const chamado = await prisma.chamado.findUnique({ where: { protocolo } })
+    if (!chamado || chamado.excluido) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'Chamado não encontrado' })
+    }
+    if (chamado.status !== 'RESOLVIDO') {
+      return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Só é possível avaliar chamados concluídos' })
+    }
+
+    const jaAvaliado = await prisma.avaliacao.findUnique({ where: { chamadoId: chamado.id } })
+    if (jaAvaliado) {
+      return res.status(409).json({ error: 'CONFLICT', message: 'Este chamado já foi avaliado' })
+    }
+
+    const avaliacao = await prisma.avaliacao.create({
+      data: { chamadoId: chamado.id, nota, comentario: comentario || null }
+    })
+
+    return res.status(201).json({ id: avaliacao.id, nota: avaliacao.nota, comentario: avaliacao.comentario })
   } catch (err) {
     throw err
   }
@@ -141,6 +179,12 @@ export async function criarChamadoPublic(req: Request, res: Response) {
     }
 
     notificarChamadoCriado(chamado).catch(() => {})
+    notificarAdmins(
+      'CHAMADO_NOVO',
+      `Novo chamado ${chamado.protocolo}`,
+      `${chamado.unidade} — ${chamado.tipo} (${chamado.urgencia})`,
+      '/chamados'
+    ).catch(() => {})
 
     return res.status(201).json(chamado)
   } catch (err) {
@@ -267,6 +311,13 @@ router.patch('/:id/status', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GES
 
     if (status !== statusAnterior) {
       await notificarChamadoStatusAlterado(updated)
+
+      // Notifica a unidade da escola (gestor/visualizador veem no sino do portal)
+      if (status === 'COMUNICADO') {
+        notificarUnidade(chamado.unidade, 'CHAMADO_RESPONDIDO', `Chamado ${chamado.protocolo} respondido`, 'A equipe respondeu e aguarda retorno da escola.', '/chamados').catch(() => {})
+      } else if (status === 'RESOLVIDO') {
+        notificarUnidade(chamado.unidade, 'CHAMADO_FINALIZADO', `Chamado ${chamado.protocolo} concluído`, chamado.descricaoResolucao || 'O chamado foi concluído pela equipe.', '/chamados').catch(() => {})
+      }
     }
 
     return res.json(updated)
