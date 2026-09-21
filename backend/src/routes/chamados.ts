@@ -418,10 +418,13 @@ router.patch('/batch', authMiddleware, requireRole('ADMIN', 'TECNICO'), async (r
   }
 })
 
-router.delete('/:id', authMiddleware, requireRole('ADMIN'), async (req: AuthenticatedRequest, res) => {
+router.delete('/batch', authMiddleware, requireRole('ADMIN'), async (req: AuthenticatedRequest, res) => {
   try {
-    await prisma.chamado.delete({ where: { id: req.params.id } })
-    return res.json({ removido: true })
+    const { ids } = BatchDeleteChamadosSchema.parse(req.body)
+
+    const result = await prisma.chamado.updateMany({ where: { id: { in: ids } }, data: { excluido: true } })
+
+    return res.json({ removidos: result.count })
   } catch (err) {
     if (err instanceof ZodError) {
       return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: err.flatten().fieldErrors })
@@ -430,6 +433,7 @@ router.delete('/:id', authMiddleware, requireRole('ADMIN'), async (req: Authenti
   }
 })
 
+// Precisa ficar DEPOIS de '/batch' — senão captura 'batch' como :id
 router.delete('/:id', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GESTOR', 'VISUALIZADOR'), async (req: AuthenticatedRequest, res) => {
   try {
     const chamado = await prisma.chamado.findUnique({ where: { id: req.params.id } })
@@ -453,21 +457,6 @@ router.delete('/:id', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GESTOR', 
       data: { excluido: true }
     })
     return res.json({ success: true })
-  } catch (err) {
-    if (err instanceof ZodError) {
-      return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: err.flatten().fieldErrors })
-    }
-    throw err
-  }
-})
-
-router.delete('/batch', authMiddleware, requireRole('ADMIN'), async (req: AuthenticatedRequest, res) => {
-  try {
-    const { ids } = BatchDeleteChamadosSchema.parse(req.body)
-
-    const result = await prisma.chamado.updateMany({ where: { id: { in: ids } }, data: { excluido: true } })
-
-    return res.json({ removidos: result.count })
   } catch (err) {
     if (err instanceof ZodError) {
       return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: err.flatten().fieldErrors })
