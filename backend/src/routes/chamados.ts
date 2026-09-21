@@ -183,7 +183,7 @@ export async function criarChamadoPublic(req: Request, res: Response) {
       'CHAMADO_NOVO',
       `Novo chamado ${chamado.protocolo}`,
       `${chamado.unidade} — ${chamado.tipo} (${chamado.urgencia})`,
-      '/chamados'
+      `/chamados/${chamado.id}`
     ).catch(() => {})
 
     return res.status(201).json(chamado)
@@ -314,9 +314,9 @@ router.patch('/:id/status', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GES
 
       // Notifica a unidade da escola (gestor/visualizador veem no sino do portal)
       if (status === 'COMUNICADO') {
-        notificarUnidade(chamado.unidade, 'CHAMADO_RESPONDIDO', `Chamado ${chamado.protocolo} respondido`, 'A equipe respondeu e aguarda retorno da escola.', '/chamados').catch(() => {})
+        notificarUnidade(chamado.unidade, 'CHAMADO_RESPONDIDO', `Chamado ${chamado.protocolo} respondido`, 'A equipe respondeu e aguarda retorno da escola.', `/chamados/${chamado.id}`).catch(() => {})
       } else if (status === 'RESOLVIDO') {
-        notificarUnidade(chamado.unidade, 'CHAMADO_FINALIZADO', `Chamado ${chamado.protocolo} concluído`, chamado.descricaoResolucao || 'O chamado foi concluído pela equipe.', '/chamados').catch(() => {})
+        notificarUnidade(chamado.unidade, 'CHAMADO_FINALIZADO', `Chamado ${chamado.protocolo} concluído`, chamado.descricaoResolucao || 'O chamado foi concluído pela equipe.', `/chamados/${chamado.id}`).catch(() => {})
       }
     }
 
