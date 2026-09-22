@@ -15,6 +15,8 @@ const envSchema = z.object({
 
   SENTRY_DSN: z.string().url().optional(),
 
+  /** URL do projeto Supabase. Se ausente, deriva do JWT da service key / DATABASE_URL. */
+  SUPABASE_URL: z.string().url().optional(),
   SUPABASE_SERVICE_KEY: z.string().optional(),
 
   GOOGLE_SERVICE_ACCOUNT_JSON: z.string().optional(),
