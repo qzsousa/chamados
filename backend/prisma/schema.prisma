@@ -129,6 +129,43 @@ model Feedback {
   criadoEm DateTime @default(now())
 }
 
+model TutorialCategoria {
+  id        String     @id @default(cuid())
+  nome      String     @unique
+  descricao String?
+  cor       String?    // hex para chip colorido na UI, ex.: '#3b82f6'
+  createdAt DateTime   @default(now())
+
+  tutoriais Tutorial[]
+}
+
+model Tutorial {
+  id            String            @id @default(cuid())
+  titulo        String
+  subtitulo     String?
+  conteudo      String            // texto simples, quebras de linha preservadas na UI
+  categoriaId   String
+  categoria     TutorialCategoria @relation(fields: [categoriaId], references: [id], onDelete: Restrict)
+  criadoPor     String            // nome do admin que criou
+  visualizacoes Int               @default(0)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  anexos        TutorialAnexo[]
+
+  @@index([categoriaId])
+  @@index([createdAt])
+}
+
+model TutorialAnexo {
+  id         String   @id @default(cuid())
+  tutorialId String
+  tutorial   Tutorial @relation(fields: [tutorialId], references: [id], onDelete: Cascade)
+  nome       String
+  tipo       String
+  url        String
+}
+
 model Notificacao {
   id        String   @id @default(cuid())
   usuarioId String?

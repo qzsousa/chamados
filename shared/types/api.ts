@@ -190,6 +190,67 @@ export const BatchDeleteChamadosSchema = z.object({
 export type BatchDeleteChamados = z.infer<typeof BatchDeleteChamadosSchema>
 
 // ============================================
+// TUTORIAIS
+// ============================================
+
+const TAMANHO_MAX_ANEXO = 5 * 1024 * 1024
+
+export const TutorialAnexoInputSchema = z.object({
+  nome: z.string().min(1).max(200),
+  tipo: z.string().optional(),
+  base64: z.string().min(1)
+})
+
+export type TutorialAnexoInput = z.infer<typeof TutorialAnexoInputSchema>
+
+function validarTamanhoAnexos(anexos: TutorialAnexoInput[] | undefined, campo: string, ctx: z.RefinementCtx) {
+  anexos?.forEach((a, i) => {
+    // base64 codifica 3 bytes em 4 chars — tamanho decodificado ~ length * 3/4
+    if ((a.base64.length * 3) / 4 > TAMANHO_MAX_ANEXO) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [campo, i], message: 'Anexo maior que 5MB' })
+    }
+  })
+}
+
+export const CriarTutorialSchema = z
+  .object({
+    titulo: z.string().min(1).max(160),
+    subtitulo: z.string().max(200).nullish().transform((v) => (v ? v : null)),
+    conteudo: z.string().min(1).max(20000),
+    categoriaId: z.string().min(1),
+    anexos: z.array(TutorialAnexoInputSchema).max(5).optional()
+  })
+  .superRefine((val, ctx) => validarTamanhoAnexos(val.anexos, 'anexos', ctx))
+
+export type CriarTutorial = z.infer<typeof CriarTutorialSchema>
+
+export const AtualizarTutorialSchema = z
+  .object({
+    titulo: z.string().min(1).max(160).optional(),
+    // undefined = não altera; null/'' = limpa o subtítulo
+    subtitulo: z.string().max(200).nullish().transform((v) => (v === undefined ? undefined : v ? v : null)),
+    conteudo: z.string().min(1).max(20000).optional(),
+    categoriaId: z.string().min(1).optional(),
+    anexosNovos: z.array(TutorialAnexoInputSchema).max(5).optional(),
+    removerAnexoIds: z.array(z.string()).optional()
+  })
+  .superRefine((val, ctx) => validarTamanhoAnexos(val.anexosNovos, 'anexosNovos', ctx))
+
+export type AtualizarTutorial = z.infer<typeof AtualizarTutorialSchema>
+
+export const CriarTutorialCategoriaSchema = z.object({
+  nome: z.string().min(1).max(60),
+  descricao: z.string().max(200).optional(),
+  cor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional()
+})
+
+export type CriarTutorialCategoria = z.infer<typeof CriarTutorialCategoriaSchema>
+
+export const AtualizarTutorialCategoriaSchema = CriarTutorialCategoriaSchema.partial()
+
+export type AtualizarTutorialCategoria = z.infer<typeof AtualizarTutorialCategoriaSchema>
+
+// ============================================
 // PAGINATION
 // ============================================
 
