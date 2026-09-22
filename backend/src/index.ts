@@ -19,6 +19,7 @@ import usuarioRoutes from './routes/usuarios'
 import chamadoRoutes, { criarChamadoPublic, consultarChamadoPublic, avaliarChamadoPublic } from './routes/chamados'
 import feedbackRoutes, { criarFeedbackPublic } from './routes/feedback'
 import notificacaoRoutes from './routes/notificacoes'
+import tutorialRoutes from './routes/tutoriais'
 import escolaRoutes from './routes/escolas'
 import equipamentoRoutes from './routes/equipamentos'
 import inventarioRoutes from './routes/inventario'
@@ -60,7 +61,10 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }))
 
-app.use(express.json({ limit: '10mb' }))
+// Tutoriais aceitam até 5 anexos (cada um ≤5MB decodificado, validado no
+// schema) em base64 no corpo. 25MB cobre o caso realista; 5 anexos todos no
+// limite exato (~35MB em base64) retornariam 413 e devem ser enviados em PATCH.
+app.use(express.json({ limit: '25mb' }))
 app.use(express.urlencoded({ extended: true }))
 app.use(cookieParser())
 
@@ -182,6 +186,7 @@ app.use('/api/equipamentos', equipamentoRoutes)
 app.use('/api/inventario', inventarioRoutes)
 app.use('/api/feedback', feedbackRoutes)
 app.use('/api/notificacoes', notificacaoRoutes)
+app.use('/api/tutoriais', tutorialRoutes)
 
 if (env.SENTRY_DSN) {
   app.use(Sentry.expressErrorHandler())

@@ -7,7 +7,7 @@ import { normalizarNomeEscola, getMapaTecnicos } from '../services/normalization
 import { getMapaInventario } from '../services/migration'
 import { notificarChamadoStatusAlterado, notificarChamadoCriado } from '../services/email'
 import { notificarAdmins, notificarUnidade } from '../services/notificacoes'
-import { supabase } from '../config/supabase'
+import { salvarAnexo } from '../services/anexos'
 
 // sempre ignorar chamados marcados como excluídos
 const filtroExcluido = { excluido: false }
@@ -487,29 +487,6 @@ async function gerarProtocolo(): Promise<string> {
   })
   const seq = ultimo ? parseInt(ultimo.protocolo.slice(prefixo.length), 10) + 1 : 1
   return `${prefixo}${String(seq).padStart(4, '0')}`
-}
-
-async function salvarAnexo(base64: string, nome: string, tipo: string, protocolo: string): Promise<string> {
-  const safeNome = nome.replace(/[^\w.\-]/g, '_')
-  if (!supabase) {
-    console.log('[anexo] Supabase Storage não configurado — anexo não persistido.')
-    return `anexos/${protocolo}_${safeNome}`
-  }
-
-  const filePath = `${protocolo}/${Date.now()}_${safeNome}`
-  const bytes = Buffer.from(base64, 'base64')
-
-  try {
-    await supabase.storage.from('anexos').upload(filePath, bytes, {
-      contentType: tipo || 'application/octet-stream',
-      upsert: true
-    })
-    const { data } = supabase.storage.from('anexos').getPublicUrl(filePath)
-    return data.publicUrl
-  } catch (err) {
-    console.error('[anexo] Falha ao enviar para o Supabase Storage:', err)
-    return `anexos/${protocolo}_${safeNome}`
-  }
 }
 
 async function notificarAltaPrioridade(chamado: any): Promise<void> {
