@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import request from 'supertest'
 import express from 'express'
-import tutorialRoutes from './tutoriais'
+import tutorialRoutes, { obterTutorialPublic } from './tutoriais'
 import { errorHandler } from '../middleware/errorHandler'
 import { pino } from 'pino'
 import { prisma } from '../config/prisma'
@@ -74,6 +74,8 @@ const tutorialMock = {
 const createApp = () => {
   const app = express()
   app.use(express.json())
+  // Rota pública: montada ANTES do router autenticado, como em index.ts
+  app.get('/api/tutoriais/publico/:id', obterTutorialPublic)
   app.use('/api/tutoriais', tutorialRoutes)
   app.use(errorHandler(pino({ level: 'silent' })))
   return app
@@ -214,6 +216,38 @@ describe('Tutoriais Routes', () => {
         where: { id: 'tut-1' },
         data: { visualizacoes: { increment: 1 } }
       }))
+    })
+  })
+
+  describe('GET /publico/:id (rota pública, sem login)', () => {
+    it('should return the tutorial and increment visualizacoes', async () => {
+      vi.mocked(prisma.tutorial.update).mockResolvedValue({
+        ...tutorialMock,
+        visualizacoes: 5,
+        categoria: categoriaMock,
+        anexos: [{ id: 'anx-1', nome: 'guia.pdf', tipo: 'application/pdf', url: 'anexos/tutoriais/tut-1_fake.png' }]
+      } as any)
+
+      const res = await request(app).get('/api/tutoriais/publico/tut-1')
+
+      expect(res.status).toBe(200)
+      expect(res.body.id).toBe('tut-1')
+      expect(res.body.categoria.nome).toBe('Redes')
+      expect(res.body.anexos).toHaveLength(1)
+      expect(prisma.tutorial.update).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: 'tut-1' },
+        data: { visualizacoes: { increment: 1 } }
+      }))
+    })
+
+    it('should return 404 for missing tutorial', async () => {
+      vi.mocked(prisma.tutorial.update).mockRejectedValue({ code: 'P2025' })
+
+      const res = await request(app).get('/api/tutoriais/publico/inexistente')
+
+      expect(res.status).toBe(404)
+      expect(res.body.error).toBe('NOT_FOUND')
+      expect(res.body.message).toBe('Tutorial não encontrado.')
     })
   })
 

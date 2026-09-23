@@ -1,4 +1,4 @@
-import { Router } from 'express'
+import { Router, type Request, type Response } from 'express'
 import { ZodError } from 'zod'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../config/prisma'
@@ -135,6 +135,30 @@ router.delete('/categorias/:id', requireRole('ADMIN'), async (req, res) => {
 // ============================================
 // TUTORIAIS
 // ============================================
+
+/**
+ * Leitura PÚBLICA de um tutorial (sem login) — link compartilhável gerado pelo
+ * portal (/tutorial/:id). É montada diretamente em index.ts, ANTES do
+ * authMiddleware. Mesmo comportamento do GET /:id autenticado: registra a
+ * visualização e devolve o tutorial com categoria e anexos (as URLs dos
+ * anexos já são públicas — bucket público do Storage).
+ */
+export async function obterTutorialPublic(req: Request, res: Response) {
+  try {
+    // update + increment registra a visualização e já retorna o registro
+    const tutorial = await prisma.tutorial.update({
+      where: { id: req.params.id },
+      data: { visualizacoes: { increment: 1 } },
+      include: { categoria: true, anexos: true }
+    })
+    return res.json(tutorial)
+  } catch (err) {
+    if ((err as any)?.code === 'P2025') {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'Tutorial não encontrado.' })
+    }
+    throw err
+  }
+}
 
 router.get('/', async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page as string) || 1)
