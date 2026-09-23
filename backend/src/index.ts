@@ -26,6 +26,7 @@ import inventarioRoutes from './routes/inventario'
 import dashboardRoutes from './routes/dashboard'
 import { LISTA_ESCOLAS_EMAILS } from './services/normalization'
 import { syncInventario } from './services/migration'
+import { limparAnexosTemporariosExpirados } from './services/anexos'
 
 // Força DNS a resolver IPv4 primeiro (Render não tem egress IPv6 → evita "ENETUNREACH")
 dns.setDefaultResultOrder('ipv4first')
@@ -220,6 +221,19 @@ async function autoSyncInventario() {
 }
 setTimeout(autoSyncInventario, 5000)
 setInterval(autoSyncInventario, SYNC_INTERVAL_MS)
+
+// Limpeza de anexos temporários de perguntas/respostas (validade de 7 dias)
+const LIMPEZA_ANEXOS_INTERVAL_MS = 6 * 60 * 60 * 1000
+async function autoLimparAnexosTemporarios() {
+  try {
+    const removidos = await limparAnexosTemporariosExpirados()
+    if (removidos > 0) logger.info(`🧹 ${removidos} anexo(s) temporário(s) expirado(s) removido(s)`)
+  } catch (err) {
+    logger.error({ err }, 'falha na limpeza de anexos temporários')
+  }
+}
+setTimeout(autoLimparAnexosTemporarios, 15000)
+setInterval(autoLimparAnexosTemporarios, LIMPEZA_ANEXOS_INTERVAL_MS)
 
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, shutting down gracefully')

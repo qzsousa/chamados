@@ -7,10 +7,44 @@ import { normalizarNomeEscola, getMapaTecnicos } from '../services/normalization
 import { getMapaInventario } from '../services/migration'
 import { notificarChamadoStatusAlterado, notificarChamadoCriado } from '../services/email'
 import { notificarAdmins, notificarUnidade } from '../services/notificacoes'
-import { salvarAnexo } from '../services/anexos'
+import { salvarAnexo, salvarAnexoComPath } from '../services/anexos'
 
 // sempre ignorar chamados marcados como excluídos
 const filtroExcluido = { excluido: false }
+
+/** Include padrão: conversa (perguntas/respostas) com anexos ainda válidos. */
+const includeMensagens = {
+  mensagens: {
+    orderBy: { createdAt: 'asc' as const },
+    include: { anexos: { where: { expiresAt: { gt: new Date() } } } }
+  }
+}
+
+/** Anexos de perguntas/respostas são temporários: expiram 7 dias após o envio. */
+const DIAS_VALIDADE_ANEXO = 7
+
+/**
+ * Registra uma mensagem (PERGUNTA da matriz ou RESPOSTA da escola) no chamado,
+ * fazendo upload dos anexos temporários para o Storage antes.
+ */
+async function salvarMensagemComAnexos(
+  chamadoId: string,
+  protocolo: string,
+  tipo: 'PERGUNTA' | 'RESPOSTA',
+  autorNome: string,
+  texto: string,
+  anexos?: Array<{ nome: string; tipo?: string; base64: string }>
+) {
+  const expiresAt = new Date(Date.now() + DIAS_VALIDADE_ANEXO * 24 * 60 * 60 * 1000)
+  const salvos: Array<{ nome: string; tipo: string; url: string; path: string; expiresAt: Date }> = []
+  for (const a of anexos ?? []) {
+    const salvo = await salvarAnexoComPath(a.base64, a.nome, a.tipo || '', `mensagens/${protocolo}`)
+    if (salvo) salvos.push({ nome: a.nome, tipo: a.tipo || '', url: salvo.url, path: salvo.path, expiresAt })
+  }
+  await prisma.chamadoMensagem.create({
+    data: { chamadoId, tipo, autorNome, texto, anexos: { create: salvos } }
+  })
+}
 
 const router = Router()
 
@@ -252,7 +286,7 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res) => {
 
 router.get('/:id', authMiddleware, async (req: AuthenticatedRequest, res) => {
   try {
-    const chamado = await prisma.chamado.findUnique({ where: { id: req.params.id } })
+    const chamado = await prisma.chamado.findUnique({ where: { id: req.params.id }, include: includeMensagens })
 
     if (!chamado || chamado.excluido) {
       return res.status(404).json({ error: 'NOT_FOUND', message: 'Chamado não encontrado' })
@@ -276,7 +310,7 @@ router.get('/:id', authMiddleware, async (req: AuthenticatedRequest, res) => {
 
 router.patch('/:id/status', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GESTOR', 'VISUALIZADOR'), async (req: AuthenticatedRequest, res) => {
   try {
-    const { status, tecnicoResolucao, descricaoResolucao, responsavel } = AtualizarStatusChamadoSchema.parse(req.body)
+    const { status, tecnicoResolucao, descricaoResolucao, responsavel, pergunta, perguntaAnexos } = AtualizarStatusChamadoSchema.parse(req.body)
 
     const chamado = await prisma.chamado.findUnique({ where: { id: req.params.id } })
     if (!chamado) {
@@ -293,9 +327,14 @@ router.patch('/:id/status', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GES
       }
     }
 
+    // Escola (gestor/visualizador) só pode alterar o chamado para Concluído
+    if (['GESTOR', 'VISUALIZADOR'].includes(req.userRecord?.nivel || '') && status !== 'RESOLVIDO') {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'A escola só pode alterar o chamado para Concluído' })
+    }
+
     const agora = new Date()
     const statusAnterior = chamado.status
-    const entradaHistorico = `[${agora.toLocaleString('pt-BR')}] Status alterado para "${status}" por ${req.userRecord?.nome || 'Sistema'}${tecnicoResolucao ? ` (técnico: ${tecnicoResolucao})` : ''}${descricaoResolucao ? `\nDescrição da resolução: ${descricaoResolucao}` : ''}`
+    const entradaHistorico = `[${agora.toLocaleString('pt-BR')}] Status alterado para "${status}" por ${req.userRecord?.nome || 'Sistema'}${tecnicoResolucao ? ` (técnico: ${tecnicoResolucao})` : ''}${descricaoResolucao ? `\nDescrição da resolução: ${descricaoResolucao}` : ''}${status === 'COMUNICADO' && pergunta?.trim() ? `\nPergunta para a escola: ${pergunta.trim()}` : ''}`
 
     const updated = await prisma.chamado.update({
       where: { id: req.params.id },
@@ -309,18 +348,25 @@ router.patch('/:id/status', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GES
       }
     })
 
-    if (status !== statusAnterior) {
-      await notificarChamadoStatusAlterado(updated)
-
-      // Notifica a unidade da escola (gestor/visualizador veem no sino do portal)
-      if (status === 'COMUNICADO') {
-        notificarUnidade(chamado.unidade, 'CHAMADO_RESPONDIDO', `Chamado ${chamado.protocolo} respondido`, 'A equipe respondeu e aguarda retorno da escola.', '/chamados').catch(() => {})
-      } else if (status === 'RESOLVIDO') {
-        notificarUnidade(chamado.unidade, 'CHAMADO_FINALIZADO', `Chamado ${chamado.protocolo} concluído`, chamado.descricaoResolucao || 'O chamado foi concluído pela equipe.', '/chamados').catch(() => {})
-      }
+    // Matriz colocou em "Aguardando escola" com uma pergunta: registra na conversa (múltiplas rodadas)
+    if (status === 'COMUNICADO' && pergunta?.trim()) {
+      await salvarMensagemComAnexos(chamado.id, chamado.protocolo, 'PERGUNTA', req.userRecord?.nome || 'Matriz', pergunta.trim(), perguntaAnexos)
     }
 
-    return res.json(updated)
+    if (status !== statusAnterior) {
+      await notificarChamadoStatusAlterado(updated)
+    }
+
+    // Notifica a unidade da escola (gestor/visualizador veem no sino do portal).
+    // COMUNICADO com pergunta notifica mesmo sem mudança de status (nova rodada de perguntas).
+    if (status === 'COMUNICADO' && (status !== statusAnterior || pergunta?.trim())) {
+      notificarUnidade(chamado.unidade, 'CHAMADO_RESPONDIDO', `Chamado ${chamado.protocolo} respondido`, pergunta?.trim() || 'A equipe respondeu e aguarda retorno da escola.', `/chamados/${chamado.id}`).catch(() => {})
+    } else if (status === 'RESOLVIDO' && status !== statusAnterior) {
+      notificarUnidade(chamado.unidade, 'CHAMADO_FINALIZADO', `Chamado ${chamado.protocolo} concluído`, chamado.descricaoResolucao || 'O chamado foi concluído pela equipe.', `/chamados/${chamado.id}`).catch(() => {})
+    }
+
+    const completo = await prisma.chamado.findUnique({ where: { id: updated.id }, include: includeMensagens })
+    return res.json(completo ?? updated)
   } catch (err) {
     if (err instanceof ZodError) {
       return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: err.flatten().fieldErrors })
@@ -331,25 +377,56 @@ router.patch('/:id/status', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GES
 
 router.post('/:id/resposta', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GESTOR', 'VISUALIZADOR'), async (req: AuthenticatedRequest, res) => {
   try {
-    const { texto } = ResponderChamadoSchema.parse(req.body)
+    const { texto, anexos } = ResponderChamadoSchema.parse(req.body)
 
     const chamado = await prisma.chamado.findUnique({ where: { id: req.params.id } })
     if (!chamado) {
       return res.status(404).json({ error: 'NOT_FOUND', message: 'Chamado não encontrado' })
     }
 
-    const entrada = `[${new Date().toLocaleString('pt-BR')}] ${req.userRecord?.nome || 'Sistema'}: ${texto}`
+    if (req.userRecord && req.userRecord.nivel !== 'ADMIN') {
+      const canAccess =
+        req.userRecord.nivel === 'TECNICO' && (chamado.tecnicoSetor === req.userRecord.filial || chamado.responsavel === req.userRecord.nome) ||
+        (req.userRecord.nivel === 'GESTOR' || req.userRecord.nivel === 'VISUALIZADOR') && unidadeCasa(chamado.unidade, req.userRecord.filial)
+
+      if (!canAccess) {
+        return res.status(403).json({ error: 'FORBIDDEN', message: 'Sem acesso a este chamado' })
+      }
+    }
+
+    const autor = req.userRecord?.nome || 'Sistema'
+    const ehEscola = ['GESTOR', 'VISUALIZADOR'].includes(req.userRecord?.nivel || '')
+    // Escola respondendo um chamado "Aguardando escola": a bola volta para a matriz
+    const voltaParaMatriz = ehEscola && chamado.status === 'COMUNICADO'
+    const agora = new Date()
+
+    const entrada = `[${agora.toLocaleString('pt-BR')}] ${autor}: ${texto}`
+    const entradaStatus = voltaParaMatriz
+      ? `\n[${agora.toLocaleString('pt-BR')}] Status alterado para "ANDAMENTO" por ${autor} (resposta da escola)`
+      : ''
 
     const updated = await prisma.chamado.update({
       where: { id: req.params.id },
       data: {
         responsavel: req.userRecord?.nome,
-        ultimaAtualizacao: new Date(),
-        historico: `${chamado.historico || ''}\n${entrada}`.trim()
+        status: voltaParaMatriz ? 'ANDAMENTO' : chamado.status,
+        ultimaAtualizacao: agora,
+        historico: `${chamado.historico || ''}\n${entrada}${entradaStatus}`.trim()
       }
     })
 
-    return res.json(updated)
+    // Respostas da escola entram na conversa (com anexos temporários); respostas da matriz
+    // só viram mensagem quando carregam anexo (notas internas continuam apenas no histórico).
+    if (ehEscola || (anexos?.length ?? 0) > 0) {
+      await salvarMensagemComAnexos(chamado.id, chamado.protocolo, ehEscola ? 'RESPOSTA' : 'PERGUNTA', autor, texto, anexos)
+    }
+
+    if (voltaParaMatriz) {
+      notificarAdmins('CHAMADO_RESPONDIDO', `Escola respondeu o chamado ${chamado.protocolo}`, `${autor} respondeu à pergunta da equipe. O chamado voltou para "Em atendimento".`, `/chamados/${chamado.id}`).catch(() => {})
+    }
+
+    const completo = await prisma.chamado.findUnique({ where: { id: updated.id }, include: includeMensagens })
+    return res.json(completo ?? updated)
   } catch (err) {
     if (err instanceof ZodError) {
       return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: err.flatten().fieldErrors })

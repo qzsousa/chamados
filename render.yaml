@@ -6,7 +6,7 @@ services:
     rootDir: backend
     buildCommand: |
       cd /opt/render/project/src/shared/types && NODE_ENV=development npm ci && npm run build
-      cd /opt/render/project/src/backend && NODE_ENV=development npm ci && npx prisma generate && npm run build
+      cd /opt/render/project/src/backend && NODE_ENV=development npm ci && npx prisma generate && npx prisma migrate deploy && npm run build
     startCommand: node dist/index.js
     healthCheckPath: /health
     envVars:

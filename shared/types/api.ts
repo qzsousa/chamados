@@ -144,17 +144,39 @@ export const CriarChamadoSchema = z.object({
 
 export type CriarChamado = z.infer<typeof CriarChamadoSchema>
 
+const TAMANHO_MAX_ANEXO_MENSAGEM = 5 * 1024 * 1024
+
+// Anexo temporário de pergunta/resposta de chamado (expira 7 dias após o envio)
+export const AnexoMensagemSchema = z
+  .object({
+    nome: z.string().min(1).max(200),
+    tipo: z.string().optional(),
+    base64: z.string().min(1)
+  })
+  .superRefine((a, ctx) => {
+    // base64 codifica 3 bytes em 4 chars — tamanho decodificado ~ length * 3/4
+    if ((a.base64.length * 3) / 4 > TAMANHO_MAX_ANEXO_MENSAGEM) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Anexo maior que 5MB' })
+    }
+  })
+
+export type AnexoMensagem = z.infer<typeof AnexoMensagemSchema>
+
 export const AtualizarStatusChamadoSchema = z.object({
   status: StatusChamadoSchema,
   tecnicoResolucao: z.string().optional(),
   descricaoResolucao: z.string().optional(),
-  responsavel: z.string().optional()
+  responsavel: z.string().optional(),
+  // Matriz: ao mudar para COMUNICADO ("Aguardando escola"), registra a pergunta para a escola
+  pergunta: z.string().min(1).max(5000).optional(),
+  perguntaAnexos: z.array(AnexoMensagemSchema).max(5).optional()
 })
 
 export type AtualizarStatusChamado = z.infer<typeof AtualizarStatusChamadoSchema>
 
 export const ResponderChamadoSchema = z.object({
-  texto: z.string().min(1)
+  texto: z.string().min(1).max(5000),
+  anexos: z.array(AnexoMensagemSchema).max(5).optional()
 })
 
 export type ResponderChamado = z.infer<typeof ResponderChamadoSchema>

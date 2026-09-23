@@ -67,6 +67,7 @@ model Chamado {
   updatedAt          DateTime @updatedAt
 
   avaliacao          Avaliacao?
+  mensagens          ChamadoMensagem[]
 
   @@index([unidade])
   @@index([status])
@@ -164,6 +165,37 @@ model TutorialAnexo {
   nome       String
   tipo       String
   url        String
+}
+
+// Perguntas da matriz (status "Aguardando escola") e respostas da escola.
+// O texto é permanente; apenas os anexos são temporários (7 dias).
+model ChamadoMensagem {
+  id        String   @id @default(cuid())
+  chamadoId String
+  chamado   Chamado  @relation(fields: [chamadoId], references: [id], onDelete: Cascade)
+  tipo      String   // PERGUNTA (matriz -> escola) | RESPOSTA (escola -> matriz)
+  autorNome String
+  texto     String
+  createdAt DateTime @default(now())
+
+  anexos    ChamadoMensagemAnexo[]
+
+  @@index([chamadoId])
+}
+
+model ChamadoMensagemAnexo {
+  id         String          @id @default(cuid())
+  mensagemId String
+  mensagem   ChamadoMensagem @relation(fields: [mensagemId], references: [id], onDelete: Cascade)
+  nome       String
+  tipo       String
+  url        String
+  path       String          // path interno no bucket `anexos` (necessário para remoção)
+  expiresAt  DateTime        // anexo temporário: removido do Storage + banco após 7 dias
+  createdAt  DateTime        @default(now())
+
+  @@index([mensagemId])
+  @@index([expiresAt])
 }
 
 model Notificacao {
