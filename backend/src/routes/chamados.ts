@@ -24,6 +24,13 @@ const includeMensagens = {
 const DIAS_VALIDADE_ANEXO = 7
 
 /**
+ * Formata data/hora sempre no fuso de Brasília. O histórico é gravado como TEXTO
+ * e o servidor (Render) roda em UTC — sem o timeZone explícito os horários
+ * ficavam deslocados (e misturavam fusos quando gravados por ambientes diferentes).
+ */
+const fmtHoraLocal = (d: Date): string => d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+
+/**
  * Registra uma mensagem (PERGUNTA da matriz ou RESPOSTA da escola) no chamado,
  * fazendo upload dos anexos temporários para o Storage antes.
  */
@@ -198,7 +205,7 @@ export async function criarChamadoPublic(req: Request, res: Response) {
             email: data.email || null,
             tecnicoSetor,
             inventarioStatus: inventarioStatus as any,
-            historico: `Chamado criado em ${new Date().toLocaleString('pt-BR')}`
+            historico: `Chamado criado em ${fmtHoraLocal(new Date())}`
           }
         })
       } catch (err) {
@@ -334,7 +341,7 @@ router.patch('/:id/status', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GES
 
     const agora = new Date()
     const statusAnterior = chamado.status
-    const entradaHistorico = `[${agora.toLocaleString('pt-BR')}] Status alterado para "${status}" por ${req.userRecord?.nome || 'Sistema'}${tecnicoResolucao ? ` (técnico: ${tecnicoResolucao})` : ''}${descricaoResolucao ? `\nDescrição da resolução: ${descricaoResolucao}` : ''}${status === 'COMUNICADO' && pergunta?.trim() ? `\nPergunta para a escola: ${pergunta.trim()}` : ''}`
+    const entradaHistorico = `[${fmtHoraLocal(agora)}] Status alterado para "${status}" por ${req.userRecord?.nome || 'Sistema'}${tecnicoResolucao ? ` (técnico: ${tecnicoResolucao})` : ''}${descricaoResolucao ? `\nDescrição da resolução: ${descricaoResolucao}` : ''}${status === 'COMUNICADO' && pergunta?.trim() ? `\nPergunta para a escola: ${pergunta.trim()}` : ''}`
 
     const updated = await prisma.chamado.update({
       where: { id: req.params.id },
@@ -400,9 +407,9 @@ router.post('/:id/resposta', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GE
     const voltaParaMatriz = ehEscola && chamado.status === 'COMUNICADO'
     const agora = new Date()
 
-    const entrada = `[${agora.toLocaleString('pt-BR')}] ${autor}: ${texto}`
+    const entrada = `[${fmtHoraLocal(agora)}] ${autor}: ${texto}`
     const entradaStatus = voltaParaMatriz
-      ? `\n[${agora.toLocaleString('pt-BR')}] Status alterado para "ANDAMENTO" por ${autor} (resposta da escola)`
+      ? `\n[${fmtHoraLocal(agora)}] Status alterado para "ANDAMENTO" por ${autor} (resposta da escola)`
       : ''
 
     const updated = await prisma.chamado.update({
@@ -459,12 +466,12 @@ router.patch('/batch', authMiddleware, requireRole('ADMIN', 'TECNICO'), async (r
       let historicoNovo = chamado.historico || ''
 
       if (status) {
-        const entrada = `[${agora.toLocaleString('pt-BR')}] Status alterado para "${status}" por ${req.userRecord?.nome || 'Sistema'}${tecnicoResolucao ? ` (técnico: ${tecnicoResolucao})` : ''}`
+        const entrada = `[${fmtHoraLocal(agora)}] Status alterado para "${status}" por ${req.userRecord?.nome || 'Sistema'}${tecnicoResolucao ? ` (técnico: ${tecnicoResolucao})` : ''}`
         historicoNovo = `${historicoNovo}\n${entrada}`.trim()
       }
 
       if (resposta) {
-        const entrada = `[${agora.toLocaleString('pt-BR')}] ${req.userRecord?.nome || 'Sistema'}: ${resposta}`
+        const entrada = `[${fmtHoraLocal(agora)}] ${req.userRecord?.nome || 'Sistema'}: ${resposta}`
         historicoNovo = `${historicoNovo}\n${entrada}`.trim()
       }
 
