@@ -20,6 +20,7 @@ import chamadoRoutes, { criarChamadoPublic, consultarChamadoPublic, avaliarChama
 import feedbackRoutes, { criarFeedbackPublic } from './routes/feedback'
 import notificacaoRoutes from './routes/notificacoes'
 import tutorialRoutes, { obterTutorialPublic } from './routes/tutoriais'
+import formularioRoutes, { formularioPublicoHandler } from './routes/formulario'
 import escolaRoutes from './routes/escolas'
 import equipamentoRoutes from './routes/equipamentos'
 import inventarioRoutes from './routes/inventario'
@@ -179,6 +180,8 @@ app.post('/api/chamados/protocolo/:protocolo/avaliar', avaliarChamadoPublic)
 app.post('/api/feedback', criarFeedbackPublic)
 // Leitura pública de tutorial (link compartilhável do portal, sem login)
 app.get('/api/tutoriais/publico/:id', obterTutorialPublic)
+// Formulário de chamados configurável (público — semeado na primeira leitura)
+app.get('/api/formulario/publico', formularioPublicoHandler)
 
 app.use('/api/dashboard', dashboardRoutes)
 app.use('/api', authMiddleware, attachUserRecord)
@@ -190,6 +193,7 @@ app.use('/api/inventario', inventarioRoutes)
 app.use('/api/feedback', feedbackRoutes)
 app.use('/api/notificacoes', notificacaoRoutes)
 app.use('/api/tutoriais', tutorialRoutes)
+app.use('/api/formulario', formularioRoutes)
 
 if (env.SENTRY_DSN) {
   app.use(Sentry.expressErrorHandler())

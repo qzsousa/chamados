@@ -448,3 +448,94 @@ export const HealthResponseSchema = z.object({
 })
 
 export type HealthResponse = z.infer<typeof HealthResponseSchema>
+
+===========================================
+// FORMULÁRIO DE CHAMADOS (configurável)
+// ============================================
+
+export const FormularioOpcaoAlertaSchema = z.object({
+  texto: z.string().min(1),
+  tipo: z.enum(['info', 'aviso']),
+  encerra: z.boolean().optional(),
+  exigeAnexo: z.boolean().optional(),
+  linkRotulo: z.string().max(80).optional(),
+  linkUrl: z.string().url().optional()
+})
+
+export type FormularioOpcaoAlerta = z.infer<typeof FormularioOpcaoAlertaSchema>
+
+export const FormularioOpcaoSchema = z.object({
+  rotulo: z.string().min(1).max(300),
+  alerta: FormularioOpcaoAlertaSchema.optional()
+})
+
+export type FormularioOpcao = z.infer<typeof FormularioOpcaoSchema>
+
+function refinarFormularioPergunta(
+  val: {
+    tipo?: 'OPCOES' | 'TEXTO' | 'TEXTO_LONGO'
+    opcoes?: FormularioOpcao[]
+    dependeDePerguntaId?: string | null
+    dependeDeOpcao?: string | null
+  },
+  ctx: z.RefinementCtx
+) {
+  if (val.tipo === 'OPCOES' && (!val.opcoes || val.opcoes.length === 0)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['opcoes'], message: 'Pergunta do tipo OPCOES exige ao menos uma opção.' })
+  }
+  if ((val.tipo === 'TEXTO' || val.tipo === 'TEXTO_LONGO') && val.opcoes && val.opcoes.length > 0) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['opcoes'], message: 'Pergunta de texto não aceita opções.' })
+  }
+  if (val.dependeDeOpcao != null && val.dependeDeOpcao !== '' && (val.dependeDePerguntaId == null || val.dependeDePerguntaId === '')) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['dependeDePerguntaId'], message: 'dependeDeOpcao exige dependeDePerguntaId.' })
+  }
+}
+
+export const CriarFormularioPerguntaSchema = z
+  .object({
+    categoriaId: z.string().min(1),
+    rotulo: z.string().min(1).max(300),
+    ajuda: z.string().max(500).optional(),
+    tipo: z.enum(['OPCOES', 'TEXTO', 'TEXTO_LONGO']),
+    obrigatoria: z.boolean().default(true),
+    ordem: z.number().int().default(0),
+    ativa: z.boolean().default(true),
+    dependeDePerguntaId: z.string().nullish(),
+    dependeDeOpcao: z.string().nullish(),
+    opcoes: z.array(FormularioOpcaoSchema).optional()
+  })
+  .superRefine(refinarFormularioPergunta)
+
+export type CriarFormularioPergunta = z.infer<typeof CriarFormularioPerguntaSchema>
+
+export const AtualizarFormularioPerguntaSchema = z
+  .object({
+    categoriaId: z.string().min(1).optional(),
+    rotulo: z.string().min(1).max(300).optional(),
+    ajuda: z.string().max(500).optional(),
+    tipo: z.enum(['OPCOES', 'TEXTO', 'TEXTO_LONGO']).optional(),
+    obrigatoria: z.boolean().optional(),
+    ordem: z.number().int().optional(),
+    ativa: z.boolean().optional(),
+    dependeDePerguntaId: z.string().nullish(),
+    dependeDeOpcao: z.string().nullish(),
+    opcoes: z.array(FormularioOpcaoSchema).optional()
+  })
+  .superRefine(refinarFormularioPergunta)
+
+export type AtualizarFormularioPergunta = z.infer<typeof AtualizarFormularioPerguntaSchema>
+
+export const CriarFormularioCategoriaSchema = z.object({
+  chave: z.string().regex(/^[a-z0-9-]+$/).optional(),
+  nome: z.string().min(1).max(80),
+  descricao: z.string().max(300).optional(),
+  cor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  ordem: z.number().int().default(0),
+  ativa: z.boolean().default(true)
+})
+
+export type CriarFormularioCategoria = z.infer<typeof CriarFormularioCategoriaSchema>
+
+export const AtualizarFormularioCategoriaSchema = CriarFormularioCategoriaSchema.partial()
+
+export type AtualizarFormularioCategoria = z.infer<typeof AtualizarFormularioCategoriaSchema>

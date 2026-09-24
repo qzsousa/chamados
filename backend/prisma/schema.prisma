@@ -212,3 +212,41 @@ model Notificacao {
   @@index([usuarioId, lida])
   @@index([filial])
 }
+
+// Formulário de abertura de chamados configurável (categorias + perguntas
+// dinâmicas, com condicionais por resposta). Semeado a partir do formulário
+// legado na primeira leitura pública.
+model FormularioCategoria {
+  id        String   @id @default(cuid())
+  chave     String   @unique
+  nome      String
+  descricao String?
+  cor       String?
+  ordem     Int      @default(0)
+  ativa     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  perguntas FormularioPergunta[]
+
+  @@index([ativa, ordem])
+}
+
+model FormularioPergunta {
+  id                  String              @id @default(cuid())
+  categoriaId         String
+  categoria           FormularioCategoria @relation(fields: [categoriaId], references: [id], onDelete: Cascade)
+  rotulo              String
+  ajuda               String?
+  tipo                String              // OPCOES | TEXTO | TEXTO_LONGO
+  obrigatoria         Boolean             @default(true)
+  ordem               Int                 @default(0)
+  ativa               Boolean             @default(true)
+  dependeDePerguntaId String?
+  dependeDeOpcao      String?
+  opcoes              Json?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  @@index([categoriaId, ordem])
+}
