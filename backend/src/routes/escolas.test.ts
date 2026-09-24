@@ -12,6 +12,15 @@ vi.mock('../config/prisma', () => ({
       findMany: vi.fn(),
       findUnique: vi.fn(),
       create: vi.fn()
+    },
+    inventario: {
+      findMany: vi.fn()
+    },
+    usuario: {
+      findMany: vi.fn()
+    },
+    chamado: {
+      groupBy: vi.fn()
     }
   }
 }))
@@ -19,6 +28,11 @@ vi.mock('../config/prisma', () => ({
 vi.mock('../services/normalization', () => ({
   normalizarNomeEscola: vi.fn((nome: string) => nome.toUpperCase().replace(/[^A-Z0-9]/g, '')),
   getMapaTecnicos: vi.fn(() => ({ ESCOLA1: 'TECNICO1', ESCOLA2: 'TECNICO2' })),
+  getTecnicoPorEscola: vi.fn(() => 'TECNICO1'),
+  listarUnidadesIndividuais: vi.fn(() => [
+    { nome: 'E.E. TESTE 1', grupo: 'E.E. TESTE 1 / E.E. TESTE 2', irma: 'E.E. TESTE 2' },
+    { nome: 'E.E. TESTE 2', grupo: 'E.E. TESTE 1 / E.E. TESTE 2', irma: 'E.E. TESTE 1' }
+  ]),
   NOMES_PADRONIZADOS: ['E.E. TESTE 1', 'E.E. TESTE 2']
 }))
 
@@ -26,7 +40,8 @@ vi.mock('../middleware/auth', () => ({
   authMiddleware: vi.fn((req: any, _res: any, next: any) => {
     req.user = { sub: 'user-1', email: 'user@test.com', nome: 'Test User', nivel: 'ADMIN', filial: 'FILIAL1', type: 'access', iat: Date.now(), exp: Date.now() + 15 * 60 * 1000 }
     next()
-  })
+  }),
+  requireRole: vi.fn((..._roles: string[]) => (_req: any, _res: any, next: any) => next())
 }))
 
 const createApp = () => {
@@ -76,6 +91,33 @@ describe('Escolas Routes', () => {
 
       expect(res.status).toBe(200)
       expect(res.body).toEqual(['E.E. TESTE 1', 'E.E. TESTE 2'])
+    })
+  })
+
+  describe('GET /painel', () => {
+    it('should return painel de unidades individuais com grupo, inventário e contadores', async () => {
+      vi.mocked(prisma.inventario.findMany).mockResolvedValue([
+        { escola: { nome: 'E.E. TESTE 1 / E.E. TESTE 2' }, status: 'CONCLUIDO' }
+      ] as any)
+      vi.mocked(prisma.usuario.findMany).mockResolvedValue([{ filial: 'E.E. TESTE 1' }] as any)
+      vi.mocked(prisma.chamado.groupBy).mockResolvedValue([
+        { unidade: 'E.E. TESTE 1', status: 'ABERTO', _count: 2 },
+        { unidade: 'E.E. TESTE 1 / E.E. TESTE 2', status: 'RESOLVIDO', _count: 3 }
+      ] as any)
+
+      const res = await request(app).get('/api/escolas/painel')
+
+      expect(res.status).toBe(200)
+      expect(res.body).toHaveLength(2)
+      const u1 = res.body[0]
+      expect(u1.grupo).toBe('E.E. TESTE 1 / E.E. TESTE 2')
+      expect(u1.irma).toBe('E.E. TESTE 2')
+      expect(u1.tecnico).toBe('TECNICO1')
+      expect(u1.inventarioStatus).toBe('CONCLUIDO')
+      expect(u1.usuariosAtivos).toBe(1)
+      // chamados individuais (2 abertos) + compostos do grupo (3 resolvidos)
+      expect(u1.chamadosTotal).toBe(5)
+      expect(u1.chamadosAbertos).toBe(2)
     })
   })
 
