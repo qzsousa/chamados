@@ -297,3 +297,80 @@ export function getEmailsContato(escola: string): EmailContato[] {
 
   return []
 }
+
+// ==================== UNIDADES INDIVIDUAIS (ESCOLAS IRMÃS) ====================
+// NOMES_PADRONIZADOS lista escolas irmãs (mesmo prédio) como linha composta
+// ("E.E. A / E.E. B"). Chamados e usuários são individuais; equipamentos (SCE)
+// são compartilhados pelo grupo. Os helpers abaixo derivam o catálogo.
+
+export interface UnidadeIndividual {
+  /** Nome canônico individual, ex.: "E.E. LEILA DINIZ" */
+  nome: string
+  /** Nome oficial do grupo (a linha composta; unidade sozinha = ela mesma) */
+  grupo: string
+  /** Nome da escola irmã, quando o grupo tem duas unidades */
+  irma: string | null
+}
+
+/** Colapsa espaços estranhos e padroniza a barra: "X  /  Y" → "X / Y". */
+function canonizarEspacos(nome: string): string {
+  return nome.replace(/\s+/g, ' ').replace(/\s*\/\s*/g, ' / ').trim()
+}
+
+/** Catálogo de unidades individuais derivado de NOMES_PADRONIZADOS (calculado 1x). */
+let cacheUnidades: UnidadeIndividual[] | null = null
+export function listarUnidadesIndividuais(): UnidadeIndividual[] {
+  if (cacheUnidades) return cacheUnidades
+  const unidades: UnidadeIndividual[] = []
+  for (const entrada of NOMES_PADRONIZADOS) {
+    const partes = canonizarEspacos(entrada).split(' / ').filter(Boolean)
+    if (partes.length < 2) {
+      const nome = canonizarEspacos(entrada)
+      unidades.push({ nome, grupo: nome, irma: null })
+      continue
+    }
+    const a = partes[0]
+    // no grupo oficial, só a primeira parte leva "E.E." (forma oficial da lista-mestra:
+    // "E.E. CESAR DONATO CALABREZ / LEILA DINIZ"); a irmã individual recebe o prefixo.
+    const bNome = partes.slice(1).join(' / ')
+    const b = /^E\.?E\.?\s+/i.test(bNome) ? bNome : `E.E. ${bNome}`
+    const grupo = `${a} / ${bNome.replace(/^E\.?E\.?\s+/i, '')}`
+    unidades.push({ nome: a, grupo, irma: b })
+    unidades.push({ nome: b, grupo, irma: a })
+  }
+  cacheUnidades = unidades
+  return unidades
+}
+
+let cacheMapaUnidades: Map<string, UnidadeIndividual> | null = null
+function mapaUnidades(): Map<string, UnidadeIndividual> {
+  if (cacheMapaUnidades) return cacheMapaUnidades
+  const mapa = new Map<string, UnidadeIndividual>()
+  for (const u of listarUnidadesIndividuais()) {
+    mapa.set(normalizarNomeEscola(u.nome), u)
+    mapa.set(normalizarNomeEscola(u.grupo), u)
+  }
+  cacheMapaUnidades = mapa
+  return mapa
+}
+
+/**
+ * Resolve o GRUPO de uma unidade (nome canônico composto para escolas irmãs;
+ * a própria unidade quando ela está sozinha). Aceita nome individual,
+ * composto ou variações sem "E.E."/acentos. Fora do catálogo: retorna o próprio nome.
+ */
+export function grupoDaUnidade(nome: string): string {
+  const n = normalizarNomeEscola(nome)
+  if (!n) return String(nome || '').trim()
+  const direto = mapaUnidades().get(n)
+  if (direto) return direto.grupo
+  // tolerante: cobre grafias parciais (legado) — ex.: "CESAR DONATO CALABREZ"
+  for (const u of listarUnidadesIndividuais()) {
+    const chaveGrupo = normalizarNomeEscola(u.grupo)
+    const chaveIndividual = normalizarNomeEscola(u.nome)
+    if ((chaveGrupo.length > 8 && (chaveGrupo.includes(n) || n.includes(chaveIndividual))) && n.length > 3) {
+      return u.grupo
+    }
+  }
+  return String(nome || '').trim()
+}
