@@ -115,7 +115,18 @@ export async function consultarChamadoPublic(req: Request, res: Response) {
       return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Informe o protocolo' })
     }
 
-    const chamado = await prisma.chamado.findUnique({ where: { protocolo }, include: { avaliacao: true } })
+    const chamado = await prisma.chamado.findUnique({
+      where: { protocolo },
+      include: {
+        avaliacao: true,
+        // Conversa matriz ↔ unidade (perguntas "Aguardando resposta" e respostas),
+        // visível na consulta pública de protocolo
+        mensagens: {
+          orderBy: { createdAt: 'asc' },
+          include: { anexos: { select: { nome: true, tipo: true, url: true, expiresAt: true } } }
+        }
+      }
+    })
     if (!chamado || chamado.excluido) {
       return res.status(404).json({ error: 'NOT_FOUND', message: 'Chamado não encontrado' })
     }
@@ -131,7 +142,15 @@ export async function consultarChamadoPublic(req: Request, res: Response) {
       anexoUrl: chamado.anexoUrl,
       timestamp: chamado.timestamp,
       ultimaAtualizacao: chamado.ultimaAtualizacao,
-      avaliacao: chamado.avaliacao ? { nota: chamado.avaliacao.nota, comentario: chamado.avaliacao.comentario } : null
+      avaliacao: chamado.avaliacao ? { nota: chamado.avaliacao.nota, comentario: chamado.avaliacao.comentario } : null,
+      mensagens: chamado.mensagens.map((m) => ({
+        id: m.id,
+        tipo: m.tipo, // PERGUNTA (matriz) | RESPOSTA (unidade)
+        autorNome: m.autorNome,
+        texto: m.texto,
+        createdAt: m.createdAt,
+        anexos: m.anexos
+      }))
     })
   } catch (err) {
     throw err
@@ -367,7 +386,7 @@ router.patch('/:id/status', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GES
     // Notifica a unidade da escola (gestor/visualizador veem no sino do portal).
     // COMUNICADO com pergunta notifica mesmo sem mudança de status (nova rodada de perguntas).
     if (status === 'COMUNICADO' && (status !== statusAnterior || pergunta?.trim())) {
-      notificarUnidade(chamado.unidade, 'CHAMADO_RESPONDIDO', `Chamado ${chamado.protocolo} respondido`, pergunta?.trim() || 'A equipe respondeu e aguarda retorno da escola.', `/chamados/${chamado.id}`).catch(() => {})
+      notificarUnidade(chamado.unidade, 'CHAMADO_RESPONDIDO', `Chamado ${chamado.protocolo} respondido`, pergunta?.trim() || 'A equipe respondeu e aguarda o retorno do solicitante.', `/chamados/${chamado.id}`).catch(() => {})
     } else if (status === 'RESOLVIDO' && status !== statusAnterior) {
       notificarUnidade(chamado.unidade, 'CHAMADO_FINALIZADO', `Chamado ${chamado.protocolo} concluído`, chamado.descricaoResolucao || 'O chamado foi concluído pela equipe.', `/chamados/${chamado.id}`).catch(() => {})
     }
