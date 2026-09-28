@@ -51,3 +51,8 @@ test-results/
 .temp/
 *.bak
 *.orig
+
+# Deploy (Cloud Run) - segredos reais nunca entram no git.
+# Os arquivos .example.* continuam versionados de proposito.
+deploy/secrets.env
+deploy/env-producao.yaml

@@ -40,13 +40,25 @@ services:
         sync: false
       - key: BREVO_SENDER_EMAIL
         sync: false
+      # Host e porta do SMTP nao sao segredo: podem ser fixados aqui para
+      # reduzir o que voce digita no painel. O usuario e a senha de APP vao
+      # como segredo.
       - key: SMTP_HOST
-        sync: false
+        value: smtp.gmail.com
       - key: SMTP_PORT
-        sync: false
+        value: "587"
       - key: SMTP_USER
         sync: false
       - key: SMTP_PASS
         sync: false
       - key: EMAIL_FROM
+        value: chamadossetec@gmail.com
+      # Sincronizacao de usuarios do portal -> SCE.
+      # Sem o SCE_API_URL o sync de usuarios nao roda, e o SSO do SCE nao
+      # encontra o perfil. Ver src/services/sceSync.ts.
+      # ATENCAO: se o SCE tambem mudar de workspace, a URL muda e este valor
+      # precisa ser atualizado aqui e o servico redeployado.
+      - key: SCE_API_URL
+        value: https://sce-nyjc.onrender.com
+      - key: SCE_SYNC_KEY
         sync: false

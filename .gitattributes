@@ -1,0 +1,18 @@
+# O Docker build le o Dockerfile da working copy. Com CRLF, o \r entra no
+# comando do shell dentro do container e o build falha de forma confusa
+# ("apt-get update: command not found" ou "not found" em fim de linha).
+# As duas ultimas linhas deste arquivo evitam isso de forma explicita.
+Dockerfile       text eol=lf
+**/Dockerfile    text eol=lf
+.dockerignore    text eol=lf
+
+# PowerShell e o padrao no Windows e tolera CRLF sem problema.
+*.ps1            text eol=crlf
+
+# O Render le o render.yaml do repositorio; LF evita surpresa de parser.
+*.yaml           text eol=lf
+*.yml            text eol=lf
+
+*.sh             text eol=lf
+*.md             text eol=lf
+*.env            text eol=lf
