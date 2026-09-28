@@ -1,0 +1,53 @@
+# Variaveis de ambiente NAO sensiveis do sci-chamados-api.
+#
+#   cp env-producao.example.yaml env-producao.yaml
+#   $env:GOOGLE_APPLICATION_CREDENTIALS / gcloud auth login
+#   gcloud run deploy ... --set-env-vars-file=env-producao.yaml
+#
+# As variaveis sensiveis (senhas, chaves, DATABASE_URL) NAO ficam aqui: vao para
+# o Secret Manager e sao injetadas com --set-secrets. Veja secrets.example.env.
+#
+# NAO defina PORT aqui: o Cloud Run injeta PORT=8080 e usa esse valor para
+# encaminhar o trafego. Definir aqui sobrescreve e derruba o servico.
+
+env:
+  - name: NODE_ENV
+    value: production
+
+  - name: LOG_LEVEL
+    value: info
+
+  # Dominio do portal (Vercel). Usado em redirects e mensagens; o CORS em
+  # index.ts aceita qualquer origem, entao nao trava por dominio.
+  - name: FRONTEND_URL
+    value: https://chamados-lac-delta.vercel.app
+
+  # Duracao dos tokens. Mantenha igual em todos os deploys.
+  - name: JWT_ACCESS_EXPIRES_IN
+    value: 15m
+  - name: JWT_REFRESH_EXPIRES_IN
+    value: 7d
+
+  # Planilhas de origem da sincronizacao de inventario.
+  - name: GOOGLE_SHEETS_ID
+    value: 1HyfNcETaINc0ZKcvM0pUPqlv94gwkNlYlwIpvCBxV8o
+  - name: GOOGLE_INVENTARIO_SHEETS_ID
+    value: 1W9_Q8F6k0Ic7OG5dpgEIGbEzmJwjExv-S07gJptv9SY
+
+  # Envio de e-mail. Hoje o sistema usa SMTP do Gmail (chamadossetec@gmail.com),
+  # e nao o Brevo - por isso nao ha BREVO_* aqui.
+  # SMTP_HOST/SMTP_PORT nao sao segredos; SMTP_USER e SMTP_PASS vao no Secret
+  # Manager. SMTP_PASS e a senha de APP do Gmail, criada em
+  # https://myaccount.google.com/apppasswords
+  - name: EMAIL_FROM
+    value: chamadossetec@gmail.com
+  - name: SMTP_HOST
+    value: smtp.gmail.com
+  - name: SMTP_PORT
+    value: "587"
+
+  # Sincronizacao de usuarios do portal -> SCE (src/services/sceSync.ts).
+  # Sem isto o SSO do SCE nao acha o perfil. Se o SCE mudar de workspace, a URL
+  # muda e este valor precisa ser atualizado.
+  - name: SCE_API_URL
+    value: https://sce-nyjc.onrender.com

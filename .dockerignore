@@ -1,0 +1,70 @@
+# Contexto de build: a raiz do repo (por causa do "file:../shared/types").
+# Este arquivo nao substitui o .gitignore: o Docker so respeita ESTE aqui.
+
+# --- Segredos: NUNCA podem entrar na imagem -------------------------------
+.env
+.env.*
+!.env.example
+# Chave de conta de servico do Google (esta no repo local e no gitignore,
+# mas o Docker nao le o gitignore - sem esta linha ela iria para a imagem).
+gcp-service-account.json
+*-service-account.json
+*.pem
+*.key
+# deploy/secrets.env e deploy/env-producao.yaml: fora do contexto do build.
+deploy
+
+# --- Dependencies (reinstaladas dentro da imagem) --------------------------
+**/node_modules
+node_modules
+
+# --- Artefatos de build locais (recompilados dentro da imagem) ---------------
+**/dist
+dist
+build
+**/*.tsbuildinfo
+*.tsbuildinfo
+
+# --- Git / CI / editor ------------------------------------------------------
+.git
+.gitignore
+.github
+.vscode
+.idea
+.clasp.json
+.claspignore
+
+# --- Partes do repo que a imagem da API nao usa ----------------------------
+# O frontend do backend e as migracoes do Supabase sao entregues pelo Vercel.
+backend/frontend
+frontend
+database
+legacy-apps-script
+# Scripts de manutencao executados localmente (precisam de tsx, que e devDep).
+backend/migrate-*.ts
+backend/fix-*.ts
+backend/find-*.ts
+backend/seed-*.ts
+backend/check-users.ts
+backend/list-tipos-novos.ts
+backend/test-server.ts
+backend/test-equip.ts
+backend/reconcile-sce.ts
+
+# --- Testes ----------------------------------------------------------------
+**/*.test.ts
+**/test
+**/coverage
+
+# --- Docs e artefatos diversos ----------------------------------------------
+docs
+*.md
+!README.md
+*.html
+*.sql
+*.csv
+*.xlsx
+test.json
+*.bak
+*.orig
+*.log
