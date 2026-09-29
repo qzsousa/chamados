@@ -18,6 +18,13 @@ export type InventarioStatus = z.infer<typeof InventarioStatusSchema>
 // USER
 // ============================================
 
+/**
+ * Papel no grupo de escolas irmãs (mesmo prédio). As duas escolas compartilham
+ * o painel de equipamentos, mas a FILHA tem acesso somente de visualização.
+ */
+export const PapelUnidadeSchema = z.enum(['MAE', 'FILHA'])
+export type PapelUnidade = z.infer<typeof PapelUnidadeSchema>
+
 export const UserSchema = z.object({
   id: z.string().cuid(),
   email: z.string().email(),
@@ -26,6 +33,9 @@ export const UserSchema = z.object({
   filial: z.string(),
   status: StatusUsuarioSchema,
   primeiroLogin: z.boolean(),
+  /** Nome composto do grupo ("E.E. A / E.E. B") — mesma quando a unidade está sozinha. */
+  grupo: z.string().optional(),
+  papelUnidade: PapelUnidadeSchema.nullable().optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime()
 })
@@ -136,13 +146,38 @@ export const CriarChamadoSchema = z.object({
   tipo: z.string().min(1),
   descricao: z.string().min(1),
   urgencia: z.string().min(1),
-  email: z.string().email().optional(),
+  /**
+   * E-mail do solicitante — OBRIGATÓRIO. É a segunda credencial da consulta
+   * pública (protocolo + e-mail), então chamado sem e-mail ficaria sem
+   * acompanhamento pelo site.
+   */
+  email: z.string().email('Informe um e-mail válido'),
   anexoBase64: z.string().optional(),
   anexoNome: z.string().optional(),
-  anexoTipo: z.string().optional()
+  anexoTipo: z.string().optional(),
+  /**
+   * Chave da categoria do formulário público (ex.: 'equipamento').
+   * É o que permite encaminhar o chamado automaticamente para o técnico
+   * sem depender do texto livre de `tipo` (que quebra se a categoria for renomeada).
+   */
+  categoriaChave: z.string().optional()
 })
 
 export type CriarChamado = z.infer<typeof CriarChamadoSchema>
+
+/**
+ * Credenciais da consulta pública de chamado.
+ *
+ * O protocolo é sequencial por dia (CH-AAAAMMDD-NNNN) e, sozinho, é adivinhável.
+ * Por isso a rota pública exige TAMBÉM o e-mail usado na abertura: o par só
+ * abre o chamado para quem realmente o criou.
+ */
+export const ConsultarChamadoPublicoSchema = z.object({
+  protocolo: z.string().trim().min(1),
+  email: z.string().trim().email('Informe um e-mail válido'),
+})
+
+export type ConsultarChamadoPublico = z.infer<typeof ConsultarChamadoPublicoSchema>
 
 const TAMANHO_MAX_ANEXO_MENSAGEM = 5 * 1024 * 1024
 
@@ -204,6 +239,42 @@ export const BatchUpdateChamadosSchema = z.object({
 })
 
 export type BatchUpdateChamados = z.infer<typeof BatchUpdateChamadosSchema>
+
+/* ---------- ENCAMINHAMENTO DE CHAMADOS ---------- */
+
+/** Para onde encaminhar: o técnico da própria unidade ou um técnico escolhido. */
+export const ModoEncaminhamentoSchema = z.enum(['UNIDADE', 'TECNICO'])
+export type ModoEncaminhamento = z.infer<typeof ModoEncaminhamentoSchema>
+
+/** Encaminhamento manual (modal de detalhes do chamado). */
+export const EncaminharChamadoSchema = z
+  .object({
+    modo: ModoEncaminhamentoSchema.default('UNIDADE'),
+    tecnicoId: z.string().cuid().optional(),
+    /** Observação opcional registrada no histórico do chamado. */
+    observacao: z.string().max(500).optional()
+  })
+  .refine((d) => d.modo !== 'TECNICO' || !!d.tecnicoId, {
+    message: 'Informe o técnico de destino',
+    path: ['tecnicoId']
+  })
+
+export type EncaminharChamado = z.infer<typeof EncaminharChamadoSchema>
+
+/** Regra de encaminhamento automático por categoria do formulário. */
+export const EncaminhamentoRegraSchema = z
+  .object({
+    categoriaChave: z.string().min(1),
+    modo: ModoEncaminhamentoSchema.default('UNIDADE'),
+    tecnicoId: z.string().cuid().optional(),
+    ativa: z.boolean().default(true)
+  })
+  .refine((d) => d.modo !== 'TECNICO' || !!d.tecnicoId, {
+    message: 'Informe o técnico fixo da regra',
+    path: ['tecnicoId']
+  })
+
+export type EncaminhamentoRegra = z.infer<typeof EncaminhamentoRegraSchema>
 
 export const BatchDeleteChamadosSchema = z.object({
   ids: z.array(z.string().cuid()).min(1)
@@ -271,6 +342,97 @@ export type CriarTutorialCategoria = z.infer<typeof CriarTutorialCategoriaSchema
 export const AtualizarTutorialCategoriaSchema = CriarTutorialCategoriaSchema.partial()
 
 export type AtualizarTutorialCategoria = z.infer<typeof AtualizarTutorialCategoriaSchema>
+
+// ============================================
+// FORMULÁRIO DE CHAMADOS (configurável)
+// ============================================
+
+export const FormularioOpcaoAlertaSchema = z.object({
+  texto: z.string().min(1),
+  tipo: z.enum(['info', 'aviso']),
+  encerra: z.boolean().optional(),
+  exigeAnexo: z.boolean().optional(),
+  linkRotulo: z.string().max(80).optional(),
+  linkUrl: z.string().url().optional()
+})
+
+export type FormularioOpcaoAlerta = z.infer<typeof FormularioOpcaoAlertaSchema>
+
+export const FormularioOpcaoSchema = z.object({
+  rotulo: z.string().min(1).max(300),
+  alerta: FormularioOpcaoAlertaSchema.optional()
+})
+
+export type FormularioOpcao = z.infer<typeof FormularioOpcaoSchema>
+
+function refinarFormularioPergunta(
+  val: {
+    tipo?: 'OPCOES' | 'TEXTO' | 'TEXTO_LONGO'
+    opcoes?: FormularioOpcao[]
+    dependeDePerguntaId?: string | null
+    dependeDeOpcao?: string | null
+  },
+  ctx: z.RefinementCtx
+) {
+  if (val.tipo === 'OPCOES' && (!val.opcoes || val.opcoes.length === 0)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['opcoes'], message: 'Pergunta do tipo OPCOES exige ao menos uma opção.' })
+  }
+  if ((val.tipo === 'TEXTO' || val.tipo === 'TEXTO_LONGO') && val.opcoes && val.opcoes.length > 0) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['opcoes'], message: 'Pergunta de texto não aceita opções.' })
+  }
+  if (val.dependeDeOpcao != null && val.dependeDeOpcao !== '' && (val.dependeDePerguntaId == null || val.dependeDePerguntaId === '')) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['dependeDePerguntaId'], message: 'dependeDeOpcao exige dependeDePerguntaId.' })
+  }
+}
+
+export const CriarFormularioPerguntaSchema = z
+  .object({
+    categoriaId: z.string().min(1),
+    rotulo: z.string().min(1).max(300),
+    ajuda: z.string().max(500).optional(),
+    tipo: z.enum(['OPCOES', 'TEXTO', 'TEXTO_LONGO']),
+    obrigatoria: z.boolean().default(true),
+    ordem: z.number().int().default(0),
+    ativa: z.boolean().default(true),
+    dependeDePerguntaId: z.string().nullish(),
+    dependeDeOpcao: z.string().nullish(),
+    opcoes: z.array(FormularioOpcaoSchema).optional()
+  })
+  .superRefine(refinarFormularioPergunta)
+
+export type CriarFormularioPergunta = z.infer<typeof CriarFormularioPerguntaSchema>
+
+export const AtualizarFormularioPerguntaSchema = z
+  .object({
+    categoriaId: z.string().min(1).optional(),
+    rotulo: z.string().min(1).max(300).optional(),
+    ajuda: z.string().max(500).optional(),
+    tipo: z.enum(['OPCOES', 'TEXTO', 'TEXTO_LONGO']).optional(),
+    obrigatoria: z.boolean().optional(),
+    ordem: z.number().int().optional(),
+    ativa: z.boolean().optional(),
+    dependeDePerguntaId: z.string().nullish(),
+    dependeDeOpcao: z.string().nullish(),
+    opcoes: z.array(FormularioOpcaoSchema).optional()
+  })
+  .superRefine(refinarFormularioPergunta)
+
+export type AtualizarFormularioPergunta = z.infer<typeof AtualizarFormularioPerguntaSchema>
+
+export const CriarFormularioCategoriaSchema = z.object({
+  chave: z.string().regex(/^[a-z0-9-]+$/).optional(),
+  nome: z.string().min(1).max(80),
+  descricao: z.string().max(300).optional(),
+  cor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  ordem: z.number().int().default(0),
+  ativa: z.boolean().default(true)
+})
+
+export type CriarFormularioCategoria = z.infer<typeof CriarFormularioCategoriaSchema>
+
+export const AtualizarFormularioCategoriaSchema = CriarFormularioCategoriaSchema.partial()
+
+export type AtualizarFormularioCategoria = z.infer<typeof AtualizarFormularioCategoriaSchema>
 
 // ============================================
 // PAGINATION

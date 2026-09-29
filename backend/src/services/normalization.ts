@@ -342,6 +342,49 @@ export function listarUnidadesIndividuais(): UnidadeIndividual[] {
   return unidades
 }
 
+/**
+ * Uma linha por PRÉDIO (catálogo de painéis), ao contrário de
+ * `listarUnidadesIndividuais()` que emite mãe E filha.
+ *
+ * Escolas irmãs (mesmo prédio) são UMA unidade nos painéis: o equipamento é
+ * compartilhado por grupo, então listar as duas linhas faz o mesmo parque ser
+ * contado duas vezes. Aqui entra só a MÃE, com a irmã preservada em `irma` para
+ * a tela mostrar "divide o prédio com ...".
+ *
+ * `nome` = nome da MÃE (primeira parte do composto) — a chave canônica da linha.
+ * `grupo` = nome oficial do grupo (a linha composta da lista-mestra; a própria
+ * unidade quando não divide prédio). É o mesmo valor gravado na tabela Escola.
+ */
+export interface GrupoUnidade {
+  nome: string
+  grupo: string
+  irma: string | null
+}
+
+let cacheGrupos: GrupoUnidade[] | null = null
+export function listarGruposUnidades(): GrupoUnidade[] {
+  if (cacheGrupos) return cacheGrupos
+  const grupos: GrupoUnidade[] = []
+  for (const entrada of NOMES_PADRONIZADOS) {
+    const partes = canonizarEspacos(entrada).split(' / ').filter(Boolean)
+    if (partes.length < 2) {
+      const nome = canonizarEspacos(entrada)
+      grupos.push({ nome, grupo: nome, irma: null })
+      continue
+    }
+    const a = partes[0]
+    const bNome = partes.slice(1).join(' / ')
+    const b = /^E\.?E\.?\s+/i.test(bNome) ? bNome : `E.E. ${bNome}`
+    // Mesma construção de `grupo` de listarUnidadesIndividuais — os dois
+    // catálogos precisam produzir a MESMA string de grupo, senão o equipamento
+    // do SCE casa num e não no outro.
+    const grupo = `${a} / ${bNome.replace(/^E\.?E\.?\s+/i, '')}`
+    grupos.push({ nome: a, grupo, irma: b })
+  }
+  cacheGrupos = grupos
+  return grupos
+}
+
 let cacheMapaUnidades: Map<string, UnidadeIndividual> | null = null
 function mapaUnidades(): Map<string, UnidadeIndividual> {
   if (cacheMapaUnidades) return cacheMapaUnidades
@@ -373,4 +416,43 @@ export function grupoDaUnidade(nome: string): string {
     }
   }
   return String(nome || '').trim()
+}
+
+export type PapelUnidade = 'MAE' | 'FILHA'
+
+/** Primeira parte do grupo composto — a escola MÃE (a que administra o painel). */
+function maeDoGrupo(grupo: string): string {
+  return canonizarEspacos(grupo).split(' / ')[0].trim()
+}
+
+/**
+ * Papel da unidade no grupo de escolas irmãs:
+ * - 'MAE'   → a escola que aparece primeiro no grupo; administra o painel compartilhado
+ * - 'FILHA' → a irmã que divide o mesmo prédio; só pode VISUALIZAR os equipamentos
+ * - null    → unidade sem par (ou o grupo inteiro): sem restrição adicional
+ *
+ * Aceita nome individual, composto ou variações sem "E.E."/acentos.
+ */
+export function papelDaUnidade(nome: string): PapelUnidade | null {
+  const n = normalizarNomeEscola(nome)
+  if (!n) return null
+  for (const u of listarUnidadesIndividuais()) {
+    const chaveGrupo = normalizarNomeEscola(u.grupo)
+    const chaveNome = normalizarNomeEscola(u.nome)
+    // grupo completo ("E.E. A / E.E. B") não é uma unidade isolada: sem papel
+    if (n === chaveGrupo) return null
+    if (n !== chaveNome) continue
+    if (u.irma === null) return null
+    return normalizarNomeEscola(maeDoGrupo(u.grupo)) === chaveNome ? 'MAE' : 'FILHA'
+  }
+  // tolerante: grafias parciais (legado) — ex.: "LEILA DINIZ", "JOSUE DE CASTRO"
+  for (const u of listarUnidadesIndividuais()) {
+    if (u.irma === null) continue
+    const chaveNome = normalizarNomeEscola(u.nome)
+    if (chaveNome.length <= 3) continue
+    if (n.length > 3 && (chaveNome.startsWith(n + ' ') || n.startsWith(chaveNome + ' '))) {
+      return normalizarNomeEscola(maeDoGrupo(u.grupo)) === chaveNome ? 'MAE' : 'FILHA'
+    }
+  }
+  return null
 }

@@ -5,6 +5,7 @@ import escolaRoutes from './escolas'
 import { errorHandler } from '../middleware/errorHandler'
 import { pino } from 'pino'
 import { prisma } from '../config/prisma'
+import { listarGruposUnidades } from '../services/normalization'
 
 vi.mock('../config/prisma', () => ({
   prisma: {
@@ -29,6 +30,9 @@ vi.mock('../services/normalization', () => ({
   normalizarNomeEscola: vi.fn((nome: string) => nome.toUpperCase().replace(/[^A-Z0-9]/g, '')),
   getMapaTecnicos: vi.fn(() => ({ ESCOLA1: 'TECNICO1', ESCOLA2: 'TECNICO2' })),
   getTecnicoPorEscola: vi.fn(() => 'TECNICO1'),
+  listarGruposUnidades: vi.fn(() => [
+    { nome: 'E.E. TESTE 1', grupo: 'E.E. TESTE 1 / E.E. TESTE 2', irma: 'E.E. TESTE 2' },
+  ]),
   listarUnidadesIndividuais: vi.fn(() => [
     { nome: 'E.E. TESTE 1', grupo: 'E.E. TESTE 1 / E.E. TESTE 2', irma: 'E.E. TESTE 2' },
     { nome: 'E.E. TESTE 2', grupo: 'E.E. TESTE 1 / E.E. TESTE 2', irma: 'E.E. TESTE 1' }
@@ -95,7 +99,7 @@ describe('Escolas Routes', () => {
   })
 
   describe('GET /painel', () => {
-    it('should return painel de unidades individuais com grupo, inventário e contadores', async () => {
+    it('should return uma linha por prédio (mãe/filha não duplica) com inventário e contadores', async () => {
       vi.mocked(prisma.inventario.findMany).mockResolvedValue([
         { escola: { nome: 'E.E. TESTE 1 / E.E. TESTE 2' }, status: 'CONCLUIDO' }
       ] as any)
@@ -108,16 +112,57 @@ describe('Escolas Routes', () => {
       const res = await request(app).get('/api/escolas/painel')
 
       expect(res.status).toBe(200)
-      expect(res.body).toHaveLength(2)
+      // 1 prédio = 1 linha, mesmo com mãe E filha
+      expect(res.body).toHaveLength(1)
       const u1 = res.body[0]
+      expect(u1.nome).toBe('E.E. TESTE 1')
       expect(u1.grupo).toBe('E.E. TESTE 1 / E.E. TESTE 2')
       expect(u1.irma).toBe('E.E. TESTE 2')
       expect(u1.tecnico).toBe('TECNICO1')
       expect(u1.inventarioStatus).toBe('CONCLUIDO')
       expect(u1.usuariosAtivos).toBe(1)
-      // chamados individuais (2 abertos) + compostos do grupo (3 resolvidos)
+      // chamado individual da mãe (2 abertos) + composto do grupo (3 resolvidos),
+      // contando o composto UMA vez
       expect(u1.chamadosTotal).toBe(5)
       expect(u1.chamadosAbertos).toBe(2)
+    })
+
+    it('deve somar chamado registrado no nome da irmã no total do prédio', async () => {
+      vi.mocked(prisma.inventario.findMany).mockResolvedValue([] as any)
+      vi.mocked(prisma.usuario.findMany).mockResolvedValue([
+        { filial: 'E.E. TESTE 1' },
+        { filial: 'E.E. TESTE 2' },
+      ] as any)
+      vi.mocked(prisma.chamado.groupBy).mockResolvedValue([
+        { unidade: 'E.E. TESTE 1', status: 'ABERTO', _count: 1 },
+        { unidade: 'E.E. TESTE 2', status: 'ABERTO', _count: 4 },
+      ] as any)
+
+      const res = await request(app).get('/api/escolas/painel')
+
+      expect(res.body).toHaveLength(1)
+      // 1 da mãe + 4 da filha = 5 no prédio (antes a filha tinha linha própria)
+      expect(res.body[0].chamadosTotal).toBe(5)
+      expect(res.body[0].chamadosAbertos).toBe(5)
+      // usuário da irmã entra uma vez só
+      expect(res.body[0].usuariosAtivos).toBe(2)
+    })
+
+    it('não deve casar chamado de outra escola por semelhança de prefixo', async () => {
+      vi.mocked(listarGruposUnidades).mockReturnValue([
+        { nome: 'E.E. VILA BELA', grupo: 'E.E. VILA BELA', irma: null },
+      ] as any)
+      vi.mocked(prisma.inventario.findMany).mockResolvedValue([] as any)
+      vi.mocked(prisma.usuario.findMany).mockResolvedValue([] as any)
+      vi.mocked(prisma.chamado.groupBy).mockResolvedValue([
+        { unidade: 'E.E. VILA', status: 'ABERTO', _count: 7 },
+      ] as any)
+
+      const res = await request(app).get('/api/escolas/painel')
+
+      // "E.E. VILA" está contido em "E.E. VILA BELA", mas é outra escola:
+      // o matcher por grupo compara por igualdade, então não entra.
+      expect(res.body[0].chamadosTotal).toBe(0)
     })
   })
 

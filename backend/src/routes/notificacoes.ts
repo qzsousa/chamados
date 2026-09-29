@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { prisma } from '../config/prisma'
 import { authMiddleware, attachUserRecord, AuthenticatedRequest } from '../middleware/auth'
+import { filtroUnidadesDoUsuario, usuarioAtendeUnidade } from '../services/unidades'
 
 const router = Router()
 
@@ -8,7 +9,9 @@ const router = Router()
 function filtroVisiveis(user: AuthenticatedRequest['user'], record: AuthenticatedRequest['userRecord']) {
   const or: Array<Record<string, unknown>> = [
     { usuarioId: user?.sub },
-    { filial: record?.filial },
+    // Técnico tem VÁRIAS unidades no filial (separadas por vírgula) — casar por
+    // igualdade com a string inteira esconderia as notificações das escolas dele.
+    ...(record?.filial ? [filtroUnidadesDoUsuario(record.filial)] : []),
   ]
   if (record?.nivel === 'ADMIN') or.push({ usuarioId: null })
   return {
@@ -32,7 +35,7 @@ router.post('/:id/lida', authMiddleware, attachUserRecord, async (req: Authentic
 
   const visivel =
     notif.usuarioId === req.user?.sub ||
-    (!!req.userRecord?.filial && notif.filial === req.userRecord.filial) ||
+    (!!req.userRecord?.filial && !!notif.filial && usuarioAtendeUnidade(req.userRecord.filial, notif.filial)) ||
     (req.userRecord?.nivel === 'ADMIN' && notif.usuarioId === null)
 
   if (!visivel) return res.status(403).json({ error: 'FORBIDDEN', message: 'Sem acesso a esta notificação' })

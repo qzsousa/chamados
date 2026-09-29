@@ -4,6 +4,7 @@ import { authMiddleware, attachUserRecord, AuthenticatedRequest } from '../middl
 import { DashboardKPIsSchema, DashboardMatrizResponseSchema, DashboardFiltradoResponseSchema } from '@shared/api'
 import { normalizarNomeEscola, normalizarTexto, getMapaTecnicos, getEmailsContato } from '../services/normalization'
 import { getMapaInventario } from '../services/migration'
+import { filtroUnidadesDoUsuario } from '../services/unidades'
 
 /** Match tolerante de unidade (geminadas, honoríficos). Espelha o helper de chamados.ts. */
 function normUnidadeDash(s: string): string {
@@ -31,8 +32,14 @@ async function getDashboardData(filtroFilial?: string, filtroNivel?: string) {
   const where: any = { excluido: false }
 
   if (filtroFilial && filtroNivel !== 'ADMIN') {
-    // casamento tolerante: unidades geminadas ("E.E. A / E.E. B") e honoríficos
-    where.OR = filtroUnidadeToleranteDash(filtroFilial)
+    if (filtroNivel === 'TECNICO') {
+      // Técnico atende VÁRIAS unidades (filial separada por vírgula): um
+      // `contains` da string inteira nunca casaria com nenhuma escola.
+      where.OR = filtroUnidadesDoUsuario(filtroFilial).OR
+    } else {
+      // casamento tolerante: unidades geminadas ("E.E. A / E.E. B") e honoríficos
+      where.OR = filtroUnidadeToleranteDash(filtroFilial)
+    }
   }
 
   const [chamados, totalCount] = await Promise.all([

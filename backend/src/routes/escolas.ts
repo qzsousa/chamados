@@ -3,7 +3,7 @@ import { prisma } from '../config/prisma'
 import { authMiddleware, AuthenticatedRequest, requireRole } from '../middleware/auth'
 import { EscolaSchema, EscolaCreateSchema } from '@shared/api'
 import { ZodError } from 'zod'
-import { normalizarNomeEscola, getMapaTecnicos, getTecnicoPorEscola, NOMES_PADRONIZADOS, listarUnidadesIndividuais } from '../services/normalization'
+import { normalizarNomeEscola, getMapaTecnicos, getTecnicoPorEscola, NOMES_PADRONIZADOS, listarGruposUnidades } from '../services/normalization'
 
 const router = Router()
 
@@ -25,26 +25,39 @@ function unidadeCasaPainel(a: string, b: string): boolean {
 }
 
 /**
- * Chamado pertence à unidade quando o texto gravado É o nome individual dela
- * ou o contém (chamados antigos compostos "E.E. A / E.E. B" entram nas duas irmãs).
- * NUNCA o contrário: chamado individual da irmã não vaza para esta unidade.
+ * Chamado pertence ao PRÉDIO (grupo) quando casa com QUALQUER das escolas do
+ * grupo, ou com o composto inteiro.
+ *
+ * Deliberadamente NÃO usa `grupo.includes(nomeChamado)`: no nível do grupo isso
+ * fica frouxo demais — "E.E. VILA" casaria dentro de "E.E. VILA BELA". Aqui a
+ * comparação é por IGUALDADE contra cada parte, e o `includes` fica restrito ao
+ * caso legado de chamado gravado com o composto canônico.
  */
-function chamadoPertenceAUnidade(unidadeChamado: string, nomeUnidade: string): boolean {
+function chamadoPertenceAGrupo(unidadeChamado: string, grupo: string): boolean {
   const na = normalizarNomeEscola(unidadeChamado)
-  const nb = normalizarNomeEscola(nomeUnidade)
-  if (!na || !nb) return false
-  return na === nb || (nb.length > 3 && na.includes(nb))
+  if (!na) return false
+  if (na === normalizarNomeEscola(grupo)) return true
+  const partes = grupo.split('/').map((p) => normalizarNomeEscola(p)).filter(Boolean)
+  if (partes.some((p) => p === na)) return true
+  // legado: chamado antigo gravado como "E.E. A / E.E. B" (com barra e prefixo)
+  return partes.some((p) => p.length > 3 && na.includes(p))
 }
 
 /**
- * Painel de unidades escolares (somente matriz): TODAS as unidades individuais
- * (escolas irmãs separadas), cada uma com grupo oficial, técnico, status de
- * inventário (grupo), usuários ativos e totais de chamados.
+ * Painel de unidades escolares (somente matriz): UMA LINHA POR PRÉDIO.
+ *
+ * Escolas que dividem o mesmo prédio (mãe/filha) são uma única unidade aqui:
+ * o equipamento é compartilhado por grupo, então emitir as duas linhas faria o
+ * mesmo parque ser contado duas vezes. A irmã aparece em `irma`, que a tela usa
+ * para mostrar "divide o prédio com ..." abaixo da mãe.
+ *
+ * Os contadores (usuários, chamados) são agregados pelo grupo, e não pela linha
+ * individual — assim nenhum registro é contado duas vezes.
  * Os totais de equipamentos são mesclados no frontend a partir do SCE.
  */
 router.get('/painel', authMiddleware, requireRole('ADMIN', 'TECNICO'), async (_req: AuthenticatedRequest, res) => {
   try {
-    const unidades = listarUnidadesIndividuais()
+    const unidades = listarGruposUnidades()
 
     const [inventarios, usuarios, chamadosAgrupados] = await Promise.all([
       prisma.inventario.findMany({ include: { escola: true } }),
@@ -59,15 +72,14 @@ router.get('/painel', authMiddleware, requireRole('ADMIN', 'TECNICO'), async (_r
     }
 
     const painel = unidades.map((u) => {
-      const usuariosAtivos = usuarios.filter(
-        (x) => unidadeCasaPainel(x.filial, u.nome) || unidadeCasaPainel(x.filial, u.grupo),
-      ).length
+      // usuários do PRÉDIO: casa pelo grupo (que contém as duas escolas), não pela
+      // linha — casando pelo grupo o usuário da irmã entra uma vez só.
+      const usuariosAtivos = usuarios.filter((x) => unidadeCasaPainel(x.filial, u.grupo)).length
 
       let chamadosTotal = 0
       let chamadosAbertos = 0
       for (const c of chamadosAgrupados) {
-        // o composto já contém o nome individual — basta comparar com o nome da unidade
-        if (!chamadoPertenceAUnidade(c.unidade, u.nome)) continue
+        if (!chamadoPertenceAGrupo(c.unidade, u.grupo)) continue
         chamadosTotal += c._count
         if (c.status !== 'RESOLVIDO') chamadosAbertos += c._count
       }
