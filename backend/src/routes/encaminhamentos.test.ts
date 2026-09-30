@@ -17,7 +17,11 @@ vi.mock('../config/prisma', () => ({
   },
 }))
 
-vi.mock('../services/encaminhamento', () => ({
+// Só as funções que fazem I/O são mockadas; `destinoWhere` (o filtro Prisma
+// de quem pode receber encaminhamento) vem do módulo real, para o teste
+// valer contra a mesma definição que a rota usa.
+vi.mock('../services/encaminhamento', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../services/encaminhamento')>()),
   encaminharChamado: vi.fn(),
   encaminharPorRegras: vi.fn(),
   tecnicosDaUnidade: vi.fn(),
@@ -90,6 +94,15 @@ describe('GET /chamados/encaminhar/tecnicos', () => {
     const res = await request(createApp()).get('/api/chamados/encaminhar/tecnicos')
     expect(res.status).toBe(200)
     expect(res.body.data).toHaveLength(1)
+  })
+
+  it('ADMIN entra na lista: o chefe do setor atende chamado, ele só não é "técnico"', async () => {
+    vi.mocked(prisma.usuario.findMany).mockResolvedValue([] as any)
+    await request(createApp()).get('/api/chamados/encaminhar/tecnicos')
+    expect(vi.mocked(prisma.usuario.findMany).mock.calls[0][0]?.where).toEqual({
+      nivel: { in: ['ADMIN', 'TECNICO'] },
+      status: 'ATIVO',
+    })
   })
 })
 
@@ -197,5 +210,19 @@ describe('Regras de encaminhamento (ADMIN)', () => {
       .put('/api/encaminhamentos')
       .send({ categoriaChave: 'equipamento', modo: 'TECNICO', tecnicoId: 'clh3k4j5k0000abcd1234zzzz', ativa: true })
     expect(res.status).toBe(400)
+  })
+
+  it('aceita ADMIN como técnico fixo, com o mesmo filtro da lista', async () => {
+    vi.mocked(prisma.usuario.findFirst).mockResolvedValue({ nome: 'Jessica Alves' } as any)
+    vi.mocked(prisma.encaminhamentoRegra.upsert).mockResolvedValue({ id: 'r1', categoriaChave: 'sistemas' } as any)
+    const res = await request(createApp())
+      .put('/api/encaminhamentos')
+      .send({ categoriaChave: 'sistemas', modo: 'TECNICO', tecnicoId: TEC_ID, ativa: true })
+    expect(res.status).toBe(200)
+    expect(vi.mocked(prisma.usuario.findFirst).mock.calls[0][0]?.where).toEqual({
+      id: TEC_ID,
+      nivel: { in: ['ADMIN', 'TECNICO'] },
+      status: 'ATIVO',
+    })
   })
 })

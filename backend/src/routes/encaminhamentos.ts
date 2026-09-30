@@ -10,7 +10,7 @@ import { ZodError } from 'zod'
 import { prisma } from '../config/prisma'
 import { authMiddleware, AuthenticatedRequest, requireRole } from '../middleware/auth'
 import { EncaminhamentoRegraSchema } from '@shared/api'
-import { encaminharPendentes } from '../services/encaminhamento'
+import { encaminharPendentes, destinoWhere } from '../services/encaminhamento'
 
 const router = Router()
 
@@ -27,7 +27,7 @@ router.get('/', async (_req: AuthenticatedRequest, res) => {
         orderBy: { ordem: 'asc' },
       }),
       prisma.usuario.findMany({
-        where: { nivel: 'TECNICO', status: 'ATIVO' },
+        where: destinoWhere,
         select: { id: true, nome: true, email: true, filial: true },
         orderBy: { nome: 'asc' },
       }),
@@ -51,7 +51,7 @@ router.put('/', async (req: AuthenticatedRequest, res) => {
     let tecnicoNome: string | null = null
     if (data.modo === 'TECNICO' && data.tecnicoId) {
       const t = await prisma.usuario.findFirst({
-        where: { id: data.tecnicoId, nivel: 'TECNICO', status: 'ATIVO' },
+        where: { id: data.tecnicoId, ...destinoWhere },
         select: { nome: true },
       })
       if (!t) {

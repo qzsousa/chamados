@@ -12,6 +12,7 @@
  * Se não houver técnico cadastrado para a unidade, nada é quebrado: o chamado
  * segue sem responsável e os admins continuam sendo notificados como antes.
  */
+import { Prisma } from '@prisma/client'
 import { prisma } from '../config/prisma'
 import { normalizarNomeEscola } from './normalization'
 import { notificarUsuario } from './notificacoes'
@@ -49,6 +50,26 @@ export interface TecnicoDestino {
 
 /** O tipo gravado na Notificação: encaminhamento é um chamado novo para o técnico. */
 const TIPO_NOTIFICACAO = 'CHAMADO_NOVO' as const
+
+/**
+ * Quem pode receber um encaminhamento.
+ *
+ * ADMIN entra porque é o nível mais alto do sistema: os chefes do setor
+ * (SEINTEC/SETEC), o técnico sênior e os estagiários atendem chamado de
+ * sistema e de e-mail junto com os juniores — nenhum deles tem a conta
+ * TECNICO, mas todos precisam poder ficar com o chamado. TECNICO são os
+ * juniores e volantes que vão até a unidade fazer manutenção.
+ *
+ * Fica AQUI, e não repetido em cada rota, para que lista de destino e
+ * validação de `tecnicoId` nunca aceitem conjunto diferente um do outro.
+ */
+export const NIVEIS_DESTINO: string[] = ['ADMIN', 'TECNICO']
+
+/** Filtro Prisma dos usuários que podem receber encaminhamento. */
+export const destinoWhere: Prisma.UsuarioWhereInput = {
+  nivel: { in: NIVEIS_DESTINO },
+  status: 'ATIVO',
+}
 
 /** Fuso de Brasília para o histórico (o servidor roda em UTC). */
 function fmtHoraLocal(d: Date): string {
@@ -92,6 +113,10 @@ async function abertosPorTecnico(nomes: string[]): Promise<Map<string, number>> 
  * Técnico que atende a unidade: usuarios TECNICO ativos cuja lista de unidades
  * inclui a escola. Desempate: casa exata > casa por schools irmãs > menos
  * chamados abertos > cadastro mais antigo.
+ *
+ * Só TECNICO, mesmo com ADMIN valendo como destino: o encaminhamento
+ * automático é o do volante da unidade, e o chefe entra na fila só se o
+ * Admin escolher a mão (o "Técnico da unidade" do modal).
  */
 export async function tecnicosDaUnidade(unidade: string): Promise<TecnicoDestino[]> {
   const candidatos = await prisma.usuario.findMany({
@@ -127,7 +152,7 @@ export async function tecnicosDaUnidade(unidade: string): Promise<TecnicoDestino
 
 async function tecnicoFixo(tecnicoId: string): Promise<TecnicoDestino | null> {
   const u = await prisma.usuario.findFirst({
-    where: { id: tecnicoId, nivel: 'TECNICO', status: 'ATIVO' },
+    where: { id: tecnicoId, ...destinoWhere },
     select: { id: true, nome: true, email: true, filial: true },
   })
   if (!u) return null

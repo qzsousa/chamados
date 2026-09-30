@@ -7,7 +7,7 @@ import { normalizarNomeEscola, getMapaTecnicos } from '../services/normalization
 import { getMapaInventario } from '../services/migration'
 import { notificarChamadoStatusAlterado, notificarChamadoCriado } from '../services/email'
 import { notificarAdmins, notificarUnidade } from '../services/notificacoes'
-import { encaminharChamado, encaminharPorRegras, tecnicosDaUnidade } from '../services/encaminhamento'
+import { encaminharChamado, encaminharPorRegras, tecnicosDaUnidade, destinoWhere } from '../services/encaminhamento'
 import { filtroUnidadesDoUsuario, usuarioAtendeUnidade } from '../services/unidades'
 import { salvarAnexo, salvarAnexoComPath } from '../services/anexos'
 
@@ -389,13 +389,14 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res) => {
 })
 
 /**
- * Técnicos ativos para o seletor de encaminhamento do modal de detalhes.
- * Fica ANTES de `/:id` para não ser capturada pela rota de chamado por id.
+ * Destinos ativos para o seletor de encaminhamento do modal de detalhes:
+ * ADMIN e TECNICO (ver `NIVEIS_DESTINO`). Fica ANTES de `/:id` para não ser
+ * capturada pela rota de chamado por id.
  */
 router.get('/encaminhar/tecnicos', authMiddleware, requireRole('ADMIN', 'TECNICO'), async (_req: AuthenticatedRequest, res) => {
   try {
     const tecnicos = await prisma.usuario.findMany({
-      where: { nivel: 'TECNICO', status: 'ATIVO' },
+      where: destinoWhere,
       select: { id: true, nome: true, email: true, filial: true },
       orderBy: { nome: 'asc' },
     })
