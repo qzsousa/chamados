@@ -474,7 +474,13 @@ router.post('/:id/encaminhar', authMiddleware, requireRole('ADMIN', 'TECNICO'), 
 
 router.get('/:id', authMiddleware, async (req: AuthenticatedRequest, res) => {
   try {
-    const chamado = await prisma.chamado.findUnique({ where: { id: req.params.id }, include: includeMensagens })
+    const chamado = await prisma.chamado.findUnique({
+      where: { id: req.params.id },
+      // `avaliacao` entra para a escola saber se a nota já foi dada: sem isso o
+      // painel mostraria o formulário de estrelas mesmo depois de avaliado, e o
+      // envio bateria em 409.
+      include: { ...includeMensagens, avaliacao: { select: { nota: true, comentario: true } } }
+    })
 
     if (!chamado || chamado.excluido) {
       return res.status(404).json({ error: 'NOT_FOUND', message: 'Chamado não encontrado' })
