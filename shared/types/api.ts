@@ -216,12 +216,23 @@ export const ResponderChamadoSchema = z.object({
 
 export type ResponderChamado = z.infer<typeof ResponderChamadoSchema>
 
+/**
+ * Valor reservado do filtro `categoriaChave` para os chamados que não se
+ * encaixam em NENHUMA categoria do formulário — praticamente todo o histórico
+ * anterior a ele ter virado dinâmico.
+ */
+export const CATEGORIA_SEM_CHAVE = '__sem__'
+
 export const FiltrosChamadoSchema = z.object({
   unidade: z.string().optional(),
   categoria: z.string().optional(),
+  /** Chave exata da categoria do formulário público (ex.: 'equipamento'). */
+  categoriaChave: z.string().optional(),
   status: StatusChamadoSchema.optional(),
   urgencia: z.string().optional(),
   tecnico: z.string().optional(),
+  /** Nome do técnico responsável (parcial e sem diferenciar maiúsculas). */
+  responsavel: z.string().optional(),
   inventario: InventarioStatusSchema.optional(),
   dataDe: z.string().date().optional(),
   dataAte: z.string().date().optional(),

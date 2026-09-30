@@ -17,6 +17,12 @@ vi.mock('../config/prisma', () => ({
       update: vi.fn(),
       updateMany: vi.fn(),
       deleteMany: vi.fn()
+    },
+    usuario: {
+      findMany: vi.fn()
+    },
+    formularioCategoria: {
+      findMany: vi.fn()
     }
   }
 }))
@@ -43,8 +49,11 @@ vi.mock('../services/email', () => ({
   notificarChamadoConcluido: vi.fn(() => Promise.resolve())
 }))
 
-vi.mock('../services/encaminhamento', () => ({
-  ...(vi.importActual<any> as any),
+// Só os efeitos colaterais são mockados; `destinoWhere` e companhia continuam
+// vindo do módulo real. `vi.importActual` é ASSÍNCRONO — espalhar o Promise
+// direto (`...vi.importActual()`) daria `{}` e sumiria com todo export real.
+vi.mock('../services/encaminhamento', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../services/encaminhamento')>()),
   encaminharPorRegras: vi.fn(() => Promise.resolve(false)),
   encaminharChamado: vi.fn(),
   tecnicosDaUnidade: vi.fn(() => Promise.resolve([])),
@@ -57,6 +66,10 @@ const usuario = { id: 'user-1', email: 'user@test.com', nome: 'Test User', nivel
 vi.mock('../middleware/auth', () => {
   const authMiddleware = (req: any, _res: any, next: any) => {
     req.user = { sub: usuario.id, email: usuario.email, nome: usuario.nome, nivel: usuario.nivel, filial: usuario.filial, type: 'access', iat: Date.now(), exp: Date.now() + 15 * 60 * 1000 }
+    // No index.ts quem popula isto é o `attachUserRecord`, montado logo depois do
+    // `authMiddleware`. Sem preencher aqui, a listagem nunca veria o nível do
+    // usuário e o filtro de escopo (o `OR` do técnico) não existiria.
+    req.userRecord = { ...usuario }
     next()
   }
   const requireRole = (...roles: string[]) => (req: any, res: any, next: any) => {
@@ -158,6 +171,208 @@ describe('Chamados Routes', () => {
       expect(res.status).toBe(200)
       expect(res.body.data).toHaveLength(1)
       expect(res.body.meta).toEqual({ total: 1, page: 1, limit: 20, totalPages: 1 })
+    })
+  })
+
+  /* ---- Filtros de categoria e técnico (selects da listagem) ---- */
+  describe('GET / — filtros', () => {
+    beforeEach(() => {
+      vi.mocked(prisma.chamado.count).mockResolvedValue(0)
+      vi.mocked(prisma.chamado.findMany).mockResolvedValue([])
+      vi.mocked(prisma.formularioCategoria.findMany).mockResolvedValue([
+        { chave: 'equipamento', nome: 'Equipamento' },
+        { chave: 'rede', nome: 'Rede' },
+      ] as any)
+    })
+
+    /** O `where` que a rota monta para o Prisma — é o que interessa no filtro. */
+    async function whereDaListagem(query: string) {
+      await request(app).get(`/api/chamados?${query}`)
+      return vi.mocked(prisma.chamado.findMany).mock.calls[0][0]?.where
+    }
+
+    /**
+     * A chave sozinha não acha os chamados antigos (364 dos 365 no banco):
+     * o filtro tem de cair no texto do `tipo` também.
+     */
+    it('categoriaChave traz a chave OU o texto do tipo dos chamados antigos', async () => {
+      const where = await whereDaListagem('categoriaChave=equipamento')
+
+      expect(where.AND).toEqual([
+        {
+          OR: [
+            { categoriaChave: { equals: 'equipamento', mode: 'insensitive' } },
+            { tipo: { startsWith: 'Equipamento', mode: 'insensitive' } },
+          ],
+        },
+      ])
+    })
+
+    it('categoriaChave só considera categorias ativas ao casar pelo texto', async () => {
+      await whereDaListagem('categoriaChave=equipamento')
+
+      expect(prisma.formularioCategoria.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { ativa: true } })
+      )
+    })
+
+    /**
+     * O `where.OR` do nível TECNICO (unidades que ele atende OU chamados
+     * dele) já está em uso: o filtro de categoria precisa ir em `AND`, senão
+     * um sobrescreve o outro e o técnico passa a ver chamado de outra unidade.
+     */
+    it('não sobrescreve o OR de escopo do técnico', async () => {
+      const where = await whereDaListagem('categoriaChave=equipamento')
+
+      expect(where.OR).toBeDefined()
+      expect(where.AND).toHaveLength(1)
+    })
+
+    /**
+     * `__sem__` precisa ser o COMPLEMENTO das categorias, não só `chave IS
+     * NULL`: senão um chamado antigo cujo `tipo` começa com "Rede" aparece
+     * tanto em "Rede" quanto em "Sem categoria", e a pessoa não sabe em qual
+     * dos dois filtros achá-lo.
+     *
+     * A forma exata importa e não é a óbvia — ver as armadilhas comentadas em
+     * `clausesForaDeTodas`. Contra o banco real, só esta conta 338 (e as
+     * categorias 28, fechando as 366); `NOT { OR: [...] }` devolve 0.
+     */
+    it('categoriaChave=__sem__ é o que não bate com NENHUMA categoria', async () => {
+      const where = await whereDaListagem('categoriaChave=__sem__')
+
+      expect(where.AND).toEqual([
+        // "não é Equipamento": a chave pode ser NULA, então o `not` da chave
+        // precisa do `IS NULL` ao lado, senão a linha é descartada.
+        { OR: [{ categoriaChave: null }, { categoriaChave: { not: 'equipamento' } }] },
+        { NOT: { tipo: { startsWith: 'Equipamento', mode: 'insensitive' } } },
+        { OR: [{ categoriaChave: null }, { categoriaChave: { not: 'rede' } }] },
+        { NOT: { tipo: { startsWith: 'Rede', mode: 'insensitive' } } },
+      ])
+    })
+
+    /**
+     * `tipo` é NOT NULL, então o `NOT` sobre ele é um booleano de verdade —
+     * é o que garante que as duas metades (categoria / sem categoria) somem
+     * exatamente o total, sem chamado contado duas vezes.
+     */
+    it('o NOT do tipo fica no objeto, não dentro do campo', async () => {
+      const where = await whereDaListagem('categoriaChave=__sem__')
+
+      // `{ tipo: { not: /…/ } }` é aceito pelo Prisma e NÃO filtra nada nesta
+      // versão; `notStartsWith` nem existe. A negation precisa vir do NOT.
+      for (const termo of where.AND) {
+        if (termo.tipo) throw new Error('filtro por tipo deve vir dentro de um NOT')
+      }
+    })
+
+    it('responsavel filtra pelo nome, sem acento e sem diferenciar maiúsculas', async () => {
+      const where = await whereDaListagem('responsavel=joao')
+
+      expect(where.responsavel).toEqual({ contains: 'joao', mode: 'insensitive' })
+    })
+
+    it('categoria (texto do tipo) e categoriaChave convivem como filtros distintos', async () => {
+      const where = await whereDaListagem('categoria=PortalNet&categoriaChave=sistemas')
+
+      expect(where.tipo).toEqual({ contains: 'PortalNet', mode: 'insensitive' })
+      expect(where.AND).toHaveLength(1)
+    })
+
+    it('sem os filtros, nada é restringido', async () => {
+      const where = await whereDaListagem('')
+
+      expect(where).not.toHaveProperty('categoriaChave')
+      expect(where).not.toHaveProperty('responsavel')
+      expect(where).not.toHaveProperty('AND')
+    })
+  })
+
+  describe('GET /filtros/tecnicos', () => {
+    it('lista os ativos e quem já tem chamado em seu nome, sem repetir', async () => {
+      vi.mocked(prisma.usuario.findMany).mockResolvedValue([
+        { nome: 'FERNANDA' },
+        { nome: 'PABLO' },
+      ] as any)
+      vi.mocked(prisma.chamado.findMany).mockResolvedValue([
+        { responsavel: 'PABLO' },
+        { responsavel: 'Tecnico Desativado' },
+        { responsavel: null },
+      ] as any)
+
+      const res = await request(app).get('/api/chamados/filtros/tecnicos')
+
+      expect(res.status, JSON.stringify(res.body)).toBe(200)
+      expect(res.body.data).toEqual(['FERNANDA', 'PABLO', 'Tecnico Desativado'])
+    })
+
+    /**
+     * No banco a mesma pessoa aparece como "JESSICA", "Jessica" e "jessica" em
+     * chamados antigos. O filtro casa sem diferenciar maiúsculas, então uma
+     * opção só por pessoa — as três viriam repetição sem ganho, e a pessoa não
+     * saberia qual das três oferece o chamado antigo.
+     */
+    it('agrupa o mesmo técnico escrito de jeitos diferentes', async () => {
+      vi.mocked(prisma.usuario.findMany).mockResolvedValue([{ nome: 'JESSICA' }] as any)
+      vi.mocked(prisma.chamado.findMany).mockResolvedValue([
+        { responsavel: 'Jessica' },
+        { responsavel: 'jessica' },
+      ] as any)
+
+      const res = await request(app).get('/api/chamados/filtros/tecnicos')
+
+      expect(res.body.data).toEqual(['JESSICA'])
+    })
+
+    /**
+     * Acento NÃO pode entrar no agrupamento: o filtro casa por `contains`, que
+     * não ignora acento. Agrupar "Joao" (cadastro) com "JOÃO" (chamado)
+     * entregaria uma opção que não acha chamado nenhum — os 5 chamados do
+     * "JOÃO" ficariam inalcançáveis, sem erro nenhum para avisar.
+     */
+    it('NÃO agrupa nomes que só diferem no acento', async () => {
+      vi.mocked(prisma.usuario.findMany).mockResolvedValue([{ nome: 'Joao' }] as any)
+      vi.mocked(prisma.chamado.findMany).mockResolvedValue([{ responsavel: 'JOÃO' }] as any)
+
+      const res = await request(app).get('/api/chamados/filtros/tecnicos')
+
+      expect(res.body.data).toEqual(['Joao', 'JOÃO'])
+    })
+
+    it('nomes diferentes continuam separados ("HERBERT" não é "HEBERT")', async () => {
+      vi.mocked(prisma.usuario.findMany).mockResolvedValue([
+        { nome: 'HERBERT' },
+        { nome: 'HEBERT' },
+      ] as any)
+      vi.mocked(prisma.chamado.findMany).mockResolvedValue([] as any)
+
+      const res = await request(app).get('/api/chamados/filtros/tecnicos')
+
+      expect(res.body.data).toEqual(['HEBERT', 'HERBERT'])
+    })
+
+    it('GESTOR também consegue chamar (a tela /chamados é aberta por ele)', async () => {
+      Object.assign(usuario, { nivel: 'GESTOR' })
+      vi.mocked(prisma.usuario.findMany).mockResolvedValue([])
+      vi.mocked(prisma.chamado.findMany).mockResolvedValue([])
+
+      const res = await request(app).get('/api/chamados/filtros/tecnicos')
+
+      expect(res.status).toBe(200)
+      expect(res.body.data).toEqual([])
+    })
+
+    it('ignora chamado excluído e responsável em branco', async () => {
+      vi.mocked(prisma.usuario.findMany).mockResolvedValue([])
+      vi.mocked(prisma.chamado.findMany).mockResolvedValue([{ responsavel: '   ' }] as any)
+
+      const res = await request(app).get('/api/chamados/filtros/tecnicos')
+
+      expect(res.body.data).toEqual([])
+      // `excluido: false` evita que o filtro ofereça quem só tem chamado apagado.
+      expect(vi.mocked(prisma.chamado.findMany).mock.calls[0][0]?.where).toEqual(
+        expect.objectContaining({ excluido: false })
+      )
     })
   })
 

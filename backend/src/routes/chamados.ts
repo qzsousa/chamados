@@ -1,7 +1,7 @@
 import { Router, Response, Request } from 'express'
 import { prisma } from '../config/prisma'
 import { authMiddleware, AuthenticatedRequest, requireRole, requireFilialAccess } from '../middleware/auth'
-import { CriarChamadoSchema, FiltrosChamadoSchema, AtualizarStatusChamadoSchema, ResponderChamadoSchema, BatchUpdateChamadosSchema, BatchDeleteChamadosSchema, EncaminharChamadoSchema, ChamadoSchema, PaginatedResponseSchema, ConsultarChamadoPublicoSchema } from '@shared/api'
+import { CriarChamadoSchema, FiltrosChamadoSchema, AtualizarStatusChamadoSchema, ResponderChamadoSchema, BatchUpdateChamadosSchema, BatchDeleteChamadosSchema, EncaminharChamadoSchema, ChamadoSchema, PaginatedResponseSchema, ConsultarChamadoPublicoSchema, CATEGORIA_SEM_CHAVE } from '@shared/api'
 import { ZodError } from 'zod'
 import { isZodError, respostaValidacao } from '../utils/zodError'
 import { normalizarNomeEscola, getMapaTecnicos } from '../services/normalization'
@@ -14,6 +14,55 @@ import { salvarAnexo, salvarAnexoComPath } from '../services/anexos'
 
 // sempre ignorar chamados marcados como excluídos
 const filtroExcluido = { excluido: false }
+
+/**
+ * O que faz um chamado "pertencer" a uma categoria do formulário.
+ *
+ * São DOIS caminhos porque a maioria do histórico foi aberta antes do
+ * formulário ficar dinâmico e veio sem `categoriaChave` gravada — no banco,
+ * 364 dos 366 chamados. Para esses o único vestígio é o `tipo`, que o backend
+ * monta como `"<Nome da categoria> - <primeira resposta>"`, daí o `startsWith`
+ * pelo nome ATUAL da categoria (se o ADMIN renomear a categoria, passa a valer
+ * o nome novo).
+ *
+ * Fica aqui, e não repetido em cada filtro, para o filtro por categoria e o
+ * "sem categoria" (`__sem__`) nunca discordarem do que é uma categoria.
+ */
+function clauseDaCategoria(categoria: { chave: string; nome?: string }): Record<string, unknown> {
+  return {
+    OR: [
+      { categoriaChave: { equals: categoria.chave, mode: 'insensitive' } },
+      ...(categoria.nome
+        ? [{ tipo: { startsWith: categoria.nome, mode: 'insensitive' } }]
+        : []),
+    ],
+  }
+}
+
+/**
+ * O NEGATIVO de `clauseDaCategoria` — o que o filtro "Sem categoria" procura.
+ *
+ * ⚠️ Três armadilhas do Prisma nesta negation, todas já testadas contra o banco
+ * real (o filtro saía vazio ou contava o mesmo chamado duas vezes):
+ *
+ * 1. `{ NOT: clauseDaCategoria(c) }` não funciona: `categoriaChave` é NULL nos
+ *    chamados antigos (364 de 366) e em SQL `NOT (NULL = 'rede' OR false)`
+ *    vale NULL, não true — o banco descarta a linha.
+ * 2. `{ categoriaChave: { not: chave } }` sozinho também não funciona, pelo
+ *    mesmo motivo (NULL no `not`).
+ * 3. `{ tipo: { not: /regex/i } }` é aceito e **não filtra nada** nesta versão
+ *    do Prisma; `notStartsWith` nem existe. Por isso o `NOT` do `tipo` é
+ *    colocado no objeto inteiro, e não dentro do campo.
+ *
+ * O `tipo` é NOT NULL no schema, então o `NOT` sobre ele é um booleano de
+ * verdade — diferente da chave, que precisa do `IS NULL` à mão.
+ */
+function clausesForaDeTodas(ativas: Array<{ chave: string; nome: string }>): Record<string, unknown>[] {
+  return ativas.flatMap((c) => [
+    { OR: [{ categoriaChave: null }, { categoriaChave: { not: c.chave } }] },
+    { NOT: { tipo: { startsWith: c.nome, mode: 'insensitive' } } },
+  ])
+}
 
 /** Include padrão: conversa (perguntas/respostas) com anexos ainda válidos. */
 const includeMensagens = {
@@ -359,9 +408,35 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res) => {
 
     if (filtros.unidade) where.unidade = { contains: filtros.unidade, mode: 'insensitive' }
     if (filtros.categoria) where.tipo = { contains: filtros.categoria, mode: 'insensitive' }
+    if (filtros.categoriaChave) {
+      const ativas = await prisma.formularioCategoria.findMany({
+        where: { ativa: true },
+        select: { chave: true, nome: true },
+      })
+
+      if (filtros.categoriaChave === CATEGORIA_SEM_CHAVE) {
+        // "Sem categoria" = o que NÃO se encaixa em NENHUMA categoria atual.
+        // Um simples `categoriaChave IS NULL` não serviria: ele marcaria como
+        // "sem categoria" também os chamados antigos cujo `tipo` começa com o
+        // nome de uma categoria, e o mesmo chamado apareceria em dois filtros.
+        where.AND = [
+          ...(where.AND || []),
+          ...clausesForaDeTodas(ativas),
+        ]
+      } else {
+        where.AND = [
+          ...(where.AND || []),
+          clauseDaCategoria({
+            chave: filtros.categoriaChave,
+            nome: ativas.find((c) => c.chave === filtros.categoriaChave)?.nome,
+          }),
+        ]
+      }
+    }
     if (filtros.status) where.status = filtros.status
     if (filtros.urgencia) where.urgencia = { contains: filtros.urgencia, mode: 'insensitive' }
     if (filtros.tecnico) where.tecnicoSetor = filtros.tecnico
+    if (filtros.responsavel) where.responsavel = { contains: filtros.responsavel, mode: 'insensitive' }
     if (filtros.inventario) where.inventarioStatus = filtros.inventario
     if (filtros.dataDe || filtros.dataAte) {
       where.timestamp = {}
@@ -387,6 +462,63 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res) => {
     if (isZodError(err)) {
       return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: err.flatten().fieldErrors })
     }
+    throw err
+  }
+})
+
+/**
+ * Opções do filtro "Técnico" da listagem de chamados.
+ *
+ * Qualquer usuário autenticado pode chamar: a tela `/chamados` é aberta também
+ * por GESTOR/VISUALIZADOR, e para eles um 403 no filtro deixaria a tela com um
+ * select morto. Reaproveita `destinoWhere` (a mesma regra de quem pode receber
+ * encaminhamento) e COMPLEMENTA com os responsáveis já gravados nos chamados —
+ * quem foi desativado ou mudou de nível continua tendo chamado antigo em seu
+ * nome, e sem essa parte o filtro não alcançaria o trabalho já feito.
+ *
+ * Os nomes saem daqui misturados em caixa: o mesmo técnico aparece como
+ * "JESSICA", "Jessica" e "jessica" em chamados antigos. O filtro casa sem
+ * diferenciar maiúsculas (`contains` + `insensitive`), então uma opção só por
+ * pessoa basta — várias viriam repetição sem ganho. Acento, porém, NÃO é
+ * agrupado: ver o comentário do `guardar` abaixo.
+ *
+ * Fica ANTES de `/:id` para não ser capturada pela rota de chamado por id.
+ */
+router.get('/filtros/tecnicos', authMiddleware, async (_req: AuthenticatedRequest, res) => {
+  try {
+    const [ativos, dosChamados] = await Promise.all([
+      prisma.usuario.findMany({
+        where: destinoWhere,
+        select: { nome: true },
+      }),
+      prisma.chamado.findMany({
+        where: { ...filtroExcluido, responsavel: { not: null } },
+        distinct: ['responsavel'],
+        select: { responsavel: true },
+      }),
+    ])
+
+    // Agrupa só o que a MAIÚSCULA resolve. Acento NÃO entra na chave: o
+    // filtro casa por `contains`, que não ignora acento, então agrupar
+    // "Joao" com "JOÃO" criaria uma opção que não acha chamado nenhum — os
+    // chamados do "JOÃO" sumiriam do filtro sem ninguém perceber. Duas
+    // opções parecidas são melhor que uma opção morta.
+    const nomes = new Map<string, string>()
+    const guardar = (bruto?: string | null) => {
+      const nome = bruto?.trim()
+      if (!nome) return
+      const chave = nome.toUpperCase()
+      if (!nomes.has(chave)) nomes.set(chave, nome)
+    }
+    // Cadastro primeiro: "JESSICA" é melhor de ler do que "jessica".
+    for (const u of ativos) guardar(u.nome)
+    for (const c of dosChamados) guardar(c.responsavel)
+
+    const lista = [...nomes.values()].sort((a, b) =>
+      a.localeCompare(b, 'pt-BR', { sensitivity: 'base' })
+    )
+    return res.json({ data: lista })
+  } catch (err) {
     throw err
   }
 })
