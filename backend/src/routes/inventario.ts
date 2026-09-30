@@ -3,6 +3,7 @@ import { prisma } from '../config/prisma'
 import { authMiddleware, AuthenticatedRequest, requireRole } from '../middleware/auth'
 import { InventarioSchema, InventarioUpdateSchema } from '@shared/api'
 import { ZodError } from 'zod'
+import { isZodError } from '../utils/zodError'
 import { syncInventario } from '../services/migration'
 
 const router = Router()
@@ -65,7 +66,7 @@ router.patch('/:escolaId', authMiddleware, requireRole('ADMIN'), async (req: Aut
 
     return res.json(inventario)
   } catch (err) {
-    if (err instanceof ZodError) {
+    if (isZodError(err)) {
       return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: err.flatten().fieldErrors })
     }
     throw err

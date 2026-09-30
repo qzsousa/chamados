@@ -3,18 +3,10 @@ import { prisma } from '../config/prisma'
 import { authMiddleware, AuthenticatedRequest, requireRole } from '../middleware/auth'
 import { EscolaSchema, EscolaCreateSchema } from '@shared/api'
 import { ZodError } from 'zod'
+import { isZodError } from '../utils/zodError'
 import { normalizarNomeEscola, getMapaTecnicos, getTecnicoPorEscola, NOMES_PADRONIZADOS, listarGruposUnidades } from '../services/normalization'
 
 const router = Router()
-
-/**
- * Os schemas vêm do pacote linkado @shared/api, que traz sua própria cópia do
- * zod — `instanceof ZodError` falha entre as duas cópias. Checar também o nome
- * da classe (mesmo padrão adotado em tutoriais.ts).
- */
-function isZodError(err: unknown): err is ZodError {
-  return err instanceof ZodError || (err as any)?.name === 'ZodError'
-}
 
 /** Casa tolerante de unidade: exata ou individual contida no composto (e vice-versa). */
 function unidadeCasaPainel(a: string, b: string): boolean {

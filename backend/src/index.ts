@@ -1,4 +1,7 @@
 import 'dotenv/config'
+// Antes de qualquer rota: faz a rejeição de handler `async` chegar ao errorHandler
+// (Express 4 não faz isso sozinho, e sem isso um erro vira requisição pendurada).
+import './utils/asyncHandler'
 import dns from 'dns'
 import express from 'express'
 import cors from 'cors'

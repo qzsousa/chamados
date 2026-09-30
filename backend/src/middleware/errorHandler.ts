@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express'
 import { ZodError } from 'zod'
+import { isZodError } from '../utils/zodError'
 import { Prisma } from '@prisma/client'
 import pino from 'pino'
 import { notificarAdmins } from '../services/notificacoes'
@@ -8,7 +9,7 @@ export function errorHandler(logger: pino.Logger) {
   return (err: Error, req: Request, res: Response, _next: NextFunction): void => {
     const requestId = req.headers['x-request-id'] as string || 'unknown'
 
-    if (err instanceof ZodError) {
+    if (isZodError(err)) {
       logger.warn({ requestId, errors: err.flatten().fieldErrors }, 'Validation error')
       res.status(400).json({
         error: 'VALIDATION_ERROR',

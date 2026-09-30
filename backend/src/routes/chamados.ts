@@ -3,6 +3,7 @@ import { prisma } from '../config/prisma'
 import { authMiddleware, AuthenticatedRequest, requireRole, requireFilialAccess } from '../middleware/auth'
 import { CriarChamadoSchema, FiltrosChamadoSchema, AtualizarStatusChamadoSchema, ResponderChamadoSchema, BatchUpdateChamadosSchema, BatchDeleteChamadosSchema, EncaminharChamadoSchema, ChamadoSchema, PaginatedResponseSchema, ConsultarChamadoPublicoSchema } from '@shared/api'
 import { ZodError } from 'zod'
+import { isZodError, respostaValidacao } from '../utils/zodError'
 import { normalizarNomeEscola, getMapaTecnicos } from '../services/normalization'
 import { getMapaInventario } from '../services/migration'
 import { notificarChamadoStatusAlterado, notificarChamadoCriado } from '../services/email'
@@ -327,7 +328,7 @@ export async function criarChamadoPublic(req: Request, res: Response) {
 
     return res.status(201).json(chamado)
   } catch (err) {
-    if (err instanceof ZodError) {
+    if (isZodError(err)) {
       return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: err.flatten().fieldErrors })
     }
     throw err
@@ -383,7 +384,7 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res) => {
       meta: { total, page: filtros.page, limit: filtros.limit, totalPages: Math.ceil(total / filtros.limit) }
     })
   } catch (err) {
-    if (err instanceof ZodError) {
+    if (isZodError(err)) {
       return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: err.flatten().fieldErrors })
     }
     throw err
@@ -461,11 +462,11 @@ router.post('/:id/encaminhar', authMiddleware, requireRole('ADMIN', 'TECNICO'), 
     const completo = await prisma.chamado.findUnique({ where: { id: chamado.id }, include: includeMensagens })
     return res.json({ chamado: completo, tecnico: resultado.tecnico })
   } catch (err) {
-    // `instanceof` falha entre as duas cópias do zod (o @shared/api tem a sua):
-    // confere também o nome da classe, senão o Express 4 não responde (timeout).
-    if (err instanceof ZodError || (err as any)?.name === 'ZodError') {
-      const z = err as ZodError
-      return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: z.flatten().fieldErrors })
+    // `instanceof` falha entre as duas cópias do zod (o @shared/api tem a sua) —
+    // ver utils/zodError.ts. Sem isso o Express 4 não responde: a requisição fica
+    // pendurada em vez de devolver 400.
+    if (isZodError(err)) {
+      return respostaValidacao(res, err)
     }
     throw err
   }
@@ -555,7 +556,7 @@ router.patch('/:id/status', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GES
     const completo = await prisma.chamado.findUnique({ where: { id: updated.id }, include: includeMensagens })
     return res.json(completo ?? updated)
   } catch (err) {
-    if (err instanceof ZodError) {
+    if (isZodError(err)) {
       return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: err.flatten().fieldErrors })
     }
     throw err
@@ -615,7 +616,7 @@ router.post('/:id/resposta', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GE
     const completo = await prisma.chamado.findUnique({ where: { id: updated.id }, include: includeMensagens })
     return res.json(completo ?? updated)
   } catch (err) {
-    if (err instanceof ZodError) {
+    if (isZodError(err)) {
       return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: err.flatten().fieldErrors })
     }
     throw err
@@ -673,7 +674,7 @@ router.patch('/batch', authMiddleware, requireRole('ADMIN', 'TECNICO'), async (r
 
     return res.json({ atualizados })
   } catch (err) {
-    if (err instanceof ZodError) {
+    if (isZodError(err)) {
       return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: err.flatten().fieldErrors })
     }
     throw err
@@ -688,7 +689,7 @@ router.delete('/batch', authMiddleware, requireRole('ADMIN'), async (req: Authen
 
     return res.json({ removidos: result.count })
   } catch (err) {
-    if (err instanceof ZodError) {
+    if (isZodError(err)) {
       return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: err.flatten().fieldErrors })
     }
     throw err
@@ -720,7 +721,7 @@ router.delete('/:id', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GESTOR', 
     })
     return res.json({ success: true })
   } catch (err) {
-    if (err instanceof ZodError) {
+    if (isZodError(err)) {
       return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: err.flatten().fieldErrors })
     }
     throw err

@@ -1,5 +1,6 @@
 import { Router, type Request, type Response } from 'express'
 import { ZodError } from 'zod'
+import { isZodError } from '../utils/zodError'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../config/prisma'
 import { supabase } from '../config/supabase'
@@ -14,15 +15,7 @@ import {
 
 const router = Router()
 
-/**
- * Os schemas vêm do pacote linkado @shared/api, que traz sua própria cópia do
- * zod — `instanceof ZodError` falha entre as duas cópias. Checar também o
- * nome da classe. (Mantém o mesmo response shape das demais rotas.)
- */
-function isZodError(err: unknown): err is ZodError {
-  return err instanceof ZodError || (err as any)?.name === 'ZodError'
-}
-
+/** Mantém o mesmo response shape das demais rotas. */
 function respostaValidacao(res: import('express').Response, err: ZodError) {
   return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: err.flatten().fieldErrors })
 }

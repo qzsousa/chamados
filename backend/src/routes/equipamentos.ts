@@ -3,6 +3,7 @@ import { prisma } from '../config/prisma'
 import { authMiddleware, AuthenticatedRequest } from '../middleware/auth'
 import { EquipamentoCreateSchema, EquipamentoSchema } from '@shared/api'
 import { ZodError } from 'zod'
+import { isZodError } from '../utils/zodError'
 
 const router = Router()
 
@@ -91,7 +92,7 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res) => {
     const equipamento = await prisma.equipamento.create({ data })
     return res.status(201).json(equipamento)
   } catch (err) {
-    if (err instanceof ZodError) {
+    if (isZodError(err)) {
       return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: err.flatten().fieldErrors })
     }
     throw err

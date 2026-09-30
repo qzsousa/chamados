@@ -6,6 +6,7 @@ import { passwordPolicy } from '../utils/tokens'
 import { authMiddleware, AuthenticatedRequest, requireRole, attachUserRecord } from '../middleware/auth'
 import { LoginRequestSchema, ChangePasswordSchema, GerarSenhaTemporariaSchema, LoginResponseSchema } from '@shared/api'
 import { ZodError } from 'zod'
+import { isZodError } from '../utils/zodError'
 import { grupoDaUnidade, papelDaUnidade } from '../services/normalization'
 
 const router = Router()
@@ -125,7 +126,7 @@ router.post('/login', async (req, res) => {
       primeiroLogin: user.primeiroLogin
     })
   } catch (err) {
-    if (err instanceof ZodError) {
+    if (isZodError(err)) {
       return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: err.flatten().fieldErrors })
     }
     throw err
@@ -190,7 +191,7 @@ router.post('/refresh', async (req, res) => {
       primeiroLogin: user.primeiroLogin
     })
   } catch (err) {
-    if (err instanceof ZodError) {
+    if (isZodError(err)) {
       return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: err.flatten().fieldErrors })
     }
     throw err
@@ -277,7 +278,7 @@ router.post('/change-password', authMiddleware, async (req: AuthenticatedRequest
 
     return res.json({ success: true, message: 'Senha alterada com sucesso. Faça login novamente.' })
   } catch (err) {
-    if (err instanceof ZodError) {
+    if (isZodError(err)) {
       return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: err.flatten().fieldErrors })
     }
     throw err
@@ -311,7 +312,7 @@ router.post('/admin/gerar-senha-temporaria', authMiddleware, attachUserRecord, r
 
     return res.json({ senhaTemporaria })
   } catch (err) {
-    if (err instanceof ZodError) {
+    if (isZodError(err)) {
       return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: err.flatten().fieldErrors })
     }
     throw err

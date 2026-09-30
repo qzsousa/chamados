@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { z, ZodError } from 'zod'
+import { isZodError } from '../utils/zodError'
 import { prisma } from '../config/prisma'
 import { authMiddleware, attachUserRecord, requireRole, AuthenticatedRequest } from '../middleware/auth'
 
@@ -19,7 +20,7 @@ export async function criarFeedbackPublic(req: import('express').Request, res: i
     const fb = await prisma.feedback.create({ data })
     return res.status(201).json(fb)
   } catch (err) {
-    if (err instanceof ZodError) {
+    if (isZodError(err)) {
       return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: err.flatten().fieldErrors })
     }
     throw err

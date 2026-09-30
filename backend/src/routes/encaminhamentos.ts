@@ -7,6 +7,7 @@
  */
 import { Router } from 'express'
 import { ZodError } from 'zod'
+import { isZodError } from '../utils/zodError'
 import { prisma } from '../config/prisma'
 import { authMiddleware, AuthenticatedRequest, requireRole } from '../middleware/auth'
 import { EncaminhamentoRegraSchema } from '@shared/api'
@@ -82,7 +83,7 @@ router.put('/', async (req: AuthenticatedRequest, res) => {
 
     return res.json(salva)
   } catch (err) {
-    if (err instanceof ZodError || (err as any)?.name === 'ZodError') {
+    if (isZodError(err)) {
       const z = err as ZodError
       return res
         .status(400)

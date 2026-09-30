@@ -6,6 +6,7 @@ import { UserCreateSchema, UserUpdateSchema, UserWithTempPasswordSchema, Paginat
 import { passwordPolicy } from '../utils/tokens'
 import { syncUsuarioParaSce } from '../services/sceSync'
 import { ZodError } from 'zod'
+import { isZodError } from '../utils/zodError'
 
 const router = Router()
 const BCRYPT_COST = 12
@@ -114,7 +115,7 @@ router.post('/', authMiddleware, adminOuGestor, async (req: AuthenticatedRequest
 
     return res.status(201).json({ ...user, senhaTemporaria })
   } catch (err) {
-    if (err instanceof ZodError) {
+    if (isZodError(err)) {
       return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: err.flatten().fieldErrors })
     }
     throw err
@@ -176,7 +177,7 @@ router.patch('/:id', authMiddleware, adminOuGestor, async (req: AuthenticatedReq
 
     return res.json(updated)
   } catch (err) {
-    if (err instanceof ZodError) {
+    if (isZodError(err)) {
       return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: err.flatten().fieldErrors })
     }
     throw err

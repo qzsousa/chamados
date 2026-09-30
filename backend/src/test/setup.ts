@@ -1,4 +1,8 @@
 import { beforeAll, afterAll, vi } from 'vitest'
+// O index.ts importa isto em produção; aqui para o teste montar o app não
+// precisa repetir. Sem o patch, um handler async que rejeita vira requisição
+// pendurada e o teste estoura o timeout de 30 s em vez de falhar na hora.
+import '../utils/asyncHandler'
 
 vi.mock('@sentry/node', () => ({
   init: vi.fn(),
