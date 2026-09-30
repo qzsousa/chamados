@@ -33,11 +33,13 @@
 
         <div class="consulta">
           <h4>Consultar chamado</h4>
-          <p class="consulta-sub">Informe o número de protocolo para acompanhar o andamento do seu chamado.</p>
+          <p class="consulta-sub">Informe o número de protocolo <strong>e o e-mail usado na abertura</strong> para acompanhar o andamento do seu chamado.</p>
           <div class="consulta-form">
-            <input v-model="consultaProtocolo" class="consulta-input" type="text" placeholder="Ex.: CH-20260101-0001" @keyup.enter="consultarChamado" />
-            <button type="button" class="consulta-btn" :disabled="consultando" @click="consultarChamado">Consultar</button>
+            <div class="consulta-campo"><label for="id-consulta-protocolo">Protocolo</label><input id="id-consulta-protocolo" v-model="consultaProtocolo" class="consulta-input" type="text" placeholder="Ex.: CH-20260101-0001" autocomplete="off" @keyup.enter="consultarChamado" /></div>
+            <div class="consulta-campo"><label for="id-consulta-email">E-mail usado na abertura</label><input id="id-consulta-email" v-model="consultaEmail" class="consulta-input" type="email" placeholder="nome@educacao.sp.gov.br" autocomplete="email" @keyup.enter="consultarChamado" /></div>
+            <button type="button" class="consulta-btn" :disabled="consultando" @click="consultarChamado">{{ consultando ? 'Consultando...' : 'Consultar' }}</button>
           </div>
+          <p class="consulta-dica">Por segurança, o chamado só abre para quem abriu: o e-mail precisa ser o mesmo informado no formulário.</p>
           <p v-if="consultaErro" class="consulta-erro">{{ consultaErro }}</p>
           <div v-if="consultaResultado" class="consulta-resultado">
             <div class="consulta-linha"><span class="k">Protocolo</span><span class="v mono">{{ consultaResultado.protocolo }}</span></div>
@@ -160,6 +162,7 @@ const modalTesteAberto = ref(false)
 const testeUrl = 'https://www.brasilbandalarga.com.br/'
 const protocolo = ref('')
 const consultaProtocolo = ref('')
+const consultaEmail = ref('')
 const consultando = ref(false)
 const consultaErro = ref('')
 const consultaResultado = ref<any>(null)
@@ -176,15 +179,20 @@ const contato = {nome:'Jessica Moraes - Chefe de Seção SETEC',unidade:'URE Les
 
 async function consultarChamado(){
   const p = consultaProtocolo.value.trim()
+  const e = consultaEmail.value.trim()
   consultaErro.value = ''
   consultaResultado.value = null
   if(!p){ consultaErro.value = 'Informe o número do protocolo.'; return }
+  // O protocolo sozinho é sequencial e adivinhável: o e-mail da abertura é a
+  // segunda credencial e o backend exige o par.
+  if(!e){ consultaErro.value = 'Informe o e-mail usado na abertura do chamado.'; return }
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)){ consultaErro.value = 'Informe um e-mail válido (ex.: nome@educacao.sp.gov.br).'; return }
   consultando.value = true
   try{
-    const res = await fetch(`${API_BASE}/chamados/protocolo/${encodeURIComponent(p)}`, { cache: 'no-cache' })
+    const res = await fetch(`${API_BASE}/chamados/protocolo/${encodeURIComponent(p)}?email=${encodeURIComponent(e)}`, { cache: 'no-cache' })
     if(!res.ok){
       const d = await res.json().catch(()=>null)
-      consultaErro.value = d?.message || 'Chamado não encontrado.'
+      consultaErro.value = d?.message || 'Chamado não encontrado. Confira o protocolo e o e-mail informados.'
       return
     }
     consultaResultado.value = await res.json()
@@ -372,11 +380,14 @@ function fecharTeste(){modalTesteAberto.value=false}
 .consulta { margin-top: 16px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 14px; padding: 18px 20px; }
 .consulta h4 { margin: 0 0 2px; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-secondary); font-weight: 700; }
 .consulta-sub { margin: 0 0 12px; font-size: 12.5px; color: var(--text-secondary); }
-.consulta-form { display: flex; gap: 8px; }
-.consulta-input { flex: 1; border: 1.5px solid var(--border-color); border-radius: 8px; padding: 10px 12px; font-size: 13.5px; font-family: inherit; font-family: var(--font-mono); color: var(--text-primary); background: var(--bg-input); }
+.consulta-form { display: flex; flex-direction: column; gap: 8px; }
+.consulta-campo { display: flex; flex-direction: column; gap: 4px; }
+.consulta-campo label { font-size: 12px; font-weight: 700; color: var(--text-secondary); }
+.consulta-input { width: 100%; border: 1.5px solid var(--border-color); border-radius: 8px; padding: 10px 12px; font-size: 13.5px; font-family: inherit; font-family: var(--font-mono); color: var(--text-primary); background: var(--bg-input); }
 .consulta-input:focus { outline: none; border-color: var(--accent-primary); box-shadow: 0 0 0 3px rgba(59,130,246,.2); }
 .consulta-btn { background: var(--accent-primary); color: #fff; border: none; border-radius: 8px; padding: 10px 18px; font-size: 13.5px; font-weight: 700; cursor: pointer; font-family: inherit; }
 .consulta-btn:disabled { opacity: .6; cursor: not-allowed; }
+.consulta-dica { margin: 10px 0 0; font-size: 12px; color: var(--text-muted); }
 .consulta-erro { margin: 10px 0 0; font-size: 12.5px; color: var(--accent-danger); font-weight: 600; }
 .consulta-resultado { margin-top: 14px; border-top: 1px solid var(--border-color); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
 .consulta-linha { display: flex; gap: 12px; font-size: 13px; }

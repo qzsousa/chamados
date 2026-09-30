@@ -6,6 +6,7 @@ import { passwordPolicy } from '../utils/tokens'
 import { authMiddleware, AuthenticatedRequest, requireRole, attachUserRecord } from '../middleware/auth'
 import { LoginRequestSchema, ChangePasswordSchema, GerarSenhaTemporariaSchema, LoginResponseSchema } from '@shared/api'
 import { ZodError } from 'zod'
+import { grupoDaUnidade, papelDaUnidade } from '../services/normalization'
 
 const router = Router()
 
@@ -26,12 +27,54 @@ function clearRefreshCookie(res: Response): void {
   res.clearCookie('refreshToken', { ...REFRESH_COOKIE_OPTIONS, maxAge: 0 })
 }
 
+/**
+ * Acrescenta ao usuário o contexto do grupo de escolas irmãs: `grupo` (nome
+ * composto, compartilhado pelos equipamentos no SCE) e `papelUnidade`
+ * (MAE administra o painel do grupo; FILHA só visualiza).
+ */
+function comUnidade(user: { filial: string }) {
+  return {
+    ...user,
+    grupo: grupoDaUnidade(user.filial),
+    papelUnidade: papelDaUnidade(user.filial),
+  }
+}
+
+/**
+ * Campos do usuário que podem sair para o cliente.
+ *
+ * Allow-list de propósito: `senhaHash` (e o `refreshTokenHash`) NUNCA podem ir
+ * no corpo da resposta. O vazamento aconteceu porque a resposta era montada com
+ * `...user` sobre o registro inteiro do Prisma — bastou um campo novo na tabela
+ * para ele ir junto. Tudo que sai daqui passa por esta lista.
+ */
+const CAMPOS_PUBLICAVEIS = [
+  'id',
+  'email',
+  'nome',
+  'nivel',
+  'filial',
+  'status',
+  'primeiroLogin',
+  'createdAt',
+  'updatedAt',
+] as const
+
+/** Projeta o registro do usuário no que pode ser publicado (+ contexto do grupo). */
+function publicarUsuario(user: Record<string, unknown>) {
+  const seguro: Record<string, unknown> = {}
+  for (const campo of CAMPOS_PUBLICAVEIS) {
+    if (user[campo] !== undefined) seguro[campo] = user[campo]
+  }
+  return comUnidade(seguro as { filial: string })
+}
+
 function buildLoginResponse(user: { id: string; email: string; nome: string; nivel: string; filial: string; primeiroLogin: boolean }) {
   const accessToken = signAccessToken(user as any)
   const refreshToken = signRefreshToken(user.id)
   const refreshTokenHash = hashToken(refreshToken)
 
-  return { accessToken, refreshToken, refreshTokenHash, user }
+  return { accessToken, refreshToken, refreshTokenHash, user: publicarUsuario(user) }
 }
 
 router.post('/login', async (req, res) => {
@@ -39,7 +82,19 @@ router.post('/login', async (req, res) => {
     const { email, senha } = LoginRequestSchema.parse(req.body)
 
     const user = await prisma.usuario.findUnique({
-      where: { email: email.toLowerCase() }
+      where: { email: email.toLowerCase() },
+      // `senhaHash` entra só para o bcrypt.compare; o corpo da resposta é
+      // montado por publicarUsuario(), que nunca publica esse campo.
+      select: {
+        id: true,
+        email: true,
+        nome: true,
+        nivel: true,
+        filial: true,
+        status: true,
+        primeiroLogin: true,
+        senhaHash: true,
+      },
     })
 
     if (!user || user.status !== 'ATIVO') {
@@ -176,7 +231,7 @@ router.get('/me', authMiddleware, async (req: AuthenticatedRequest, res) => {
       return res.status(404).json({ error: 'NOT_FOUND', message: 'Usuário não encontrado' })
     }
 
-    return res.json(user)
+    return res.json(comUnidade(user))
   } catch (err) {
     throw err
   }

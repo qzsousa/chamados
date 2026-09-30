@@ -18,6 +18,13 @@ export type InventarioStatus = z.infer<typeof InventarioStatusSchema>
 // USER
 // ============================================
 
+/**
+ * Papel no grupo de escolas irmãs (mesmo prédio). As duas escolas compartilham
+ * o painel de equipamentos, mas a FILHA tem acesso somente de visualização.
+ */
+export const PapelUnidadeSchema = z.enum(['MAE', 'FILHA'])
+export type PapelUnidade = z.infer<typeof PapelUnidadeSchema>
+
 export const UserSchema = z.object({
   id: z.string().cuid(),
   email: z.string().email(),
@@ -26,6 +33,9 @@ export const UserSchema = z.object({
   filial: z.string(),
   status: StatusUsuarioSchema,
   primeiroLogin: z.boolean(),
+  /** Nome composto do grupo ("E.E. A / E.E. B") — mesma quando a unidade está sozinha. */
+  grupo: z.string().optional(),
+  papelUnidade: PapelUnidadeSchema.nullable().optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime()
 })
@@ -136,13 +146,38 @@ export const CriarChamadoSchema = z.object({
   tipo: z.string().min(1),
   descricao: z.string().min(1),
   urgencia: z.string().min(1),
-  email: z.string().email().optional(),
+  /**
+   * E-mail do solicitante — OBRIGATÓRIO. É a segunda credencial da consulta
+   * pública (protocolo + e-mail), então chamado sem e-mail ficaria sem
+   * acompanhamento pelo site.
+   */
+  email: z.string().email('Informe um e-mail válido'),
   anexoBase64: z.string().optional(),
   anexoNome: z.string().optional(),
-  anexoTipo: z.string().optional()
+  anexoTipo: z.string().optional(),
+  /**
+   * Chave da categoria do formulário público (ex.: 'equipamento').
+   * É o que permite encaminhar o chamado automaticamente para o técnico
+   * sem depender do texto livre de `tipo` (que quebra se a categoria for renomeada).
+   */
+  categoriaChave: z.string().optional()
 })
 
 export type CriarChamado = z.infer<typeof CriarChamadoSchema>
+
+/**
+ * Credenciais da consulta pública de chamado.
+ *
+ * O protocolo é sequencial por dia (CH-AAAAMMDD-NNNN) e, sozinho, é adivinhável.
+ * Por isso a rota pública exige TAMBÉM o e-mail usado na abertura: o par só
+ * abre o chamado para quem realmente o criou.
+ */
+export const ConsultarChamadoPublicoSchema = z.object({
+  protocolo: z.string().trim().min(1),
+  email: z.string().trim().email('Informe um e-mail válido'),
+})
+
+export type ConsultarChamadoPublico = z.infer<typeof ConsultarChamadoPublicoSchema>
 
 const TAMANHO_MAX_ANEXO_MENSAGEM = 5 * 1024 * 1024
 
@@ -204,6 +239,42 @@ export const BatchUpdateChamadosSchema = z.object({
 })
 
 export type BatchUpdateChamados = z.infer<typeof BatchUpdateChamadosSchema>
+
+/* ---------- ENCAMINHAMENTO DE CHAMADOS ---------- */
+
+/** Para onde encaminhar: o técnico da própria unidade ou um técnico escolhido. */
+export const ModoEncaminhamentoSchema = z.enum(['UNIDADE', 'TECNICO'])
+export type ModoEncaminhamento = z.infer<typeof ModoEncaminhamentoSchema>
+
+/** Encaminhamento manual (modal de detalhes do chamado). */
+export const EncaminharChamadoSchema = z
+  .object({
+    modo: ModoEncaminhamentoSchema.default('UNIDADE'),
+    tecnicoId: z.string().cuid().optional(),
+    /** Observação opcional registrada no histórico do chamado. */
+    observacao: z.string().max(500).optional()
+  })
+  .refine((d) => d.modo !== 'TECNICO' || !!d.tecnicoId, {
+    message: 'Informe o técnico de destino',
+    path: ['tecnicoId']
+  })
+
+export type EncaminharChamado = z.infer<typeof EncaminharChamadoSchema>
+
+/** Regra de encaminhamento automático por categoria do formulário. */
+export const EncaminhamentoRegraSchema = z
+  .object({
+    categoriaChave: z.string().min(1),
+    modo: ModoEncaminhamentoSchema.default('UNIDADE'),
+    tecnicoId: z.string().cuid().optional(),
+    ativa: z.boolean().default(true)
+  })
+  .refine((d) => d.modo !== 'TECNICO' || !!d.tecnicoId, {
+    message: 'Informe o técnico fixo da regra',
+    path: ['tecnicoId']
+  })
+
+export type EncaminhamentoRegra = z.infer<typeof EncaminhamentoRegraSchema>
 
 export const BatchDeleteChamadosSchema = z.object({
   ids: z.array(z.string().cuid()).min(1)

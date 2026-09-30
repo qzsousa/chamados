@@ -1,12 +1,14 @@
 import { Router, Response, Request } from 'express'
 import { prisma } from '../config/prisma'
 import { authMiddleware, AuthenticatedRequest, requireRole, requireFilialAccess } from '../middleware/auth'
-import { CriarChamadoSchema, FiltrosChamadoSchema, AtualizarStatusChamadoSchema, ResponderChamadoSchema, BatchUpdateChamadosSchema, BatchDeleteChamadosSchema, ChamadoSchema, PaginatedResponseSchema } from '@shared/api'
+import { CriarChamadoSchema, FiltrosChamadoSchema, AtualizarStatusChamadoSchema, ResponderChamadoSchema, BatchUpdateChamadosSchema, BatchDeleteChamadosSchema, EncaminharChamadoSchema, ChamadoSchema, PaginatedResponseSchema, ConsultarChamadoPublicoSchema } from '@shared/api'
 import { ZodError } from 'zod'
 import { normalizarNomeEscola, getMapaTecnicos } from '../services/normalization'
 import { getMapaInventario } from '../services/migration'
 import { notificarChamadoStatusAlterado, notificarChamadoCriado } from '../services/email'
 import { notificarAdmins, notificarUnidade } from '../services/notificacoes'
+import { encaminharChamado, encaminharPorRegras, tecnicosDaUnidade, destinoWhere } from '../services/encaminhamento'
+import { filtroUnidadesDoUsuario, usuarioAtendeUnidade } from '../services/unidades'
 import { salvarAnexo, salvarAnexoComPath } from '../services/anexos'
 
 // sempre ignorar chamados marcados como excluídos
@@ -102,18 +104,65 @@ function getTecnicoSetor(unidade: string): string {
   return mapa[chave] || ''
 }
 
+/**
+ * O técnico "é dono" deste chamado?
+ *
+ * - É o responsável (encaminhamento automático ou manual) OU
+ * - atende a unidade do chamado — o técnico pode ter VÁRIAS unidades no `filial`
+ *   (separadas por vírgula), então a comparação precisa ser lista a lista.
+ *
+ * Substitui a comparação antiga `tecnicoSetor === user.filial`, que quebrava
+ * assim que o técnico passou a atender mais de uma escola.
+ */
+function tecnicoAtende(
+  chamado: { unidade: string; responsavel: string | null },
+  user: AuthenticatedRequest['userRecord'],
+): boolean {
+  if (!user || user.nivel !== 'TECNICO') return false
+  if (chamado.responsavel && chamado.responsavel === user.nome) return true
+  return usuarioAtendeUnidade(user.filial, chamado.unidade)
+}
+
 async function getInventarioStatus(unidade: string): Promise<string | null> {
   const mapa = await getMapaInventario()
   const chave = normalizarNomeEscola(unidade)
   return mapa[chave] || null
 }
 
+/**
+ * Resposta ÚNICA para "protocolo inexistente", "chamado sem e-mail" e "e-mail
+ * diferente do cadastrado". Mensagens distintas permitiriam enumerar protocolos
+ * válidos (são sequenciais por dia) testando e-mails a partir de um throughput.
+ */
+const NAO_ENCONTRADO_PUBLICO = { error: 'NOT_FOUND', message: 'Chamado não encontrado. Confira o protocolo e o e-mail informados.' }
+
+/** E-mail do chamado casa com o informado? Comparação sem caixa/espaços nas pontas. */
+function emailConfere(emailDoChamado: string | null | undefined, emailInformado: string): boolean {
+  if (!emailDoChamado) return false
+  return emailDoChamado.trim().toLowerCase() === emailInformado.trim().toLowerCase()
+}
+
+/**
+ * Credenciais públicas (protocolo + e-mail) vindas de params/query/body.
+ * O e-mail pode ir na query (GET) ou no corpo (POST): ambos são aceitos para
+ * o par ser o mesmo nas duas rotas. Devolve `null` quando falta ou é inválido —
+ * a resposta 400 é uniforme e não revela se o protocolo existe.
+ */
+function credenciaisPublicas(req: Request): { protocolo: string; email: string } | null {
+  const r = ConsultarChamadoPublicoSchema.safeParse({
+    protocolo: String(req.params.protocolo ?? ''),
+    email: String(req.query.email ?? req.body?.email ?? ''),
+  })
+  return r.success ? r.data : null
+}
+
 export async function consultarChamadoPublic(req: Request, res: Response) {
   try {
-    const protocolo = String(req.params.protocolo || '').trim()
-    if (!protocolo) {
-      return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Informe o protocolo' })
+    const credenciais = credenciaisPublicas(req)
+    if (!credenciais) {
+      return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Informe o protocolo e o e-mail usado na abertura do chamado' })
     }
+    const { protocolo, email } = credenciais
 
     const chamado = await prisma.chamado.findUnique({
       where: { protocolo },
@@ -127,8 +176,12 @@ export async function consultarChamadoPublic(req: Request, res: Response) {
         }
       }
     })
-    if (!chamado || chamado.excluido) {
-      return res.status(404).json({ error: 'NOT_FOUND', message: 'Chamado não encontrado' })
+    // Chamado legado (sem e-mail gravado) também fica inacessível: o e-mail é
+    // a credencial do solicitante, não há como provar a titularidade sem ele.
+    // A mensagem é a mesma nos 4 casos de 404 (inexistente, excluído, e-mail
+    // errado, sem e-mail gravado) para não permitir enumerar protocolos válidos.
+    if (!chamado || chamado.excluido || !emailConfere(chamado.email, email)) {
+      return res.status(404).json(NAO_ENCONTRADO_PUBLICO)
     }
 
     return res.json({
@@ -153,24 +206,34 @@ export async function consultarChamadoPublic(req: Request, res: Response) {
       }))
     })
   } catch (err) {
-    throw err
+    // Handler público é montado direto no index.ts (sem `next`), e no Express 4
+    // `throw` num async vira unhandled rejection: o processo continua vivo
+    // (ver o unhandledRejection em index.ts) mas a requisição fica pendurada
+    // até o cliente desistir. Responder 500 é melhor do que não responder.
+    console.error('[consultarChamadoPublic]', err)
+    if (!res.headersSent) {
+      return res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Não foi possível consultar o chamado agora. Tente novamente.' })
+    }
+    return
   }
 }
 
 /** Público — a escola avalia o atendimento de um chamado concluído (1x por chamado). */
 export async function avaliarChamadoPublic(req: Request, res: Response) {
   try {
-    const protocolo = String(req.params.protocolo || '').trim()
+    const credenciais = credenciaisPublicas(req)
     const nota = Number(req.body?.nota)
     const comentario = typeof req.body?.comentario === 'string' ? req.body.comentario.trim().slice(0, 1000) : undefined
 
-    if (!protocolo || !Number.isInteger(nota) || nota < 1 || nota > 5) {
-      return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Informe o protocolo e uma nota de 1 a 5' })
+    if (!credenciais || !Number.isInteger(nota) || nota < 1 || nota > 5) {
+      return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Informe o protocolo, o e-mail usado na abertura do chamado e uma nota de 1 a 5' })
     }
+    const { protocolo, email } = credenciais
 
     const chamado = await prisma.chamado.findUnique({ where: { protocolo } })
-    if (!chamado || chamado.excluido) {
-      return res.status(404).json({ error: 'NOT_FOUND', message: 'Chamado não encontrado' })
+    // Mesma trava da consulta: só quem abriu o chamado (protocolo + e-mail) avalia.
+    if (!chamado || chamado.excluido || !emailConfere(chamado.email, email)) {
+      return res.status(404).json(NAO_ENCONTRADO_PUBLICO)
     }
     if (chamado.status !== 'RESOLVIDO') {
       return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Só é possível avaliar chamados concluídos' })
@@ -187,7 +250,13 @@ export async function avaliarChamadoPublic(req: Request, res: Response) {
 
     return res.status(201).json({ id: avaliacao.id, nota: avaliacao.nota, comentario: avaliacao.comentario })
   } catch (err) {
-    throw err
+    // Mesmo motivo da consulta: responder 500 em vez de deixar a requisição
+    // pendurada (Express 4 não captura rejeição de handler async).
+    console.error('[avaliarChamadoPublic]', err)
+    if (!res.headersSent) {
+      return res.status(500).json({ error: 'INTERNAL_ERROR', message: 'Não foi possível registrar a avaliação agora. Tente novamente.' })
+    }
+    return
   }
 }
 
@@ -223,6 +292,7 @@ export async function criarChamadoPublic(req: Request, res: Response) {
             anexoUrl,
             email: data.email || null,
             tecnicoSetor,
+            categoriaChave: data.categoriaChave || null,
             inventarioStatus: inventarioStatus as any,
             historico: `Chamado criado em ${fmtHoraLocal(new Date())}`
           }
@@ -236,6 +306,15 @@ export async function criarChamadoPublic(req: Request, res: Response) {
 
     if (data.urgencia.startsWith('Alta')) {
       await notificarAltaPrioridade(chamado)
+    }
+
+    // Encaminhamento automático: chamado de uma categoria com regra ativa
+    // (ex.: equipamento) já nasce com o técnico da unidade como responsável.
+    // Falha aqui não pode impedir a criação do chamado.
+    try {
+      await encaminharPorRegras(chamado)
+    } catch {
+      /* silencioso: o chamado foi criado e os admins seguem notificados abaixo */
     }
 
     notificarChamadoCriado(chamado).catch(() => {})
@@ -267,8 +346,9 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res) => {
 
     if (req.userRecord && req.userRecord.nivel !== 'ADMIN') {
       if (req.userRecord.nivel === 'TECNICO') {
+        // Técnico: chamados que ele atende (lista de unidades) OU que são dele
         where.OR = [
-          { tecnicoSetor: req.userRecord.filial },
+          ...filtroUnidadesDoUsuario(req.userRecord.filial).OR,
           { responsavel: req.userRecord.nome }
         ]
       } else if (req.userRecord.nivel === 'GESTOR' || req.userRecord.nivel === 'VISUALIZADOR') {
@@ -310,6 +390,87 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res) => {
   }
 })
 
+/**
+ * Destinos ativos para o seletor de encaminhamento do modal de detalhes:
+ * ADMIN e TECNICO (ver `NIVEIS_DESTINO`). Fica ANTES de `/:id` para não ser
+ * capturada pela rota de chamado por id.
+ */
+router.get('/encaminhar/tecnicos', authMiddleware, requireRole('ADMIN', 'TECNICO'), async (_req: AuthenticatedRequest, res) => {
+  try {
+    const tecnicos = await prisma.usuario.findMany({
+      where: destinoWhere,
+      select: { id: true, nome: true, email: true, filial: true },
+      orderBy: { nome: 'asc' },
+    })
+    return res.json({ data: tecnicos })
+  } catch (err) {
+    throw err
+  }
+})
+
+/** Técnicos que atendem a unidade do chamado (sugestão do "Técnico da unidade"). */
+router.get('/encaminhar/tecnicos/:id', authMiddleware, requireRole('ADMIN', 'TECNICO'), async (req: AuthenticatedRequest, res) => {
+  try {
+    const chamado = await prisma.chamado.findUnique({ where: { id: req.params.id }, select: { unidade: true } })
+    if (!chamado) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'Chamado não encontrado' })
+    }
+    const tecnicos = await tecnicosDaUnidade(chamado.unidade)
+    return res.json({ data: tecnicos })
+  } catch (err) {
+    throw err
+  }
+})
+
+/**
+ * Encaminha/reencaminha o chamado para um técnico (modal de detalhes).
+ *
+ * Usado quando a escola abriu o chamado na categoria errada e ele precisa
+ * mesmo assim chegar ao técnico. Sobrescreve o responsável anterior e deixa
+ * o registro no histórico.
+ */
+router.post('/:id/encaminhar', authMiddleware, requireRole('ADMIN', 'TECNICO'), async (req: AuthenticatedRequest, res) => {
+  try {
+    const { modo, tecnicoId, observacao } = EncaminharChamadoSchema.parse(req.body)
+
+    const chamado = await prisma.chamado.findUnique({ where: { id: req.params.id } })
+    if (!chamado || chamado.excluido) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'Chamado não encontrado' })
+    }
+
+    // Técnico só encaminha chamado que ele atende; a matriz vê todos.
+    if (req.userRecord?.nivel === 'TECNICO' && !tecnicoAtende(chamado, req.userRecord)) {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'Sem acesso a este chamado' })
+    }
+
+    const resultado = await encaminharChamado(chamado, {
+      modo,
+      tecnicoId,
+      observacao,
+      origem: 'Manual',
+      autor: req.userRecord?.nome,
+    })
+
+    if (!resultado.ok) {
+      return res.status(422).json({
+        error: 'VALIDATION_ERROR',
+        message: resultado.motivo || 'Não foi possível encaminhar o chamado.',
+      })
+    }
+
+    const completo = await prisma.chamado.findUnique({ where: { id: chamado.id }, include: includeMensagens })
+    return res.json({ chamado: completo, tecnico: resultado.tecnico })
+  } catch (err) {
+    // `instanceof` falha entre as duas cópias do zod (o @shared/api tem a sua):
+    // confere também o nome da classe, senão o Express 4 não responde (timeout).
+    if (err instanceof ZodError || (err as any)?.name === 'ZodError') {
+      const z = err as ZodError
+      return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: z.flatten().fieldErrors })
+    }
+    throw err
+  }
+})
+
 router.get('/:id', authMiddleware, async (req: AuthenticatedRequest, res) => {
   try {
     const chamado = await prisma.chamado.findUnique({ where: { id: req.params.id }, include: includeMensagens })
@@ -320,7 +481,7 @@ router.get('/:id', authMiddleware, async (req: AuthenticatedRequest, res) => {
 
     if (req.userRecord && req.userRecord.nivel !== 'ADMIN') {
       const canAccess =
-        req.userRecord.nivel === 'TECNICO' && (chamado.tecnicoSetor === req.userRecord.filial || chamado.responsavel === req.userRecord.nome) ||
+        tecnicoAtende(chamado, req.userRecord) ||
         (req.userRecord.nivel === 'GESTOR' || req.userRecord.nivel === 'VISUALIZADOR') && unidadeCasa(chamado.unidade, req.userRecord.filial)
 
       if (!canAccess) {
@@ -345,7 +506,7 @@ router.patch('/:id/status', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GES
 
     if (req.userRecord && req.userRecord.nivel !== 'ADMIN') {
       const canUpdate =
-        req.userRecord.nivel === 'TECNICO' && (chamado.tecnicoSetor === req.userRecord.filial || chamado.responsavel === req.userRecord.nome) ||
+        tecnicoAtende(chamado, req.userRecord) ||
         ['GESTOR','VISUALIZADOR'].includes(req.userRecord.nivel) && unidadeCasa(chamado.unidade, req.userRecord.filial)
 
       if (!canUpdate) {
@@ -412,7 +573,7 @@ router.post('/:id/resposta', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GE
 
     if (req.userRecord && req.userRecord.nivel !== 'ADMIN') {
       const canAccess =
-        req.userRecord.nivel === 'TECNICO' && (chamado.tecnicoSetor === req.userRecord.filial || chamado.responsavel === req.userRecord.nome) ||
+        tecnicoAtende(chamado, req.userRecord) ||
         (req.userRecord.nivel === 'GESTOR' || req.userRecord.nivel === 'VISUALIZADOR') && unidadeCasa(chamado.unidade, req.userRecord.filial)
 
       if (!canAccess) {
@@ -467,9 +628,7 @@ router.patch('/batch', authMiddleware, requireRole('ADMIN', 'TECNICO'), async (r
 
     if (req.userRecord && req.userRecord.nivel !== 'ADMIN') {
       const chamados = await prisma.chamado.findMany({ where: { id: { in: ids } } })
-      const unauthorized = chamados.some(c =>
-        !(c.tecnicoSetor === req.userRecord?.filial || c.responsavel === req.userRecord?.nome)
-      )
+      const unauthorized = chamados.some(c => !tecnicoAtende(c, req.userRecord))
       if (unauthorized) {
         return res.status(403).json({ error: 'FORBIDDEN', message: 'Sem permissão para alterar alguns chamados' })
       }
@@ -546,7 +705,7 @@ router.delete('/:id', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GESTOR', 
 
     if (req.userRecord && req.userRecord.nivel !== 'ADMIN') {
       const canDelete =
-        req.userRecord.nivel === 'TECNICO' && (chamado.tecnicoSetor === req.userRecord.filial || chamado.responsavel === req.userRecord.nome) ||
+        tecnicoAtende(chamado, req.userRecord) ||
         ['GESTOR','VISUALIZADOR'].includes(req.userRecord.nivel) && chamado.unidade === req.userRecord.filial
 
       if (!canDelete) {

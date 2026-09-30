@@ -22,6 +22,7 @@ import notificacaoRoutes from './routes/notificacoes'
 import tutorialRoutes, { obterTutorialPublic } from './routes/tutoriais'
 import formularioRoutes, { formularioPublicoHandler } from './routes/formulario'
 import escolaRoutes from './routes/escolas'
+import encaminhamentoRoutes from './routes/encaminhamentos'
 import equipamentoRoutes from './routes/equipamentos'
 import inventarioRoutes from './routes/inventario'
 import dashboardRoutes from './routes/dashboard'
@@ -59,7 +60,9 @@ app.use(helmet({
 app.use(cors({
   origin: (origin, callback) => callback(null, true),
   credentials: true,
-  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  // PUT entra na lista: sem ele o preflight barra a chamada no navegador
+  // (net::ERR_FAILED) e o portal só descobre o problema em produção.
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }))
 
@@ -90,6 +93,18 @@ const refreshLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 100,
   message: { error: 'RATE_LIMITED', message: 'Muitas tentativas de renovação, aguarde um minuto' },
+  standardHeaders: true,
+  legacyHeaders: false
+})
+
+/**
+ * Consulta pública de chamado: protocolo é sequencial por dia (CH-AAAAMMDD-NNNN)
+ * e, mesmo com o e-mail exigido, tentativa automatizada em massa deve esbarrar aqui.
+ */
+const consultaChamadoLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  message: { error: 'RATE_LIMITED', message: 'Muitas consultas, aguarde um minuto antes de tentar de novo' },
   standardHeaders: true,
   legacyHeaders: false
 })
@@ -172,9 +187,10 @@ app.get('/api/escolas/nomes', async (_req, res) => {
 
 // Criação de chamado é pública (formulário sem login)
 app.post('/api/chamados', criarChamadoPublic)
-// Consulta pública de chamado por protocolo
+// Consulta pública de chamado: exige PROTOCOLO + E-MAIL do solicitante
+app.use('/api/chamados/protocolo', consultaChamadoLimiter)
 app.get('/api/chamados/protocolo/:protocolo', consultarChamadoPublic)
-// Avaliação pública do atendimento (escola avalia chamado concluído)
+// Avaliação pública do atendimento (mesma credencial da consulta)
 app.post('/api/chamados/protocolo/:protocolo/avaliar', avaliarChamadoPublic)
 // Elogios e sugestões (público)
 app.post('/api/feedback', criarFeedbackPublic)
@@ -194,6 +210,7 @@ app.use('/api/feedback', feedbackRoutes)
 app.use('/api/notificacoes', notificacaoRoutes)
 app.use('/api/tutoriais', tutorialRoutes)
 app.use('/api/formulario', formularioRoutes)
+app.use('/api/encaminhamentos', encaminhamentoRoutes)
 
 if (env.SENTRY_DSN) {
   app.use(Sentry.expressErrorHandler())

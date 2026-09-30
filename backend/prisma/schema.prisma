@@ -62,6 +62,7 @@ model Chamado {
   tecnicoSetor       String?
   inventarioStatus   String?  // CONCLUIDO, EM_ANDAMENTO, NAO_REALIZADO, NAO_INFORMADO
   email              String?  // e-mail do solicitante
+  categoriaChave     String?  // chave da categoria do formulário público (ex.: 'equipamento')
   excluido           Boolean  @default(false) // soft delete
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
@@ -75,6 +76,22 @@ model Chamado {
   @@index([timestamp])
   @@index([protocolo])
   @@index([responsavel])
+  @@index([categoriaChave])
+}
+
+// Regras de encaminhamento automático: chamado de uma categoria do formulário
+// vai para o técnico da unidade (UNIDADE) ou para um técnico fixo (TECNICO).
+model EncaminhamentoRegra {
+  id             String   @id @default(cuid())
+  categoriaChave String   @unique // ex.: 'equipamento'
+  modo           String   @default("UNIDADE") // UNIDADE | TECNICO
+  tecnicoId      String?  // obrigatório quando modo = TECNICO
+  tecnicoNome    String?  // nome do técnico quando a regra foi configurada (exibição)
+  ativa          Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([ativa])
 }
 
 model Inventario {

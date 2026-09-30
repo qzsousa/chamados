@@ -45,6 +45,10 @@ test-results/
 *.sqlite
 *.db
 
+# Relatorios gerados pelos scripts de correcao (backfill-chamado-email-*.csv)
+# Sao artefatos de uma execucao especifica, com dados do banco de producao.
+backend/backfill-chamado-email-*.csv
+
 # Misc
 *.tgz
 .cache/
