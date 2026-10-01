@@ -14,6 +14,7 @@
     "migration:run": "tsx src/services/migration.ts",
     "inventario:sync": "tsx migrate-inventario-only.ts",
     "sce:reconcile": "tsx reconcile-sce.ts",
+    "filial:padronizar": "tsx padronizar-filial.ts",
     "email:backfill": "tsx backfill-chamado-email.ts",
     "test": "vitest run",
     "test:watch": "vitest",
