@@ -553,6 +553,12 @@ export type DashboardKPIs = z.infer<typeof DashboardKPIsSchema>
 export const DashboardMatrizResponseSchema = z.object({
   kpis: DashboardKPIsSchema,
   chamados: z.array(ChamadoSchema),
+  /** Nota média do atendimento (público). `media` é null sem avaliações. */
+  avaliacoes: z.object({
+    total: z.number(),
+    media: z.number().nullable(),
+    porNota: z.record(z.number())
+  }).optional(),
   graficos: z.object({
     porStatus: z.record(z.number()),
     porUrgencia: z.record(z.number()),

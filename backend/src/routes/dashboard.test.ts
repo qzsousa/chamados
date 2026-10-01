@@ -11,13 +11,18 @@ vi.mock('../config/prisma', () => ({
     chamado: {
       findMany: vi.fn(),
       count: vi.fn()
+    },
+    avaliacao: {
+      groupBy: vi.fn()
     }
   }
 }))
 
 vi.mock('../services/normalization', () => ({
   normalizarNomeEscola: vi.fn((nome: string) => nome.toUpperCase().replace(/[^A-Z0-9]/g, '')),
-  getMapaTecnicos: vi.fn(() => ({ ESCOLA1: 'TECNICO1', ESCOLA2: 'TECNICO2' }))
+  normalizarTexto: vi.fn((t: string) => t),
+  getMapaTecnicos: vi.fn(() => ({ ESCOLA1: 'TECNICO1', ESCOLA2: 'TECNICO2' })),
+  getEmailsContato: vi.fn(() => '')
 }))
 
 vi.mock('../services/migration', () => ({
@@ -49,6 +54,7 @@ describe('Dashboard Routes', () => {
   beforeEach(() => {
     app = createApp()
     vi.clearAllMocks()
+    vi.mocked(prisma.avaliacao.groupBy).mockResolvedValue([])
   })
 
   describe('GET /matriz', () => {
@@ -76,6 +82,25 @@ describe('Dashboard Routes', () => {
         porStatus: { ABERTO: 1, RESOLVIDO: 1 },
         porUrgencia: { Alta: 1, Normal: 1 },
         resolvidosPorTecnico: { 'Técnico 1': 1 }
+      })
+      expect(res.body.avaliacoes).toEqual({ total: 0, media: null, porNota: { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 } })
+    })
+
+    it('should return the average rating of the public dashboard', async () => {
+      vi.mocked(prisma.chamado.findMany).mockResolvedValue([])
+      vi.mocked(prisma.chamado.count).mockResolvedValue(0)
+      vi.mocked(prisma.avaliacao.groupBy).mockResolvedValue([
+        { nota: 5, _count: 3 },
+        { nota: 4, _count: 1 }
+      ] as any)
+
+      const res = await request(app).get('/api/dashboard/matriz')
+
+      expect(res.status).toBe(200)
+      expect(res.body.avaliacoes).toEqual({
+        total: 4,
+        media: 4.75,
+        porNota: { '1': 0, '2': 0, '3': 0, '4': 1, '5': 3 }
       })
     })
 

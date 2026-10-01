@@ -4,6 +4,7 @@ import { authMiddleware, attachUserRecord, AuthenticatedRequest } from '../middl
 import { DashboardKPIsSchema, DashboardMatrizResponseSchema, DashboardFiltradoResponseSchema } from '@shared/api'
 import { normalizarNomeEscola, normalizarTexto, getMapaTecnicos, getEmailsContato } from '../services/normalization'
 import { getMapaInventario } from '../services/migration'
+import { resumoAvaliacoes } from '../services/avaliacoes'
 import { filtroUnidadesDoUsuario } from '../services/unidades'
 
 /** Match tolerante de unidade (geminadas, honoríficos). Espelha o helper de chamados.ts. */
@@ -77,7 +78,12 @@ async function getDashboardData(filtroFilial?: string, filtroNivel?: string) {
 
 router.get('/matriz', async (_req, res) => {
   try {
-    const { chamados, kpis, mapaInventario } = await getDashboardData()
+    // `avaliacoes` entra no resumo público: o painel do dirigente mostra a nota
+    // média do atendimento (só agregado, nenhum dado de quem avaliou).
+    const [{ chamados, kpis }, avaliacoes] = await Promise.all([
+      getDashboardData(),
+      resumoAvaliacoes()
+    ])
 
     const porStatus: Record<string, number> = {}
     const porUrgencia: Record<string, number> = {}
@@ -95,6 +101,7 @@ router.get('/matriz', async (_req, res) => {
     return res.json({
       kpis,
       chamados,
+      avaliacoes,
       graficos: { porStatus, porUrgencia, resolvidosPorTecnico }
     })
   } catch (err) {

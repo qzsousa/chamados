@@ -3,6 +3,7 @@ import { z, ZodError } from 'zod'
 import { isZodError } from '../utils/zodError'
 import { prisma } from '../config/prisma'
 import { authMiddleware, attachUserRecord, requireRole, AuthenticatedRequest } from '../middleware/auth'
+import { resumoAvaliacoes } from '../services/avaliacoes'
 
 const router = Router()
 
@@ -46,22 +47,13 @@ router.get('/', authMiddleware, attachUserRecord, requireRole('ADMIN', 'TECNICO'
 
 router.get('/stats', authMiddleware, attachUserRecord, requireRole('ADMIN', 'TECNICO'), async (_req, res) => {
   const [avaliacoes, elogios, sugestoes] = await Promise.all([
-    prisma.avaliacao.groupBy({ by: ['nota'], _count: true }),
+    resumoAvaliacoes(),
     prisma.feedback.count({ where: { tipo: 'ELOGIO' } }),
     prisma.feedback.count({ where: { tipo: 'SUGESTAO' } }),
   ])
 
-  const porNota: Record<string, number> = { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 }
-  let total = 0
-  let soma = 0
-  for (const a of avaliacoes) {
-    porNota[String(a.nota)] = a._count
-    total += a._count
-    soma += a.nota * a._count
-  }
-
   return res.json({
-    avaliacoes: { total, media: total ? Math.round((soma / total) * 100) / 100 : null, porNota },
+    avaliacoes,
     feedback: { elogios, sugestoes },
   })
 })
