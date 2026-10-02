@@ -5,6 +5,7 @@ import usuarioRoutes from './usuarios'
 import { errorHandler } from '../middleware/errorHandler'
 import { pino } from 'pino'
 import { prisma } from '../config/prisma'
+import { authMiddleware } from '../middleware/auth'
 
 vi.mock('../config/prisma', () => ({
   prisma: {
@@ -109,6 +110,56 @@ describe('Usuários Routes (ADMIN)', () => {
       expect(prisma.usuario.findMany).toHaveBeenCalledWith(expect.objectContaining({
         where: expect.objectContaining({ nivel: 'TECNICO', status: 'ATIVO' })
       }))
+    })
+
+    it('should filter by unidade', async () => {
+      vi.mocked(prisma.usuario.count).mockResolvedValue(1)
+      vi.mocked(prisma.usuario.findMany).mockResolvedValue([])
+
+      const res = await request(app).get('/api/usuarios?filial=' + encodeURIComponent('E.E. ALCIDES BOSCOLO'))
+
+      expect(res.status).toBe(200)
+      expect(prisma.usuario.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({
+          // `contains` e não igualdade: o TECNICO tem várias unidades na mesma
+          // linha de `filial`, separadas por vírgula.
+          AND: [{ filial: { contains: 'E.E. ALCIDES BOSCOLO', mode: 'insensitive' } }]
+        })
+      }))
+    })
+
+    it('combina busca e unidade sem disputarem o mesmo OR', async () => {
+      vi.mocked(prisma.usuario.count).mockResolvedValue(1)
+      vi.mocked(prisma.usuario.findMany).mockResolvedValue([])
+
+      await request(app).get('/api/usuarios?search=maria&filial=' + encodeURIComponent('E.E. A'))
+
+      const { where } = vi.mocked(prisma.usuario.findMany).mock.calls[0][0] as any
+      // A busca continua no OR de sempre...
+      expect(where.OR).toHaveLength(2)
+      // ...e a unidade entra à parte, senão um dos dois anularia o outro.
+      expect(where.AND).toEqual([{ filial: { contains: 'E.E. A', mode: 'insensitive' } }])
+    })
+
+    it('NÃO deixa o GESTOR ampliar o escopo passando outra unidade no filtro', async () => {
+      vi.mocked(authMiddleware).mockImplementationOnce(((req: any, _res: any, next: any) => {
+        const gestor = { sub: 'g-1', email: 'gestor@test.com', nome: 'Gestor', nivel: 'GESTOR', filial: 'FILIAL1', type: 'access', iat: Date.now(), exp: Date.now() + 900000 }
+        req.user = gestor
+        req.userRecord = { id: 'g-1', ...gestor, status: 'ATIVO', primeiroLogin: false }
+        next()
+      }) as any)
+      vi.mocked(prisma.usuario.count).mockResolvedValue(1)
+      vi.mocked(prisma.usuario.findMany).mockResolvedValue([])
+
+      // Tentativa de escapar: pedir os usuários da FILIAL2 pelo filtro de unidade.
+      const res = await request(app).get('/api/usuarios?filial=FILIAL2')
+
+      expect(res.status).toBe(200)
+      const { where } = vi.mocked(prisma.usuario.findMany).mock.calls[0][0] as any
+      // Continua preso na própria filial...
+      expect(where.filial).toBe('FILIAL1')
+      // ...e o parâmetro não entrou na consulta.
+      expect(JSON.stringify(where)).not.toContain('FILIAL2')
     })
 
     it('should respect pagination limits', async () => {

@@ -36,9 +36,16 @@ router.get('/', authMiddleware, adminOuGestor, async (req: AuthenticatedRequest,
     const search = (req.query.search as string) || ''
     const nivel = req.query.nivel as string
     const status = req.query.status as string
+    const filial = (req.query.filial as string) || ''
+
+    const nivelRequisitante = req.userRecord?.nivel || req.user?.nivel
 
     const where: any = {}
-    if ((req.userRecord?.nivel || req.user?.nivel) === 'GESTOR') {
+    // Condições independentes do filtro de busca: ficam em `AND` para não
+    // disputarem o mesmo `OR` que o `search` já usa.
+    const and: any[] = []
+
+    if (nivelRequisitante === 'GESTOR') {
       where.filial = (req.userRecord?.filial || req.user?.filial || '')
     }
     if (search) {
@@ -49,6 +56,22 @@ router.get('/', authMiddleware, adminOuGestor, async (req: AuthenticatedRequest,
     }
     if (nivel) where.nivel = nivel
     if (status) where.status = status
+
+    /**
+     * Filtro de unidade.
+     *
+     * `contains` em vez de igualdade porque o TECNICO guarda as várias
+     * unidades que atende na MESMA linha de `filial`, separadas por vírgula
+     * (`unidadesDoUsuario`); casar pelo nome exato da lista o esconderia.
+     *
+     * Para o GESTOR o parâmetro é ignorado de propósito: acima ele já ficou
+     * preso na própria filial, e aplicá-lo aqui sobrescreveria essa trava —
+     * bastaria `?filial=<outra escola>` para ver usuários de outra unidade.
+     */
+    if (filial && nivelRequisitante !== 'GESTOR') {
+      and.push({ filial: { contains: filial, mode: 'insensitive' } })
+    }
+    if (and.length) where.AND = and
 
     const [total, data] = await Promise.all([
       prisma.usuario.count({ where }),
