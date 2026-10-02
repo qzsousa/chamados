@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import request from 'supertest'
-import express from 'express'
+import express, { type Request, type Response } from 'express'
 import { errorHandler } from '../middleware/errorHandler'
 import { pino } from 'pino'
 import { ZodError, z } from 'zod'
@@ -106,5 +106,30 @@ describe('rejeição de handler async', () => {
 
   it('a notificação de erro interno nunca derruba a resposta', () => {
     expect(notificarAdmins).toBeDefined()
+  })
+
+  it('o embrulho NÃO cresce a cada requisição na mesma camada', async () => {
+    // Regressão: `protegerCamada` trocava `camada.handle` pelo embrulho, mas o
+    // memo (`embrulhados`) só guardava a chave ORIGINAL -> embrulho. No
+    // despacho seguinte entrava o próprio embrulho como `handler`, o memo
+    // errava, e um embrulho novo era criado em volta do anterior. Cada
+    // requisição somava um nível de recursão na MESMA camada até estourar a
+    // pilha ("Maximum call stack size exceeded") — e só depois de muito
+    // tráfego, o que escondia a origem. O `layer.handle` tem que ser estável.
+    const a = express()
+    a.get('/alvo', (_req: Request, res: Response) => {
+      res.json({ ok: true })
+    })
+
+    await request(a).get('/alvo')
+    const camada = (a as unknown as { _router: { stack: Array<{ handle: unknown }> } })._router.stack[0]
+    const primeiro = camada.handle
+
+    for (let i = 0; i < 25; i++) {
+      const res = await request(a).get('/alvo')
+      expect(res.status).toBe(200)
+    }
+
+    expect(camada.handle).toBe(primeiro)
   })
 })

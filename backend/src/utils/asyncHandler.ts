@@ -56,6 +56,16 @@ function resolverCamada(): CamadaExpress['prototype'] & { handle?: Handler } {
 /** Um embrulho por handler: o memo garante que não crescenta a cada requisição. */
 const embrulhados = new WeakMap<Handler, Handler>()
 
+/**
+ * Marca o próprio embrulho. Sem isto o memo erra na segunda requisição: o
+ * `protegerCamada` já deixou `camada.handle` apontando para o embrulho, e o
+ * memo só conhece a chave original. O embrulho anterior entrava como `handler`,
+ * ganhava outro embrulho em volta, e a camada crescia um nível a cada requisição
+ * até estourar a pilha. Reconhecer o embrulho devolve ele mesmo, e o
+ * `protegerCamada` então não reatribui.
+ */
+const MARCA_EMBRULHADO = Symbol('asyncHandler.embrulhado')
+
 function encaminharRejeicao(resultado: unknown, next: unknown) {
   if (resultado && typeof (resultado as Promise<unknown>).then === 'function' && typeof next === 'function') {
     ;(resultado as Promise<unknown>).then(undefined, (err: unknown) => (next as NextFunction)(err))
@@ -71,6 +81,7 @@ function encaminharRejeicao(resultado: unknown, next: unknown) {
 function embrulhar(handler: Handler): Handler {
   const jaPronto = embrulhados.get(handler)
   if (jaPronto) return jaPronto
+  if ((handler as unknown as Record<symbol, boolean>)[MARCA_EMBRULHADO]) return handler
 
   let protegido: Handler
   if (handler.length >= 4) {
@@ -87,6 +98,7 @@ function embrulhar(handler: Handler): Handler {
     }
   }
 
+  ;(protegido as unknown as Record<symbol, boolean>)[MARCA_EMBRULHADO] = true
   embrulhados.set(handler, protegido)
   return protegido
 }
