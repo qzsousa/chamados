@@ -289,34 +289,39 @@ describe('Chamados Routes', () => {
   })
 
   describe('GET /filtros/tecnicos', () => {
-    it('lista os ativos e quem já tem chamado em seu nome, sem repetir', async () => {
+    it('lista só quem pode atender, sem repetir', async () => {
       vi.mocked(prisma.usuario.findMany).mockResolvedValue([
-        { nome: 'FERNANDA' },
-        { nome: 'PABLO' },
-      ] as any)
-      vi.mocked(prisma.chamado.findMany).mockResolvedValue([
-        { responsavel: 'PABLO' },
-        { responsavel: 'Tecnico Desativado' },
-        { responsavel: null },
+        { nome: 'Fernanda' },
+        { nome: 'Pablo' },
       ] as any)
 
       const res = await request(app).get('/api/chamados/filtros/tecnicos')
 
       expect(res.status, JSON.stringify(res.body)).toBe(200)
-      expect(res.body.data).toEqual(['FERNANDA', 'PABLO', 'Tecnico Desativado'])
+      expect(res.body.data).toEqual(['Fernanda', 'Pablo'])
     })
 
     /**
-     * No banco a mesma pessoa aparece como "JESSICA", "Jessica" e "jessica" em
-     * chamados antigos. O filtro casa sem diferenciar maiúsculas, então uma
-     * opção só por pessoa — as três viriam repetição sem ganho, e a pessoa não
-     * saberia qual das três oferece o chamado antigo.
+     * A rota NÃO pode mais varrer `chamado.responsavel`. Era o que encheu o
+     * select de duplicata ("Hebert"/"HERBERT"), de nome órfão de conta removida
+     * ("SEINTEC") e das contas de teste dos cenários. Além disso, como o filtro
+     * casa por `contains` sem diferenciar acento, nenhuma dessas opções
+     * extras alcançava chamado que o cadastro já não trouxesse.
      */
+    it('NÃO consulta os responsáveis gravados nos chamados', async () => {
+      vi.mocked(prisma.usuario.findMany).mockResolvedValue([{ nome: 'Pablo' }] as any)
+
+      const res = await request(app).get('/api/chamados/filtros/tecnicos')
+
+      expect(res.body.data).toEqual(['Pablo'])
+      expect(vi.mocked(prisma.chamado.findMany)).not.toHaveBeenCalled()
+    })
+
     it('agrupa o mesmo técnico escrito de jeitos diferentes', async () => {
-      vi.mocked(prisma.usuario.findMany).mockResolvedValue([{ nome: 'JESSICA' }] as any)
-      vi.mocked(prisma.chamado.findMany).mockResolvedValue([
-        { responsavel: 'Jessica' },
-        { responsavel: 'jessica' },
+      vi.mocked(prisma.usuario.findMany).mockResolvedValue([
+        { nome: 'JESSICA' },
+        { nome: 'Jessica' },
+        { nome: 'jessica' },
       ] as any)
 
       const res = await request(app).get('/api/chamados/filtros/tecnicos')
@@ -324,37 +329,33 @@ describe('Chamados Routes', () => {
       expect(res.body.data).toEqual(['JESSICA'])
     })
 
-    /**
-     * Acento NÃO pode entrar no agrupamento: o filtro casa por `contains`, que
-     * não ignora acento. Agrupar "Joao" (cadastro) com "JOÃO" (chamado)
-     * entregaria uma opção que não acha chamado nenhum — os 5 chamados do
-     * "JOÃO" ficariam inalcançáveis, sem erro nenhum para avisar.
-     */
-    it('NÃO agrupa nomes que só diferem no acento', async () => {
-      vi.mocked(prisma.usuario.findMany).mockResolvedValue([{ nome: 'Joao' }] as any)
-      vi.mocked(prisma.chamado.findMany).mockResolvedValue([{ responsavel: 'JOÃO' }] as any)
+    it('nomes realmente diferentes continuam separados ("HERBERTO" não é "HERBERT")', async () => {
+      vi.mocked(prisma.usuario.findMany).mockResolvedValue([
+        { nome: 'HERBERTO' },
+        { nome: 'HERBERT' },
+      ] as any)
 
       const res = await request(app).get('/api/chamados/filtros/tecnicos')
 
-      expect(res.body.data).toEqual(['Joao', 'JOÃO'])
+      expect(res.body.data).toEqual(['HERBERT', 'HERBERTO'])
     })
 
-    it('nomes diferentes continuam separados ("HERBERT" não é "HEBERT")', async () => {
+    it('descarta nome em branco e ordena em pt-BR', async () => {
       vi.mocked(prisma.usuario.findMany).mockResolvedValue([
-        { nome: 'HERBERT' },
-        { nome: 'HEBERT' },
+        { nome: '  ' },
+        { nome: 'Valdeir' },
+        { nome: 'Ávila' },
+        { nome: 'pablo' },
       ] as any)
-      vi.mocked(prisma.chamado.findMany).mockResolvedValue([] as any)
 
       const res = await request(app).get('/api/chamados/filtros/tecnicos')
 
-      expect(res.body.data).toEqual(['HEBERT', 'HERBERT'])
+      expect(res.body.data).toEqual(['Ávila', 'pablo', 'Valdeir'])
     })
 
     it('GESTOR também consegue chamar (a tela /chamados é aberta por ele)', async () => {
       Object.assign(usuario, { nivel: 'GESTOR' })
       vi.mocked(prisma.usuario.findMany).mockResolvedValue([])
-      vi.mocked(prisma.chamado.findMany).mockResolvedValue([])
 
       const res = await request(app).get('/api/chamados/filtros/tecnicos')
 
@@ -362,16 +363,13 @@ describe('Chamados Routes', () => {
       expect(res.body.data).toEqual([])
     })
 
-    it('ignora chamado excluído e responsável em branco', async () => {
+    it('usa a mesma regra de quem pode receber encaminhamento (destinoWhere)', async () => {
       vi.mocked(prisma.usuario.findMany).mockResolvedValue([])
-      vi.mocked(prisma.chamado.findMany).mockResolvedValue([{ responsavel: '   ' }] as any)
 
-      const res = await request(app).get('/api/chamados/filtros/tecnicos')
+      await request(app).get('/api/chamados/filtros/tecnicos')
 
-      expect(res.body.data).toEqual([])
-      // `excluido: false` evita que o filtro ofereça quem só tem chamado apagado.
-      expect(vi.mocked(prisma.chamado.findMany).mock.calls[0][0]?.where).toEqual(
-        expect.objectContaining({ excluido: false })
+      expect(vi.mocked(prisma.usuario.findMany).mock.calls[0][0]?.where).toEqual(
+        expect.objectContaining({ status: 'ATIVO', nivel: expect.objectContaining({ in: expect.any(Array) }) })
       )
     })
   })

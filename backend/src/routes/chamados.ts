@@ -471,48 +471,41 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res) => {
  *
  * Qualquer usuário autenticado pode chamar: a tela `/chamados` é aberta também
  * por GESTOR/VISUALIZADOR, e para eles um 403 no filtro deixaria a tela com um
- * select morto. Reaproveita `destinoWhere` (a mesma regra de quem pode receber
- * encaminhamento) e COMPLEMENTA com os responsáveis já gravados nos chamados —
- * quem foi desativado ou mudou de nível continua tendo chamado antigo em seu
- * nome, e sem essa parte o filtro não alcançaria o trabalho já feito.
+ * select morto. Reaproveita `destinoWhere` — a mesma regra de quem pode receber
+ * encaminhamento — ou seja, o filtro mostra exatamente quem pode atender.
  *
- * Os nomes saem daqui misturados em caixa: o mesmo técnico aparece como
- * "JESSICA", "Jessica" e "jessica" em chamados antigos. O filtro casa sem
- * diferenciar maiúsculas (`contains` + `insensitive`), então uma opção só por
- * pessoa basta — várias viriam repetição sem ganho. Acento, porém, NÃO é
- * agrupado: ver o comentário do `guardar` abaixo.
+ * Antes esta rota COMPLEMENTAVA com todo nome que já aparecia como
+ * `responsavel` em algum chamado, para o filtro alcançar o trabalho de quem
+ * saiu da equipe. Na prática o select encheu de ruído: o mesmo técnico em
+ * caixa diferente virava duas opções ("Hebert"/"HERBERT", "Joao"/"JOÃO"),
+ * nomes órfãos de conta removida seguiam listados para sempre ("SEINTEC") e
+ * as contas de teste dos cenários entravam junto. Como o filtro casa por
+ * `contains` sem diferenciar acento, nenhuma dessas opções extras encontrava
+ * chamado que a opção do cadastro já não trouxesse — só poluição.
+ *
+ * Consequência aceita: chamado antigo cujo `responsavel` não bate com o nome
+ * do cadastro (ex.: "JOÃO" gravado, cadastro "Joao") deixa de ser alcançável
+ * pelo filtro.
  *
  * Fica ANTES de `/:id` para não ser capturada pela rota de chamado por id.
  */
 router.get('/filtros/tecnicos', authMiddleware, async (_req: AuthenticatedRequest, res) => {
   try {
-    const [ativos, dosChamados] = await Promise.all([
-      prisma.usuario.findMany({
-        where: destinoWhere,
-        select: { nome: true },
-      }),
-      prisma.chamado.findMany({
-        where: { ...filtroExcluido, responsavel: { not: null } },
-        distinct: ['responsavel'],
-        select: { responsavel: true },
-      }),
-    ])
+    const ativos = await prisma.usuario.findMany({
+      where: destinoWhere,
+      select: { nome: true },
+    })
 
-    // Agrupa só o que a MAIÚSCULA resolve. Acento NÃO entra na chave: o
-    // filtro casa por `contains`, que não ignora acento, então agrupar
-    // "Joao" com "JOÃO" criaria uma opção que não acha chamado nenhum — os
-    // chamados do "JOÃO" sumiriam do filtro sem ninguém perceber. Duas
-    // opções parecidas são melhor que uma opção morta.
+    // Uma opção por pessoa. A chave é a MAIÚSCULA (o filtro casa sem
+    // diferenciar caixa), e vale a PRIMEIRA grafia vista: o cadastro vem antes
+    // dos demais e é ele que está grafado por último, então é o mais confável.
     const nomes = new Map<string, string>()
-    const guardar = (bruto?: string | null) => {
-      const nome = bruto?.trim()
-      if (!nome) return
+    for (const u of ativos) {
+      const nome = u.nome?.trim()
+      if (!nome) continue
       const chave = nome.toUpperCase()
       if (!nomes.has(chave)) nomes.set(chave, nome)
     }
-    // Cadastro primeiro: "JESSICA" é melhor de ler do que "jessica".
-    for (const u of ativos) guardar(u.nome)
-    for (const c of dosChamados) guardar(c.responsavel)
 
     const lista = [...nomes.values()].sort((a, b) =>
       a.localeCompare(b, 'pt-BR', { sensitivity: 'base' })
