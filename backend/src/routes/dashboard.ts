@@ -172,7 +172,11 @@ router.get('/filtrado', authMiddleware, attachUserRecord, async (req: Authentica
 
 router.get('/stats', authMiddleware, attachUserRecord, async (req: AuthenticatedRequest, res) => {
   try {
-    const where: any = {}
+    // `excluido: false` é obrigatório aqui: chamado excluído é SOFT DELETE (some
+    // da lista, do painel do dirigente e dos gráficos, mas continuava sendo
+    // contado por estas contas). Era a diferença entre o KPI do painel
+    // autenticado e o do painel público — 9 chamados, todos já excluídos.
+    const where: any = { excluido: false }
     if (req.userRecord && req.userRecord.nivel !== 'ADMIN') {
       where.OR = filtroUnidadeToleranteDash(req.userRecord.filial)
     }
