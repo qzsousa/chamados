@@ -1,9 +1,23 @@
 import { Router } from 'express'
 import { prisma } from '../config/prisma'
 import { authMiddleware, attachUserRecord, AuthenticatedRequest } from '../middleware/auth'
-import { filtroUnidadesDoUsuario, usuarioAtendeUnidade } from '../services/unidades'
+import { unidadesDoUsuario, normalizarUnidade, usuarioAtendeUnidade } from '../services/unidades'
 
 const router = Router()
+
+/**
+ * Prisma `where` sobre o campo `filial` da Notificacao (a unidade notificada).
+ * Espelha `filtroUnidadesDoUsuario`, que é do model Chamado (`unidade`) —
+ * usar o dele aqui quebrava a query com "Unknown argument `unidade`" e o sino
+ * de todo usuário com filial (técnicos e escolas) respondia HTTP 500.
+ */
+function filtroNotificacoesDaFilial(filial: string | null | undefined) {
+  const unidades = unidadesDoUsuario(filial)
+  if (!unidades.length) return { OR: [{ filial: { equals: '__sem_unidades__' } }] }
+  return {
+    OR: unidades.map((u) => ({ filial: { contains: normalizarUnidade(u) || u, mode: 'insensitive' as const } })),
+  }
+}
 
 /** Filtro: notificações visíveis ao usuário (próprias + broadcast admin + da sua filial). */
 function filtroVisiveis(user: AuthenticatedRequest['user'], record: AuthenticatedRequest['userRecord']) {
@@ -11,7 +25,7 @@ function filtroVisiveis(user: AuthenticatedRequest['user'], record: Authenticate
     { usuarioId: user?.sub },
     // Técnico tem VÁRIAS unidades no filial (separadas por vírgula) — casar por
     // igualdade com a string inteira esconderia as notificações das escolas dele.
-    ...(record?.filial ? [filtroUnidadesDoUsuario(record.filial)] : []),
+    ...(record?.filial ? [filtroNotificacoesDaFilial(record.filial)] : []),
   ]
   if (record?.nivel === 'ADMIN') or.push({ usuarioId: null })
   return {
