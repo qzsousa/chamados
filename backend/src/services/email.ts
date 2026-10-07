@@ -1,17 +1,15 @@
 import { env } from '../config/env'
 import { getEmailsContato, EmailContato } from './normalization'
+import { ROTULO_STATUS_CHAMADO } from '@shared/api'
 
-const STATUS_LABEL: Record<string, string> = {
-  ABERTO: 'Aberto',
-  ANDAMENTO: 'Em andamento',
-  COMUNICADO: 'Comunicado',
-  RESOLVIDO: 'Resolvido',
-}
+const STATUS_LABEL: Record<string, string> = { ...ROTULO_STATUS_CHAMADO }
 
 const STATUS_BADGE: Record<string, string> = {
   ABERTO: '#fef3c7;#92400e',
+  ENCAMINHADO: '#ffedd5;#9a3412',
   ANDAMENTO: '#dbeafe;#1e40af',
   COMUNICADO: '#e0e7ff;#3730a3',
+  AGUARDANDO_CONFERENCIA: '#ede9fe;#5b21b6',
   RESOLVIDO: '#ecfdf5;#065f46',
 }
 

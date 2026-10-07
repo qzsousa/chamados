@@ -32,7 +32,6 @@ export interface ChamadoParaEncaminhar {
   categoriaChave?: string | null
   historico?: string | null
 }
-
 export interface RegraEncaminhamento {
   categoriaChave: string
   modo: ModoEncaminhamento
@@ -220,6 +219,13 @@ export async function encaminharChamado(
     where: { id: chamado.id },
     data: {
       responsavel: tecnico.nome,
+      // `responsavel` é nome (é o que o filtro e a lista de chamados usam), mas
+      // a notificação de reabertura/conferência precisa do id do usuário.
+      responsavelId: tecnico.id,
+      // Encaminhar tira o chamado da fila da matriz e põe na fila do técnico.
+      // Reencaminhar um chamado já em atendimento não volta o status: o técnico
+      // pode estar no meio do serviço e só ser trocado de responsável.
+      status: chamado.status === 'ABERTO' ? 'ENCAMINHADO' : chamado.status,
       historico: `${chamado.historico || ''}\n${entrada}`.trim(),
       ultimaAtualizacao: agora,
     },

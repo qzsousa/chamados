@@ -54,8 +54,12 @@ function chamadoBase(over: Record<string, any> = {}) {
     timestamp: new Date('2026-09-23T10:00:00.000Z'),
     ultimaAtualizacao: new Date('2026-09-24T10:00:00.000Z'),
     excluido: false,
+    reaberturas: 0,
     avaliacao: null,
     mensagens: [],
+    // A consulta pública inclui os registros de atendimento: o solicitante tem
+    // direito de ler o que fizeram no equipamento dele.
+    atividades: [],
     ...over
   }
 }
@@ -101,6 +105,29 @@ describe('Consulta pública de chamado (protocolo + e-mail)', () => {
     expect(res.status).toBe(200)
     expect(res.body.protocolo).toBe(PROTOCOLO)
     expect(res.body.unidade).toBe('E.E. TESTE')
+    expect(res.body.atividades).toEqual([])
+    expect(res.body.reaberturas).toBe(0)
+  })
+
+  it('mostra ao solicitante os registros de atendimento do técnico', async () => {
+    vi.mocked(prisma.chamado.findUnique).mockResolvedValue(chamadoBase({
+      status: 'RESOLVIDO',
+      atividades: [
+        {
+          id: 'at-1',
+          tipo: 'REGISTRO',
+          autorNome: 'João Técnico',
+          texto: 'Testei a porta 3 do switch.',
+          criadoEm: new Date('2026-09-23T15:00:00.000Z'),
+          anexos: [{ nome: 'foto.jpg', tipo: 'image/jpeg', url: 'https://x/foto.jpg' }]
+        }
+      ]
+    }) as any)
+    const res = await consultar(EMAIL)
+    expect(res.status).toBe(200)
+    expect(res.body.atividades).toHaveLength(1)
+    expect(res.body.atividades[0]).toMatchObject({ tipo: 'REGISTRO', autorNome: 'João Técnico' })
+    expect(res.body.atividades[0].anexos[0].url).toBe('https://x/foto.jpg')
   })
 
   it('ignora maiúsculas e espaços do e-mail informado', async () => {

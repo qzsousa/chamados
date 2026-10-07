@@ -132,6 +132,24 @@ describe('encaminharChamado', () => {
     expect(update.data.historico).toContain('Obs.: categoria errada')
   })
 
+  it('grava o id do responsável — é ele que permite avisar o técnico na reabertura', async () => {
+    await encaminharChamado(CHAMADO as any, { modo: 'UNIDADE' })
+    const update = vi.mocked(prisma.chamado.update).mock.calls[0][0] as any
+    expect(update.data.responsavelId).toBe('tec-1')
+  })
+
+  it('chamado ABERTO vira ENCAMINHADO (fila do técnico, aguardando aceite)', async () => {
+    await encaminharChamado({ ...CHAMADO, status: 'ABERTO' } as any, { modo: 'UNIDADE' })
+    const update = vi.mocked(prisma.chamado.update).mock.calls[0][0] as any
+    expect(update.data.status).toBe('ENCAMINHADO')
+  })
+
+  it('reencaminhar chamado em atendimento NÃO volta o status (técnico pode estar no serviço)', async () => {
+    await encaminharChamado({ ...CHAMADO, status: 'ANDAMENTO' } as any, { modo: 'UNIDADE', origem: 'Manual' })
+    const update = vi.mocked(prisma.chamado.update).mock.calls[0][0] as any
+    expect(update.data.status).toBe('ANDAMENTO')
+  })
+
   it('modo TECNICO usa o técnico fixo da regra', async () => {
     vi.mocked(prisma.usuario.findFirst).mockResolvedValue({ ...TECNICO, id: 'tec-fixo', nome: 'Técnico Fixo' } as any)
     const r = await encaminharChamado(CHAMADO as any, { modo: 'TECNICO', tecnicoId: 'tec-fixo' })

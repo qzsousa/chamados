@@ -6,13 +6,65 @@ import { z } from 'zod'
 
 export const NivelSchema = z.enum(['ADMIN', 'TECNICO', 'GESTOR', 'VISUALIZADOR'])
 export const StatusUsuarioSchema = z.enum(['ATIVO', 'INATIVO'])
-export const StatusChamadoSchema = z.enum(['ABERTO', 'ANDAMENTO', 'COMUNICADO', 'RESOLVIDO'])
+/**
+ * Fluxo do chamado (matriz → técnico → escola):
+ *
+ *   ABERTO ──encaminhar──▶ ENCAMINHADO ──aceitar──▶ ANDAMENTO
+ *                                                          │
+ *                                              concluir   ▼
+ *                                       AGUARDANDO_CONFERENCIA
+ *                                            │            │
+ *                             school confirma│            │escola contesta
+ *                                            ▼            ▼
+ *                                        RESOLVIDO      ABERTO (+1 reabertura)
+ *
+ * `COMUNICADO` é uma via paralela já existente: a matriz faz uma pergunta à
+ * escola e, quando ela responde, o chamado volta para `ANDAMENTO`.
+ */
+export const StatusChamadoSchema = z.enum([
+  'ABERTO',
+  'ENCAMINHADO',
+  'ANDAMENTO',
+  'COMUNICADO',
+  'AGUARDANDO_CONFERENCIA',
+  'RESOLVIDO',
+])
 export const InventarioStatusSchema = z.enum(['CONCLUIDO', 'EM_ANDAMENTO', 'NAO_REALIZADO', 'NAO_INFORMADO'])
 
 export type Nivel = z.infer<typeof NivelSchema>
 export type StatusUsuario = z.infer<typeof StatusUsuarioSchema>
 export type StatusChamado = z.infer<typeof StatusChamadoSchema>
 export type InventarioStatus = z.infer<typeof InventarioStatusSchema>
+
+/** Tipo do registro datado que fica na linha do tempo do chamado. */
+export const TipoAtividadeSchema = z.enum(['REGISTRO', 'CONCLUSAO', 'CONTESTACAO', 'APROVACAO'])
+export type TipoAtividade = z.infer<typeof TipoAtividadeSchema>
+
+/** Rótulos e cores usados na interface (fonte única para as duas pontas). */
+export const ROTULO_STATUS_CHAMADO: Record<StatusChamado, string> = {
+  ABERTO: 'Aberto',
+  ENCAMINHADO: 'Encaminhado',
+  ANDAMENTO: 'Em atendimento',
+  COMUNICADO: 'Aguardando resposta',
+  AGUARDANDO_CONFERENCIA: 'Aguardando conferência',
+  RESOLVIDO: 'Concluído',
+}
+
+/** Status que ainda não são finales — base dos KPIs e do filtro "em aberto". */
+export const STATUS_EM_ABERTO: StatusChamado[] = [
+  'ABERTO',
+  'ENCAMINHADO',
+  'ANDAMENTO',
+  'COMUNICADO',
+  'AGUARDANDO_CONFERENCIA',
+]
+
+export const ROTULO_TIPO_ATIVIDADE: Record<TipoAtividade, string> = {
+  REGISTRO: 'Registro de atendimento',
+  CONCLUSAO: 'Conclusão',
+  CONTESTACAO: 'Contestação da escola',
+  APROVACAO: 'Conferência aprovada',
+}
 
 // ============================================
 // USER
@@ -223,6 +275,80 @@ export const ResponderChamadoSchema = z.object({
 })
 
 export type ResponderChamado = z.infer<typeof ResponderChamadoSchema>
+
+/* ---------- FLUXO DE ATENDIMENTO (aceitar / atividade / concluir / conferir) ---------- */
+
+/**
+ * Registro do que o técnico fez. Pode ser repetido quantas vezes quiser: cada
+ * envio vira uma linha nova com a sua própria data/hora.
+ */
+export const RegistrarAtividadeSchema = z.object({
+  texto: z.string().trim().min(1, 'Descreva o que foi feito').max(5000),
+  anexos: z.array(AnexoMensagemSchema).max(5).optional()
+})
+
+export type RegistrarAtividade = z.infer<typeof RegistrarAtividadeSchema>
+
+/** Conclusão do técnico: texto obrigatório, porque é o que a escola vai conferir. */
+export const ConcluirChamadoSchema = z.object({
+  descricaoResolucao: z
+    .string()
+    .trim()
+    .min(1, 'Registre o que foi feito para concluir o chamado')
+    .max(5000),
+  anexos: z.array(AnexoMensagemSchema).max(5).optional()
+})
+
+export type ConcluirChamado = z.infer<typeof ConcluirChamadoSchema>
+
+/**
+ * Conferência da escola sobre a conclusão do técnico.
+ *
+ * `aprovado: false` é a contestação: o texto passa a ser obrigatório porque é
+ * ele que diz o que ficou faltando, e o chamado volta para ABERTO contando mais
+ * uma reabertura.
+ */
+export const ConferirChamadoSchema = z
+  .object({
+    aprovado: z.boolean(),
+    texto: z.string().trim().max(5000).optional(),
+    anexos: z.array(AnexoMensagemSchema).max(5).optional()
+  })
+  .superRefine((a, ctx) => {
+    if (!a.aprovado && !a.texto) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['texto'],
+        message: 'Registre o que ficou faltando'
+      })
+    }
+  })
+
+export type ConferirChamado = z.infer<typeof ConferirChamadoSchema>
+
+/**
+ * Anexo permanente do registro de atividade (5MB) — mesmo limite da conversa,
+ * mas este arquivo NÃO expira: é a prova do que foi feito no equipamento.
+ */
+export const AnexoAtividadeSchema = AnexoMensagemSchema
+export type AnexoAtividade = z.infer<typeof AnexoAtividadeSchema>
+
+export const ChamadoAtividadeSchema = z.object({
+  id: z.string().cuid(),
+  tipo: TipoAtividadeSchema,
+  autorNome: z.string(),
+  autorNivel: z.string().nullable(),
+  texto: z.string(),
+  criadoEm: z.string().datetime(),
+  anexos: z.array(z.object({
+    id: z.string().cuid(),
+    nome: z.string(),
+    tipo: z.string().nullable(),
+    url: z.string()
+  }))
+})
+
+export type ChamadoAtividade = z.infer<typeof ChamadoAtividadeSchema>
 
 /**
  * Valor reservado do filtro `categoriaChave` para os chamados que não se
@@ -549,9 +675,12 @@ export type InventarioUpdate = z.infer<typeof InventarioUpdateSchema>
 
 export const DashboardKPIsSchema = z.object({
   total: z.number(),
+  /** ABERTO + ENCAMINHADO: fila que ainda não começou a ser executada. */
   abertos: z.number(),
   andamento: z.number(),
   comunicado: z.number(),
+  /** AGUARDANDO_CONFERENCIA: o técnico concluiu, a escola ainda não conferiu. */
+  aguardandoConferencia: z.number(),
   resolvidos: z.number(),
   altaPrioridade: z.number()
 })

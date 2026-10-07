@@ -31,7 +31,13 @@ vi.mock('../middleware/auth', () => {
     req.userRecord = { ...usuario }
     next()
   }
-  return { authMiddleware, attachUserRecord }
+  const requireRole = (...roles: string[]) => (_req: any, res: any, next: any) => {
+    if (!roles.includes(usuario.nivel)) {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'Sem permissão' })
+    }
+    next()
+  }
+  return { authMiddleware, attachUserRecord, requireRole }
 })
 
 const createApp = () => {

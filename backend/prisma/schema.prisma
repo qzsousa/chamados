@@ -53,8 +53,12 @@ model Chamado {
   descricao          String
   urgencia           String
   anexoUrl           String?
-  status             String   @default("ABERTO") // ABERTO, ANDAMENTO, COMUNICADO, RESOLVIDO
+  status             String   @default("ABERTO") // ABERTO, ENCAMINHADO, ANDAMENTO, COMUNICADO, AGUARDANDO_CONFERENCIA, RESOLVIDO
   responsavel        String?
+  // Id do usuário responsável. `responsavel` continua sendo o NOME (é por ele
+  // que os filtros e o histórico funcionam), mas notificar o técnico na
+  // reabertura exige o id — sem ele só daria para avisar os admins.
+  responsavelId      String?
   ultimaAtualizacao  DateTime @updatedAt
   historico          String?
   tecnicoResolucao   String?
@@ -63,14 +67,23 @@ model Chamado {
   inventarioStatus   String?  // CONCLUIDO, EM_ANDAMENTO, NAO_REALIZADO, NAO_INFORMADO
   email              String?  // e-mail do solicitante
   categoriaChave     String?  // chave da categoria do formulário público (ex.: 'equipamento')
-  aceitoEm           DateTime? // quando o técnico aceitou o chamado (botão "Aceitar")
-  concluidoEm        DateTime? // quando o chamado foi concluído (status -> RESOLVIDO)
+  aceitoEm           DateTime? // quando o técnico aceitou o chamado (botão "Aceitar"). Gravado só na ida para ANDAMENTO a partir de ABERTO/ENCAMINHADO
+  concluidoEm        DateTime? // técnico registrou a conclusão (AGUARDANDO_CONFERENCIA); a RESOLVIDO final vira `conferidoEm`
   excluido           Boolean  @default(false) // soft delete
+
+  // ---- Marco do fluxo de atendimento ----
+  // Quantas vezes a escola contestou e o chamado voltou para ABERTO.
+  reaberturas        Int      @default(0)
+  aceitoPor          String?
+  conferidoEm        DateTime? // escola confirmou que ficou tudo certo
+  conferidoPor       String?
+
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
   avaliacao          Avaliacao?
   mensagens          ChamadoMensagem[]
+  atividades         ChamadoAtividade[]
 
   @@index([unidade])
   @@index([status])
@@ -78,7 +91,43 @@ model Chamado {
   @@index([timestamp])
   @@index([protocolo])
   @@index([responsavel])
+  @@index([responsavelId])
   @@index([categoriaChave])
+}
+
+/// Registro datado do atendimento: o que o técnico fez, a conclusão, a
+/// contestação da escola e a aprovação final.
+///
+/// Fica em tabela própria (e não em `historico`, que é TEXTO) porque o técnico
+/// registra várias vezes o mesmo chamado, cada registro precisa de data/hora
+/// REAL — não inferida por regex — e porque os anexos deste registro são a
+/// prova do serviço, então não expiram como os da conversa.
+model ChamadoAtividade {
+  id         String   @id @default(cuid())
+  chamadoId  String
+  chamado    Chamado  @relation(fields: [chamadoId], references: [id], onDelete: Cascade)
+  // REGISTRO | CONCLUSAO | CONTESTACAO | APROVACAO
+  tipo       String
+  autorNome  String
+  autorNivel String?
+  texto      String
+  criadoEm   DateTime @default(now())
+
+  anexos     ChamadoAtividadeAnexo[]
+
+  @@index([chamadoId, criadoEm])
+}
+
+model ChamadoAtividadeAnexo {
+  id          String          @id @default(cuid())
+  atividadeId String
+  atividade   ChamadoAtividade @relation(fields: [atividadeId], references: [id], onDelete: Cascade)
+  nome        String
+  tipo        String?
+  url         String
+  criadoEm    DateTime        @default(now())
+
+  @@index([atividadeId])
 }
 
 // Regras de encaminhamento automático: chamado de uma categoria do formulário

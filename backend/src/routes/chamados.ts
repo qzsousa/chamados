@@ -1,13 +1,13 @@
 import { Router, Response, Request } from 'express'
 import { prisma } from '../config/prisma'
 import { authMiddleware, AuthenticatedRequest, requireRole, requireFilialAccess } from '../middleware/auth'
-import { CriarChamadoSchema, FiltrosChamadoSchema, AtualizarStatusChamadoSchema, ResponderChamadoSchema, BatchUpdateChamadosSchema, BatchDeleteChamadosSchema, EncaminharChamadoSchema, ChamadoSchema, PaginatedResponseSchema, ConsultarChamadoPublicoSchema, CATEGORIA_SEM_CHAVE } from '@shared/api'
+import { CriarChamadoSchema, FiltrosChamadoSchema, AtualizarStatusChamadoSchema, ResponderChamadoSchema, BatchUpdateChamadosSchema, BatchDeleteChamadosSchema, EncaminharChamadoSchema, ChamadoSchema, PaginatedResponseSchema, ConsultarChamadoPublicoSchema, CATEGORIA_SEM_CHAVE, RegistrarAtividadeSchema, ConcluirChamadoSchema, ConferirChamadoSchema, TipoAtividadeSchema } from '@shared/api'
 import { ZodError } from 'zod'
 import { isZodError, respostaValidacao } from '../utils/zodError'
 import { normalizarNomeEscola, getMapaTecnicos } from '../services/normalization'
 import { getMapaInventario } from '../services/migration'
 import { notificarChamadoStatusAlterado, notificarChamadoCriado } from '../services/email'
-import { notificarAdmins, notificarUnidade } from '../services/notificacoes'
+import { notificarAdmins, notificarUnidade, notificarTecnicoResponsavel } from '../services/notificacoes'
 import { encaminharChamado, encaminharPorRegras, tecnicosDaUnidade, destinoWhere } from '../services/encaminhamento'
 import { filtroUnidadesDoUsuario, usuarioAtendeUnidade } from '../services/unidades'
 import { salvarAnexo, salvarAnexoComPath } from '../services/anexos'
@@ -72,8 +72,61 @@ const includeMensagens = {
   }
 }
 
+/**
+ * Registros datados do atendimento — o que o técnico fez, a conclusão, a
+ * contestação e a aprovação. Anexos **não** são filtrados por expiração: este
+ * arquivo é a prova do serviço e precisa continuar acessível.
+ */
+const includeAtividades = {
+  atividades: {
+    orderBy: { criadoEm: 'asc' as const },
+    include: { anexos: { select: { id: true, nome: true, tipo: true, url: true } } }
+  }
+}
+
+/** Detalhe completo do chamado: conversa + registros de atendimento. */
+const includeDetalhe = { ...includeMensagens, ...includeAtividades }
+
 /** Anexos de perguntas/respostas são temporários: expiram 7 dias após o envio. */
 const DIAS_VALIDADE_ANEXO = 7
+
+/**
+ * Status em que o técnico JÁ assumiu o chamado no ciclo atual — é o que libera
+ * registrar atividade e concluir.
+ *
+ * Não olha `aceitoEm` porque ele é acumulado entre ciclos: depois de uma
+ * contestação o status volta para ABERTO com o `aceitoEm` antigo ainda gravado,
+ * e o técnico não pode registrar nada antes de aceitar de novo.
+ */
+const STATUS_COM_TECNICO_ACEITO = ['ANDAMENTO', 'COMUNICADO', 'AGUARDANDO_CONFERENCIA']
+
+/** Status em que o técnico ainda precisa assumir o chamado. */
+const STATUS_Aguardando_ACEITE = ['ABERTO', 'ENCAMINHADO']
+
+/**
+ * Grava um registro datado na linha do tempo do chamado, fazendo upload dos
+ * anexos antes. `criadoEm` é o relógio do servidor — é esse campo que a tela
+ * mostra, nada é inferido do texto do histórico.
+ */
+async function salvarAtividade(
+  chamadoId: string,
+  protocolo: string,
+  tipo: (typeof TipoAtividadeSchema)['_output'],
+  autorNome: string,
+  autorNivel: string | null | undefined,
+  texto: string,
+  anexos?: Array<{ nome: string; tipo?: string; base64: string }>
+) {
+  const salvos: Array<{ nome: string; tipo: string; url: string }> = []
+  for (const a of anexos ?? []) {
+    const salvo = await salvarAnexoComPath(a.base64, a.nome, a.tipo || '', `atividades/${protocolo}`)
+    if (salvo) salvos.push({ nome: a.nome, tipo: a.tipo || '', url: salvo.url })
+  }
+  return prisma.chamadoAtividade.create({
+    data: { chamadoId, tipo, autorNome, autorNivel: autorNivel ?? null, texto, anexos: { create: salvos } },
+    include: { anexos: { select: { id: true, nome: true, tipo: true, url: true } } },
+  })
+}
 
 /**
  * Formata data/hora sempre no fuso de Brasília. O histórico é gravado como TEXTO
@@ -173,6 +226,28 @@ function tecnicoAtende(
   return usuarioAtendeUnidade(user.filial, chamado.unidade)
 }
 
+/**
+ * O usuário logado é o DONO deste chamado — quem pode aceitar, registrar o que
+ * fez e concluir.
+ *
+ * Diferente de `tecnicoAtende` (que responde "esse técnico atende essa
+ * escola?", e libera até o colega de plantão a ver o chamado), aqui a pergunta
+ * é "esse chamado é seu?": aceitar o serviço de alguém é assumir a
+ * responsabilidade por ele, então só o responsável gravado pode.
+ *
+ * ADMIN responde por todos — é o nível que atende chamado sem dono.
+ */
+function ehDonoDoChamado(
+  chamado: { responsavelId?: string | null; responsavel?: string | null },
+  user: AuthenticatedRequest['userRecord'],
+): boolean {
+  if (!user) return false
+  if (user.nivel === 'ADMIN') return true
+  if (user.nivel !== 'TECNICO') return false
+  if (chamado.responsavelId) return chamado.responsavelId === user.id
+  return !!chamado.responsavel && chamado.responsavel === user.nome
+}
+
 async function getInventarioStatus(unidade: string): Promise<string | null> {
   const mapa = await getMapaInventario()
   const chave = normalizarNomeEscola(unidade)
@@ -223,6 +298,11 @@ export async function consultarChamadoPublic(req: Request, res: Response) {
         mensagens: {
           orderBy: { createdAt: 'asc' },
           include: { anexos: { select: { nome: true, tipo: true, url: true, expiresAt: true } } }
+        },
+        // O que a equipe registrou no atendimento, na ordem em que foi feito
+        atividades: {
+          orderBy: { criadoEm: 'asc' },
+          include: { anexos: { select: { nome: true, tipo: true, url: true } } }
         }
       }
     })
@@ -242,10 +322,21 @@ export async function consultarChamadoPublic(req: Request, res: Response) {
       status: chamado.status,
       descricao: chamado.descricao,
       descricaoResolucao: chamado.descricaoResolucao,
+      reaberturas: chamado.reaberturas,
       anexoUrl: chamado.anexoUrl,
       timestamp: chamado.timestamp,
       ultimaAtualizacao: chamado.ultimaAtualizacao,
       avaliacao: chamado.avaliacao ? { nota: chamado.avaliacao.nota, comentario: chamado.avaliacao.comentario } : null,
+      // O solicitante tem direito de ler o que fizeram no equipamento dele:
+      // são os registros de atendimento, com horário real e comprovante.
+      atividades: chamado.atividades.map((a) => ({
+        id: a.id,
+        tipo: a.tipo,
+        autorNome: a.autorNome,
+        texto: a.texto,
+        criadoEm: a.criadoEm,
+        anexos: a.anexos
+      })),
       mensagens: chamado.mensagens.map((m) => ({
         id: m.id,
         tipo: m.tipo, // PERGUNTA (matriz) | RESPOSTA (unidade)
@@ -597,61 +688,6 @@ router.post('/:id/encaminhar', authMiddleware, requireRole('ADMIN', 'TECNICO'), 
   }
 })
 
-/**
- * O técnico ACEITA um chamado encaminhado para ele (botão no portal).
- *
- * Marca `aceitoEm` (métrica de tempo de resposta) e tira o chamado de
- * "Aberto" para "Em atendimento". Idempotente de propósito: um toque duplo
- * no celular não pode derrubar a ação — se já estava aceito, devolve 200 com
- * o chamado como está.
- */
-router.post('/:id/aceitar', authMiddleware, requireRole('ADMIN', 'TECNICO'), async (req: AuthenticatedRequest, res) => {
-  try {
-    const chamado = await prisma.chamado.findUnique({ where: { id: req.params.id } })
-    if (!chamado || chamado.excluido) {
-      return res.status(404).json({ error: 'NOT_FOUND', message: 'Chamado não encontrado' })
-    }
-
-    if (req.userRecord?.nivel === 'TECNICO' && !tecnicoAtende(chamado, req.userRecord)) {
-      return res.status(403).json({ error: 'FORBIDDEN', message: 'Sem acesso a este chamado' })
-    }
-
-    if (chamado.status === 'RESOLVIDO') {
-      return res.status(422).json({ error: 'VALIDATION_ERROR', message: 'Chamado já está concluído.' })
-    }
-
-    // Já aceito: resposta idempotente, sem regravar histórico nem datas.
-    if (chamado.aceitoEm) {
-      const atual = await prisma.chamado.findUnique({ where: { id: chamado.id }, include: includeMensagens })
-      return res.json(atual ?? chamado)
-    }
-
-    const agora = new Date()
-    const statusNovo = chamado.status === 'ABERTO' ? 'ANDAMENTO' : chamado.status
-    const entrada = `[${fmtHoraLocal(agora)}] Chamado aceito por ${req.userRecord?.nome || 'Sistema'}`
-
-    const updated = await prisma.chamado.update({
-      where: { id: chamado.id },
-      data: {
-        aceitoEm: agora,
-        status: statusNovo,
-        responsavel: req.userRecord?.nome || chamado.responsavel,
-        ultimaAtualizacao: agora,
-        historico: `${chamado.historico || ''}\n${entrada}`.trim()
-      }
-    })
-
-    if (statusNovo !== chamado.status) {
-      await notificarChamadoStatusAlterado(updated)
-    }
-
-    const completo = await prisma.chamado.findUnique({ where: { id: updated.id }, include: includeMensagens })
-    return res.json(completo ?? updated)
-  } catch (err) {
-    throw err
-  }
-})
-
 router.get('/:id', authMiddleware, async (req: AuthenticatedRequest, res) => {
   try {
     const chamado = await prisma.chamado.findUnique({
@@ -659,7 +695,7 @@ router.get('/:id', authMiddleware, async (req: AuthenticatedRequest, res) => {
       // `avaliacao` entra para a escola saber se a nota já foi dada: sem isso o
       // painel mostraria o formulário de estrelas mesmo depois de avaliado, e o
       // envio bateria em 409.
-      include: { ...includeMensagens, avaliacao: { select: { nota: true, comentario: true } } }
+      include: { ...includeDetalhe, avaliacao: { select: { nota: true, comentario: true } } }
     })
 
     if (!chamado || chamado.excluido) {
@@ -701,22 +737,29 @@ router.patch('/:id/status', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GES
       }
     }
 
-    // Escola (gestor/visualizador) só pode alterar o chamado para Concluído
-    if (['GESTOR', 'VISUALIZADOR'].includes(req.userRecord?.nivel || '') && status !== 'RESOLVIDO') {
-      return res.status(403).json({ error: 'FORBIDDEN', message: 'A escola só pode alterar o chamado para Concluído' })
+    // A escola NÃO mexe no status por esta rota: encerrar o chamado é uma
+    // conferência (POST /:id/conferir), que valida se o técnico realmente
+    // concluiu antes de aceitar o "ok" — ou reabre o chamado se não.
+    if (['GESTOR', 'VISUALIZADOR'].includes(req.userRecord?.nivel || '')) {
+      return res.status(403).json({
+        error: 'FORBIDDEN',
+        message: 'A escola confere o serviço pelo botão de conferência do chamado.'
+      })
+    }
+
+    // Concluir sem descrever o que foi feito deixava a escola sem como conferir.
+    if (status === 'AGUARDANDO_CONFERENCIA' && !descricaoResolucao?.trim()) {
+      return res.status(400).json({
+        error: 'VALIDATION_ERROR',
+        message: 'Registre o que foi feito para o chamado passar à conferência da escola.'
+      })
     }
 
     const agora = new Date()
     const statusAnterior = chamado.status
+    const aceitando = status === 'ANDAMENTO' && STATUS_Aguardando_ACEITE.includes(statusAnterior)
+    const concluindo = status === 'AGUARDANDO_CONFERENCIA' && statusAnterior !== 'AGUARDANDO_CONFERENCIA'
     const entradaHistorico = `[${fmtHoraLocal(agora)}] Status alterado para "${status}" por ${req.userRecord?.nome || 'Sistema'}${tecnicoResolucao ? ` (técnico: ${tecnicoResolucao})` : ''}${descricaoResolucao ? `\nDescrição da resolução: ${descricaoResolucao}` : ''}${status === 'COMUNICADO' && pergunta?.trim() ? `\nPergunta para a escola: ${pergunta.trim()}` : ''}`
-
-    // Carimbo de conclusão: grava na 1ª ida para RESOLVIDO e preserva nas
-    // seguintes; se o chamado for reaberto (saiu de RESOLVIDO), zera — ele
-    // deixou de estar concluído.
-    const concluidoEm =
-      status === 'RESOLVIDO'
-        ? (chamado.concluidoEm ?? agora)
-        : (statusAnterior === 'RESOLVIDO' ? null : chamado.concluidoEm)
 
     const updated = await prisma.chamado.update({
       where: { id: req.params.id },
@@ -726,7 +769,20 @@ router.patch('/:id/status', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GES
         ultimaAtualizacao: agora,
         tecnicoResolucao: tecnicoResolucao || chamado.tecnicoResolucao,
         descricaoResolucao: descricaoResolucao || chamado.descricaoResolucao,
-        concluidoEm,
+        // Só carimba o aceite vindo de ABERTO/ENCAMINHADO: a resposta da escola
+        // a COMUNICADO também joga para ANDAMENTO e não é um novo aceite.
+        // `concluidoEm` estritamente na ida para AGUARDANDO_CONFERENCIA — é o
+        // momento em que o técnico entregou o serviço; `conferidoEm` é o que
+        // marca RESOLVIDO (pela conferência da escola).
+        ...(aceitando ? { aceitoEm: agora, aceitoPor: req.userRecord?.nome || 'Sistema' } : {}),
+        concluidoEm:
+          status === 'AGUARDANDO_CONFERENCIA'
+            ? agora
+            : status === 'RESOLVIDO'
+              ? (chamado.concluidoEm ?? agora)
+              : statusAnterior === 'RESOLVIDO'
+                ? null
+                : chamado.concluidoEm,
         historico: `${chamado.historico || ''}\n${entradaHistorico}`.trim()
       }
     })
@@ -744,11 +800,11 @@ router.patch('/:id/status', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GES
     // COMUNICADO com pergunta notifica mesmo sem mudança de status (nova rodada de perguntas).
     if (status === 'COMUNICADO' && (status !== statusAnterior || pergunta?.trim())) {
       notificarUnidade(chamado.unidade, 'CHAMADO_RESPONDIDO', `Chamado ${chamado.protocolo} respondido`, pergunta?.trim() || 'A equipe respondeu e aguarda o retorno do solicitante.', `/chamados/${chamado.id}`).catch(() => {})
-    } else if (status === 'RESOLVIDO' && status !== statusAnterior) {
+    } else if ((status === 'AGUARDANDO_CONFERENCIA' || status === 'RESOLVIDO') && status !== statusAnterior) {
       notificarUnidade(chamado.unidade, 'CHAMADO_FINALIZADO', `Chamado ${chamado.protocolo} concluído`, chamado.descricaoResolucao || 'O chamado foi concluído pela equipe.', `/chamados/${chamado.id}`).catch(() => {})
     }
 
-    const completo = await prisma.chamado.findUnique({ where: { id: updated.id }, include: includeMensagens })
+    const completo = await prisma.chamado.findUnique({ where: { id: updated.id }, include: includeDetalhe })
     return res.json(completo ?? updated)
   } catch (err) {
     if (isZodError(err)) {
@@ -808,11 +864,317 @@ router.post('/:id/resposta', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GE
       notificarAdmins('CHAMADO_RESPONDIDO', `Escola respondeu o chamado ${chamado.protocolo}`, `${autor} respondeu à pergunta da equipe. O chamado voltou para "Em atendimento".`, `/chamados/${chamado.id}`).catch(() => {})
     }
 
-    const completo = await prisma.chamado.findUnique({ where: { id: updated.id }, include: includeMensagens })
+    const completo = await prisma.chamado.findUnique({ where: { id: updated.id }, include: includeDetalhe })
     return res.json(completo ?? updated)
   } catch (err) {
     if (isZodError(err)) {
       return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: err.flatten().fieldErrors })
+    }
+    throw err
+  }
+})
+
+/* =================================================================
+ * FLUXO DE ATENDIMENTO
+ *
+ * ABERTO ──▶ ENCAMINHADO ──▶ ANDAMENTO ──▶ AGUARDANDO_CONFERENCIA ──▶ RESOLVIDO
+ *   ▲                                                              (escola)
+ *   └──────────────── contestação da escola (+1 reabertura) ──────────┘
+ *
+ * Os quatro passos abaixo são endpoints separados (e não um PATCH genérico de
+ * status) porque cada um tem permissão, pré-condição, registro obrigatório e
+ * notificação própria — espremer isso num único `PATCH /status` foi o que deixou
+ * a escola fechar chamado que o técnico não concluiu.
+ * ================================================================= */
+
+/** Carrega o chamado garantindo que ele existe e não está excluído. */
+async function carregarChamadoAtivo(id: string) {
+  const chamado = await prisma.chamado.findUnique({ where: { id } })
+  if (!chamado || chamado.excluido) return null
+  return chamado
+}
+
+/**
+ * ACEITE — o técnico assume o chamado. É o que libera registrar atividade e
+ * concluir, e grava o marco do horário (vem do servidor, não do relógio do
+ * navegador).
+ */
+router.post('/:id/aceitar', authMiddleware, requireRole('ADMIN', 'TECNICO'), async (req: AuthenticatedRequest, res) => {
+  try {
+    const chamado = await carregarChamadoAtivo(req.params.id)
+    if (!chamado) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'Chamado não encontrado' })
+    }
+
+    // TECNICO pode aceitar se é o responsável OU atende a unidade do chamado
+    // (aceitar é "assumir" o serviço; um colega de plantão pode pegar o caso).
+    if (req.userRecord?.nivel === 'TECNICO' && !ehDonoDoChamado(chamado, req.userRecord) && !tecnicoAtende(chamado, req.userRecord)) {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'Sem acesso a este chamado' })
+    }
+
+    if (chamado.status === 'RESOLVIDO') {
+      return res.status(422).json({ error: 'VALIDATION_ERROR', message: 'Chamado já está concluído.' })
+    }
+
+    // Já aceito nesta etapa: resposta idempotente — não regrava histórico nem datas.
+    if (chamado.aceitoEm && ['ANDAMENTO', 'COMUNICADO', 'AGUARDANDO_CONFERENCIA'].includes(chamado.status)) {
+      const atual = await prisma.chamado.findUnique({ where: { id: chamado.id }, include: includeDetalhe })
+      return res.json(atual ?? chamado)
+    }
+
+    const agora = new Date()
+    const autor = req.userRecord?.nome || 'Sistema'
+    const entrada = `[${fmtHoraLocal(agora)}] Chamado aceito por ${autor}`
+    // ABERTO/ENCAMINHADO viram ANDAMENTO; COMUNICADO permanece COMUNICADO (a
+    // pergunta está na frente da escola; o aceite só registra que estou dono).
+    const statusNovo = chamado.status === 'ABERTO' || chamado.status === 'ENCAMINHADO' ? 'ANDAMENTO' : chamado.status
+
+    const updated = await prisma.chamado.update({
+      where: { id: chamado.id },
+      data: {
+        status: statusNovo,
+        aceitoEm: chamado.aceitoEm ?? agora,
+        aceitoPor: chamado.aceitoEm ? (chamado.aceitoPor ?? autor) : autor,
+        responsavel: chamado.responsavel || autor,
+        responsavelId: chamado.responsavelId || req.userRecord?.id,
+        ultimaAtualizacao: agora,
+        historico: `${chamado.historico || ''}\n${entrada}`.trim()
+      }
+    })
+
+    notificarAdmins(
+      'CHAMADO_RESPONDIDO',
+      `Chamado ${chamado.protocolo} aceito por ${autor}`,
+      `${chamado.unidade} — ${chamado.tipo}`,
+      `/chamados/${chamado.id}`
+    ).catch(() => {})
+
+    const completo = await prisma.chamado.findUnique({ where: { id: updated.id }, include: includeDetalhe })
+    return res.json(completo ?? updated)
+  } catch (err) {
+    if (isZodError(err)) {
+      return respostaValidacao(res, err)
+    }
+    throw err
+  }
+})
+
+/**
+ * REGISTRO DO QUE FOI FEITO — pode repetir quantas vezes quiser; cada envio é
+ * uma linha nova com data/hora do servidor. Exige aceite no ciclo atual.
+ */
+router.post('/:id/atividades', authMiddleware, requireRole('ADMIN', 'TECNICO'), async (req: AuthenticatedRequest, res) => {
+  try {
+    const { texto, anexos } = RegistrarAtividadeSchema.parse(req.body)
+
+    const chamado = await carregarChamadoAtivo(req.params.id)
+    if (!chamado) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'Chamado não encontrado' })
+    }
+
+    if (!ehDonoDoChamado(chamado, req.userRecord)) {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'Só quem é o responsável pelo chamado pode registrar o atendimento' })
+    }
+
+    if (!STATUS_COM_TECNICO_ACEITO.includes(chamado.status)) {
+      return res.status(409).json({
+        error: 'CONFLICT',
+        message: 'Aceite o chamado antes de registrar o atendimento.'
+      })
+    }
+
+    const autor = req.userRecord?.nome || 'Sistema'
+    const agora = new Date()
+    const atividade = await salvarAtividade(
+      chamado.id,
+      chamado.protocolo,
+      'REGISTRO',
+      autor,
+      req.userRecord?.nivel,
+      texto,
+      anexos
+    )
+
+    await prisma.chamado.update({
+      where: { id: chamado.id },
+      data: {
+        ultimaAtualizacao: agora,
+        historico: `${chamado.historico || ''}\n[${fmtHoraLocal(agora)}] Registro de atendimento por ${autor}: ${texto}`.trim()
+      }
+    })
+
+    notificarAdmins(
+      'CHAMADO_ATIVIDADE',
+      `Registro de atendimento no chamado ${chamado.protocolo}`,
+      `${autor}: ${texto}`,
+      `/chamados/${chamado.id}`
+    ).catch(() => {})
+
+    return res.status(201).json(atividade)
+  } catch (err) {
+    if (isZodError(err)) {
+      return respostaValidacao(res, err)
+    }
+    throw err
+  }
+})
+
+/**
+ * CONCLUSÃO DO TÉCNICO — o que ele fez está no registro, e a bola passa para a
+ * escola conferir. Não é mais o fim do chamado: quem encerra é a escola.
+ */
+router.post('/:id/concluir', authMiddleware, requireRole('ADMIN', 'TECNICO'), async (req: AuthenticatedRequest, res) => {
+  try {
+    const { descricaoResolucao, anexos } = ConcluirChamadoSchema.parse(req.body)
+
+    const chamado = await carregarChamadoAtivo(req.params.id)
+    if (!chamado) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'Chamado não encontrado' })
+    }
+
+    if (!ehDonoDoChamado(chamado, req.userRecord)) {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'Só quem é o responsável pelo chamado pode concluí-lo' })
+    }
+
+    if (!STATUS_COM_TECNICO_ACEITO.includes(chamado.status)) {
+      return res.status(409).json({
+        error: 'CONFLICT',
+        message: 'Aceite o chamado antes de concluir.'
+      })
+    }
+
+    const agora = new Date()
+    const autor = req.userRecord?.nome || 'Sistema'
+    const entrada = `[${fmtHoraLocal(agora)}] Conclusão registrada por ${autor}\nDescrição da resolução: ${descricaoResolucao}`
+
+    await salvarAtividade(chamado.id, chamado.protocolo, 'CONCLUSAO', autor, req.userRecord?.nivel, descricaoResolucao, anexos)
+
+    const updated = await prisma.chamado.update({
+      where: { id: chamado.id },
+      data: {
+        status: 'AGUARDANDO_CONFERENCIA',
+        concluidoEm: agora,
+        // `descricaoResolucao`/`tecnicoResolucao` guardam só a ÚLTIMA
+        // conclusão: o histórico de todas as tentativas fica nas atividades.
+        tecnicoResolucao: autor,
+        descricaoResolucao,
+        ultimaAtualizacao: agora,
+        historico: `${chamado.historico || ''}\n${entrada}`.trim()
+      }
+    })
+
+    // A escola precisa saber que há o que conferir; o e-mail segue o mesmo
+    // caminho de sempre (mudança de status).
+    notificarUnidade(
+      chamado.unidade,
+      'CHAMADO_FINALIZADO',
+      `Chamado ${chamado.protocolo} concluído pelo técnico`,
+      descricaoResolucao,
+      `/chamados/${chamado.id}`
+    ).catch(() => {})
+    await notificarChamadoStatusAlterado(updated)
+
+    const completo = await prisma.chamado.findUnique({ where: { id: updated.id }, include: includeDetalhe })
+    return res.json(completo ?? updated)
+  } catch (err) {
+    if (isZodError(err)) {
+      return respostaValidacao(res, err)
+    }
+    throw err
+  }
+})
+
+/**
+ * CONFERÊNCIA DA ESCOLA — o passo que faltava: a unidade verifica o que o
+ * técnico fez e é quem encerra o chamado.
+ *
+ *   aprovado   → RESOLVIDO (com horário e nome de quem deu o ok)
+ *   contestado → ABERTO, +1 reabertura, admins + técnico responsável avisados
+ */
+router.post('/:id/conferir', authMiddleware, requireRole('GESTOR', 'VISUALIZADOR'), async (req: AuthenticatedRequest, res) => {
+  try {
+    const { aprovado, texto, anexos } = ConferirChamadoSchema.parse(req.body)
+
+    const chamado = await carregarChamadoAtivo(req.params.id)
+    if (!chamado) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'Chamado não encontrado' })
+    }
+
+    if (!unidadeCasa(chamado.unidade, req.userRecord!.filial)) {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'Sem acesso a este chamado' })
+    }
+
+    if (chamado.status !== 'AGUARDANDO_CONFERENCIA') {
+      return res.status(409).json({
+        error: 'CONFLICT',
+        message: 'Só é possível conferir chamado que o técnico concluiu e está aguardando conferência.'
+      })
+    }
+
+    const agora = new Date()
+    const autor = req.userRecord?.nome || 'Escola'
+    const link = `/chamados/${chamado.id}`
+
+    if (aprovado) {
+      const comentario = texto?.trim()
+      if (comentario) {
+        await salvarAtividade(chamado.id, chamado.protocolo, 'APROVACAO', autor, req.userRecord?.nivel, comentario, anexos)
+      }
+
+      const updated = await prisma.chamado.update({
+        where: { id: chamado.id },
+        data: {
+          status: 'RESOLVIDO',
+          conferidoEm: agora,
+          conferidoPor: autor,
+          ultimaAtualizacao: agora,
+          historico: `${chamado.historico || ''}\n[${fmtHoraLocal(agora)}] Conferência aprovada pela escola (${autor})${comentario ? ` — ${comentario}` : ''}`.trim()
+        }
+      })
+
+      // Quem executou precisa saber que o serviço foi validado, e não esquecido.
+      notificarTecnicoResponsavel(
+        chamado,
+        'CHAMADO_APROVADO',
+        `Chamado ${chamado.protocolo} confirmado pela escola`,
+        `${chamado.unidade} confirmou que o serviço foi concluído.`,
+        link
+      ).catch(() => {})
+
+      await notificarChamadoStatusAlterado(updated)
+
+      const completo = await prisma.chamado.findUnique({ where: { id: updated.id }, include: includeDetalhe })
+      return res.json(completo ?? updated)
+    }
+
+    // Contestação: o texto é o que diz o que faltou (o Zod já exige).
+    const motivo = texto!.trim()
+    await salvarAtividade(chamado.id, chamado.protocolo, 'CONTESTACAO', autor, req.userRecord?.nivel, motivo, anexos)
+
+    const updated = await prisma.chamado.update({
+      where: { id: chamado.id },
+      data: {
+        status: 'ABERTO',
+        reaberturas: { increment: 1 },
+        ultimaAtualizacao: agora,
+        historico: `${chamado.historico || ''}\n[${fmtHoraLocal(agora)}] Chamado contestado pela escola (${autor}) e reaberto\nO que ficou faltando: ${motivo}`.trim()
+      }
+    })
+
+    const aviso = `A escola informou o que ficou faltando: ${motivo}`
+    notificarAdmins(
+      'CHAMADO_REABERTO',
+      `Chamado ${chamado.protocolo} contestado pela escola`,
+      aviso,
+      link
+    ).catch(() => {})
+    notificarTecnicoResponsavel(chamado, 'CHAMADO_REABERTO', `Chamado ${chamado.protocolo} foi reaberto`, aviso, link).catch(() => {})
+
+    const completo = await prisma.chamado.findUnique({ where: { id: updated.id }, include: includeDetalhe })
+    return res.json(completo ?? updated)
+  } catch (err) {
+    if (isZodError(err)) {
+      return respostaValidacao(res, err)
     }
     throw err
   }

@@ -74,6 +74,7 @@ describe('Dashboard Routes', () => {
         abertos: 1,
         andamento: 0,
         comunicado: 0,
+        aguardandoConferencia: 0,
         resolvidos: 1,
         altaPrioridade: 1
       })
@@ -149,11 +150,14 @@ describe('Dashboard Routes', () => {
 
   describe('GET /stats', () => {
     it('should return stats for authenticated user', async () => {
+      // A ordem segue as sete contagens da rota: total, abertos, andamento,
+      // comunicado, aguardandoConferencia, resolvidos, altaPrioridade.
       vi.mocked(prisma.chamado.count)
         .mockResolvedValueOnce(10)
         .mockResolvedValueOnce(3)
         .mockResolvedValueOnce(2)
         .mockResolvedValueOnce(1)
+        .mockResolvedValueOnce(5)
         .mockResolvedValueOnce(4)
         .mockResolvedValueOnce(2)
 
@@ -165,9 +169,25 @@ describe('Dashboard Routes', () => {
         abertos: 3,
         andamento: 2,
         comunicado: 1,
+        aguardandoConferencia: 5,
         resolvidos: 4,
         altaPrioridade: 2
       })
+    })
+
+    it('conta ENCAMINHADO junto de ABERTO na fila que ainda não começou', async () => {
+      const chamados = [
+        { id: '1', status: 'ABERTO', urgencia: 'Normal', tecnicoResolucao: null, unidade: 'E.E. T', timestamp: new Date(), ultimaAtualizacao: new Date(), historico: null, tipo: 'Hardware' },
+        { id: '2', status: 'ENCAMINHADO', urgencia: 'Normal', tecnicoResolucao: null, unidade: 'E.E. T', timestamp: new Date(), ultimaAtualizacao: new Date(), historico: null, tipo: 'Hardware' },
+        { id: '3', status: 'AGUARDANDO_CONFERENCIA', urgencia: 'Normal', tecnicoResolucao: 'T1', unidade: 'E.E. T', timestamp: new Date(), ultimaAtualizacao: new Date(), historico: null, tipo: 'Hardware' }
+      ]
+      vi.mocked(prisma.chamado.findMany).mockResolvedValue(chamados)
+      vi.mocked(prisma.chamado.count).mockResolvedValue(3)
+
+      const res = await request(app).get('/api/dashboard/matriz')
+
+      expect(res.body.kpis.abertos).toBe(2)
+      expect(res.body.kpis.aguardandoConferencia).toBe(1)
     })
   })
 })

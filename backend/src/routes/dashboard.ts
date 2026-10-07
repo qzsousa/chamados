@@ -66,9 +66,12 @@ async function getDashboardData(filtroFilial?: string, filtroNivel?: string) {
 
   const kpis = {
     total: totalCount,
-    abertos: enriched.filter(c => c.status === 'ABERTO').length,
+    // ENCAMINHADO entra em "abertos": é chamado novo na fila do técnico, não
+    // serviço em curso.
+    abertos: enriched.filter(c => c.status === 'ABERTO' || c.status === 'ENCAMINHADO').length,
     andamento: enriched.filter(c => c.status === 'ANDAMENTO').length,
     comunicado: enriched.filter(c => c.status === 'COMUNICADO').length,
+    aguardandoConferencia: enriched.filter(c => c.status === 'AGUARDANDO_CONFERENCIA').length,
     resolvidos: enriched.filter(c => c.status === 'RESOLVIDO').length,
     altaPrioridade: enriched.filter(c => c.urgencia.startsWith('Alta') && c.status !== 'RESOLVIDO').length
   }
@@ -181,16 +184,17 @@ router.get('/stats', authMiddleware, attachUserRecord, async (req: Authenticated
       where.OR = filtroUnidadeToleranteDash(req.userRecord.filial)
     }
 
-    const [total, abertos, andamento, comunicado, resolvidos, altaPrioridade] = await Promise.all([
+    const [total, abertos, andamento, comunicado, aguardandoConferencia, resolvidos, altaPrioridade] = await Promise.all([
       prisma.chamado.count({ where }),
-      prisma.chamado.count({ where: { ...where, status: 'ABERTO' } }),
+      prisma.chamado.count({ where: { ...where, status: { in: ['ABERTO', 'ENCAMINHADO'] } } }),
       prisma.chamado.count({ where: { ...where, status: 'ANDAMENTO' } }),
       prisma.chamado.count({ where: { ...where, status: 'COMUNICADO' } }),
+      prisma.chamado.count({ where: { ...where, status: 'AGUARDANDO_CONFERENCIA' } }),
       prisma.chamado.count({ where: { ...where, status: 'RESOLVIDO' } }),
       prisma.chamado.count({ where: { ...where, urgencia: { startsWith: 'Alta' }, status: { not: 'RESOLVIDO' } } })
     ])
 
-    return res.json({ total, abertos, andamento, comunicado, resolvidos, altaPrioridade })
+    return res.json({ total, abertos, andamento, comunicado, aguardandoConferencia, resolvidos, altaPrioridade })
   } catch (err) {
     throw err
   }

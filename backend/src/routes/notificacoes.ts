@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { prisma } from '../config/prisma'
-import { authMiddleware, attachUserRecord, AuthenticatedRequest } from '../middleware/auth'
+import { authMiddleware, attachUserRecord, requireRole, AuthenticatedRequest } from '../middleware/auth'
 import { unidadesDoUsuario, normalizarUnidade, usuarioAtendeUnidade } from '../services/unidades'
 
 const router = Router()
@@ -41,6 +41,16 @@ router.get('/', authMiddleware, attachUserRecord, async (req: AuthenticatedReque
     prisma.notificacao.count({ where: { ...filtro, lida: false } }),
   ])
   return res.json({ data, naoLidas })
+})
+
+/** Erros internos (ERRO_SISTEMA) — visão de logs para a matriz (ADMIN). */
+router.get('/erros', authMiddleware, requireRole('ADMIN'), async (_req: AuthenticatedRequest, res) => {
+  const data = await prisma.notificacao.findMany({
+    where: { tipo: 'ERRO_SISTEMA' },
+    orderBy: { criadoEm: 'desc' },
+    take: 100,
+  })
+  return res.json({ data })
 })
 
 router.post('/:id/lida', authMiddleware, attachUserRecord, async (req: AuthenticatedRequest, res) => {
