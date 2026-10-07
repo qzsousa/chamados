@@ -63,6 +63,8 @@ model Chamado {
   inventarioStatus   String?  // CONCLUIDO, EM_ANDAMENTO, NAO_REALIZADO, NAO_INFORMADO
   email              String?  // e-mail do solicitante
   categoriaChave     String?  // chave da categoria do formulário público (ex.: 'equipamento')
+  aceitoEm           DateTime? // quando o técnico aceitou o chamado (botão "Aceitar")
+  concluidoEm        DateTime? // quando o chamado foi concluído (status -> RESOLVIDO)
   excluido           Boolean  @default(false) // soft delete
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt

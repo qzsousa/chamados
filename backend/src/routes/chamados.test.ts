@@ -512,6 +512,163 @@ describe('Chamados Routes', () => {
 
       expect(res.status).toBe(200)
     })
+
+    it('carimba concluidoEm na primeira ida para RESOLVIDO', async () => {
+      vi.mocked(prisma.chamado.findUnique).mockResolvedValue({
+        id: CUID_1,
+        protocolo: 'CH-20240101-0001',
+        unidade: 'E.E. TESTE',
+        status: 'ANDAMENTO',
+        responsavel: 'Test User',
+        historico: '',
+        concluidoEm: null
+      })
+      vi.mocked(prisma.chamado.update).mockResolvedValue({ id: CUID_1, status: 'RESOLVIDO', historico: 'x' })
+
+      const res = await request(app)
+        .patch(`/api/chamados/${CUID_1}/status`)
+        .send({ status: 'RESOLVIDO' })
+
+      expect(res.status).toBe(200)
+      const data = vi.mocked(prisma.chamado.update).mock.calls[0][0].data
+      expect(data.concluidoEm).toBeInstanceOf(Date)
+    })
+
+    it('preserva o primeiro concluidoEm quando o chamado já estava concluído', async () => {
+      const primeiro = new Date('2024-01-01T12:00:00Z')
+      vi.mocked(prisma.chamado.findUnique).mockResolvedValue({
+        id: CUID_1,
+        protocolo: 'CH-20240101-0001',
+        unidade: 'E.E. TESTE',
+        status: 'RESOLVIDO',
+        responsavel: 'Test User',
+        historico: '',
+        concluidoEm: primeiro
+      })
+      vi.mocked(prisma.chamado.update).mockResolvedValue({ id: CUID_1, status: 'RESOLVIDO', historico: 'x' })
+
+      const res = await request(app)
+        .patch(`/api/chamados/${CUID_1}/status`)
+        .send({ status: 'RESOLVIDO' })
+
+      expect(res.status).toBe(200)
+      const data = vi.mocked(prisma.chamado.update).mock.calls[0][0].data
+      expect(data.concluidoEm).toBe(primeiro)
+    })
+
+    it('zera concluidoEm quando o chamado é reaberto', async () => {
+      vi.mocked(prisma.chamado.findUnique).mockResolvedValue({
+        id: CUID_1,
+        protocolo: 'CH-20240101-0001',
+        unidade: 'E.E. TESTE',
+        status: 'RESOLVIDO',
+        responsavel: 'Test User',
+        historico: '',
+        concluidoEm: new Date('2024-01-01T12:00:00Z')
+      })
+      vi.mocked(prisma.chamado.update).mockResolvedValue({ id: CUID_1, status: 'ANDAMENTO', historico: 'x' })
+
+      const res = await request(app)
+        .patch(`/api/chamados/${CUID_1}/status`)
+        .send({ status: 'ANDAMENTO' })
+
+      expect(res.status).toBe(200)
+      const data = vi.mocked(prisma.chamado.update).mock.calls[0][0].data
+      expect(data.concluidoEm).toBeNull()
+    })
+  })
+
+  describe('POST /:id/aceitar', () => {
+    const chamadoEncaminhado = {
+      id: CUID_1,
+      protocolo: 'CH-20240101-0001',
+      unidade: 'E.E. TESTE',
+      status: 'ABERTO',
+      responsavel: 'Test User',
+      historico: '',
+      aceitoEm: null,
+      excluido: false
+    }
+
+    it('carimba aceitoEm, move ABERTO para ANDAMENTO e registra no histórico', async () => {
+      vi.mocked(prisma.chamado.findUnique)
+        .mockResolvedValueOnce(chamadoEncaminhado)
+        .mockResolvedValue({ ...chamadoEncaminhado, status: 'ANDAMENTO', aceitoEm: new Date() })
+      vi.mocked(prisma.chamado.update).mockResolvedValue({ ...chamadoEncaminhado, status: 'ANDAMENTO', aceitoEm: new Date() })
+
+      const res = await request(app).post(`/api/chamados/${CUID_1}/aceitar`)
+
+      expect(res.status).toBe(200)
+      const data = vi.mocked(prisma.chamado.update).mock.calls[0][0].data
+      expect(data.aceitoEm).toBeInstanceOf(Date)
+      expect(data.status).toBe('ANDAMENTO')
+      expect(data.historico).toContain('Chamado aceito por Test User')
+    })
+
+    it('é idempotente: chamado já aceito não é regravado', async () => {
+      vi.mocked(prisma.chamado.findUnique).mockResolvedValue({
+        ...chamadoEncaminhado,
+        status: 'ANDAMENTO',
+        aceitoEm: new Date('2024-01-01T12:00:00Z')
+      })
+
+      const res = await request(app).post(`/api/chamados/${CUID_1}/aceitar`)
+
+      expect(res.status).toBe(200)
+      expect(vi.mocked(prisma.chamado.update)).not.toHaveBeenCalled()
+    })
+
+    it('não altera o status de quem está COMUNICADO (aguardando a escola)', async () => {
+      vi.mocked(prisma.chamado.findUnique)
+        .mockResolvedValueOnce({ ...chamadoEncaminhado, status: 'COMUNICADO' })
+        .mockResolvedValue({ ...chamadoEncaminhado, status: 'COMUNICADO', aceitoEm: new Date() })
+      vi.mocked(prisma.chamado.update).mockResolvedValue({ ...chamadoEncaminhado, status: 'COMUNICADO', aceitoEm: new Date() })
+
+      const res = await request(app).post(`/api/chamados/${CUID_1}/aceitar`)
+
+      expect(res.status).toBe(200)
+      const data = vi.mocked(prisma.chamado.update).mock.calls[0][0].data
+      expect(data.aceitoEm).toBeInstanceOf(Date)
+      expect(data.status).toBe('COMUNICADO')
+    })
+
+    it('devolve 422 para chamado já concluído', async () => {
+      vi.mocked(prisma.chamado.findUnique).mockResolvedValue({ ...chamadoEncaminhado, status: 'RESOLVIDO' })
+
+      const res = await request(app).post(`/api/chamados/${CUID_1}/aceitar`)
+
+      expect(res.status).toBe(422)
+      expect(vi.mocked(prisma.chamado.update)).not.toHaveBeenCalled()
+    })
+
+    it('devolve 404 para chamado inexistente', async () => {
+      vi.mocked(prisma.chamado.findUnique).mockResolvedValue(null)
+
+      const res = await request(app).post(`/api/chamados/${CUID_1}/aceitar`)
+
+      expect(res.status).toBe(404)
+    })
+
+    it('403 para técnico que não é o responsável e não atende a unidade', async () => {
+      Object.assign(usuario, { filial: 'E.E. OUTRA' })
+      vi.mocked(prisma.chamado.findUnique).mockResolvedValue({
+        ...chamadoEncaminhado,
+        responsavel: 'Outro Técnico'
+      })
+
+      const res = await request(app).post(`/api/chamados/${CUID_1}/aceitar`)
+
+      expect(res.status).toBe(403)
+      expect(vi.mocked(prisma.chamado.update)).not.toHaveBeenCalled()
+    })
+
+    it('403 para perfil de escola (GESTOR não aceita chamado)', async () => {
+      Object.assign(usuario, { nivel: 'GESTOR' })
+
+      const res = await request(app).post(`/api/chamados/${CUID_1}/aceitar`)
+
+      expect(res.status).toBe(403)
+    })
   })
 
   describe('POST /:id/resposta', () => {

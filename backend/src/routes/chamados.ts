@@ -597,6 +597,61 @@ router.post('/:id/encaminhar', authMiddleware, requireRole('ADMIN', 'TECNICO'), 
   }
 })
 
+/**
+ * O técnico ACEITA um chamado encaminhado para ele (botão no portal).
+ *
+ * Marca `aceitoEm` (métrica de tempo de resposta) e tira o chamado de
+ * "Aberto" para "Em atendimento". Idempotente de propósito: um toque duplo
+ * no celular não pode derrubar a ação — se já estava aceito, devolve 200 com
+ * o chamado como está.
+ */
+router.post('/:id/aceitar', authMiddleware, requireRole('ADMIN', 'TECNICO'), async (req: AuthenticatedRequest, res) => {
+  try {
+    const chamado = await prisma.chamado.findUnique({ where: { id: req.params.id } })
+    if (!chamado || chamado.excluido) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'Chamado não encontrado' })
+    }
+
+    if (req.userRecord?.nivel === 'TECNICO' && !tecnicoAtende(chamado, req.userRecord)) {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'Sem acesso a este chamado' })
+    }
+
+    if (chamado.status === 'RESOLVIDO') {
+      return res.status(422).json({ error: 'VALIDATION_ERROR', message: 'Chamado já está concluído.' })
+    }
+
+    // Já aceito: resposta idempotente, sem regravar histórico nem datas.
+    if (chamado.aceitoEm) {
+      const atual = await prisma.chamado.findUnique({ where: { id: chamado.id }, include: includeMensagens })
+      return res.json(atual ?? chamado)
+    }
+
+    const agora = new Date()
+    const statusNovo = chamado.status === 'ABERTO' ? 'ANDAMENTO' : chamado.status
+    const entrada = `[${fmtHoraLocal(agora)}] Chamado aceito por ${req.userRecord?.nome || 'Sistema'}`
+
+    const updated = await prisma.chamado.update({
+      where: { id: chamado.id },
+      data: {
+        aceitoEm: agora,
+        status: statusNovo,
+        responsavel: req.userRecord?.nome || chamado.responsavel,
+        ultimaAtualizacao: agora,
+        historico: `${chamado.historico || ''}\n${entrada}`.trim()
+      }
+    })
+
+    if (statusNovo !== chamado.status) {
+      await notificarChamadoStatusAlterado(updated)
+    }
+
+    const completo = await prisma.chamado.findUnique({ where: { id: updated.id }, include: includeMensagens })
+    return res.json(completo ?? updated)
+  } catch (err) {
+    throw err
+  }
+})
+
 router.get('/:id', authMiddleware, async (req: AuthenticatedRequest, res) => {
   try {
     const chamado = await prisma.chamado.findUnique({
@@ -655,6 +710,14 @@ router.patch('/:id/status', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GES
     const statusAnterior = chamado.status
     const entradaHistorico = `[${fmtHoraLocal(agora)}] Status alterado para "${status}" por ${req.userRecord?.nome || 'Sistema'}${tecnicoResolucao ? ` (técnico: ${tecnicoResolucao})` : ''}${descricaoResolucao ? `\nDescrição da resolução: ${descricaoResolucao}` : ''}${status === 'COMUNICADO' && pergunta?.trim() ? `\nPergunta para a escola: ${pergunta.trim()}` : ''}`
 
+    // Carimbo de conclusão: grava na 1ª ida para RESOLVIDO e preserva nas
+    // seguintes; se o chamado for reaberto (saiu de RESOLVIDO), zera — ele
+    // deixou de estar concluído.
+    const concluidoEm =
+      status === 'RESOLVIDO'
+        ? (chamado.concluidoEm ?? agora)
+        : (statusAnterior === 'RESOLVIDO' ? null : chamado.concluidoEm)
+
     const updated = await prisma.chamado.update({
       where: { id: req.params.id },
       data: {
@@ -663,6 +726,7 @@ router.patch('/:id/status', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GES
         ultimaAtualizacao: agora,
         tecnicoResolucao: tecnicoResolucao || chamado.tecnicoResolucao,
         descricaoResolucao: descricaoResolucao || chamado.descricaoResolucao,
+        concluidoEm,
         historico: `${chamado.historico || ''}\n${entradaHistorico}`.trim()
       }
     })
@@ -792,6 +856,10 @@ router.patch('/batch', authMiddleware, requireRole('ADMIN', 'TECNICO'), async (r
           responsavel: req.userRecord?.nome,
           ultimaAtualizacao: agora,
           tecnicoResolucao: tecnicoResolucao || chamado.tecnicoResolucao,
+          // Mesmo carimbo do PATCH individual: grava na 1ª conclusão, zera se reaberto.
+          concluidoEm: status
+            ? (status === 'RESOLVIDO' ? (chamado.concluidoEm ?? agora) : null)
+            : chamado.concluidoEm,
           historico: historicoNovo
         }
       })

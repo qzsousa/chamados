@@ -134,7 +134,15 @@ export const ChamadoSchema = z.object({
   descricaoResolucao: z.string().nullable(),
   tecnicoSetor: z.string().nullable(),
   inventarioStatus: InventarioStatusSchema.nullable(),
-  email: z.string().nullable()
+  email: z.string().nullable(),
+  /**
+   * Quando o técnico aceitou o chamado (botão "Aceitar chamado").
+   * NULL enquanto ninguém assumiu — é o que diferencia "encaminhado" de
+   * "de fato em atendimento pelo técnico".
+   */
+  aceitoEm: z.string().datetime().nullable(),
+  /** Quando o chamado foi concluído (status -> RESOLVIDO). NULL se reaberto. */
+  concluidoEm: z.string().datetime().nullable()
 })
 
 export type Chamado = z.infer<typeof ChamadoSchema>
