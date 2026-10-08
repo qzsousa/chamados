@@ -7,7 +7,7 @@ export const useChamadosStore = defineStore('chamados', () => {
   const lista = ref<Chamado[]>([])
   const filtros = ref<FiltrosChamado>({ page: 1, limit: 20 })
   const loading = ref(false)
-  const stats = ref<DashboardKPIs>({ total: 0, abertos: 0, andamento: 0, comunicado: 0, resolvidos: 0, altaPrioridade: 0 })
+  const stats = ref<DashboardKPIs>({ total: 0, abertos: 0, andamento: 0, comunicado: 0, aguardandoConferencia: 0, resolvidos: 0, altaPrioridade: 0 })
   const graficos = ref<{ porStatus: Record<string, number>; porUrgencia: Record<string, number>; resolvidosPorTecnico: Record<string, number> }>({ porStatus: {}, porUrgencia: {}, resolvidosPorTecnico: {} })
   const avisos = ref<any[]>([])
   const inventario = ref<{ unidade: string; tecnicoSetor: string; status: string | null } | null>(null)

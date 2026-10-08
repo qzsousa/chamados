@@ -15,13 +15,16 @@ export interface StatusMeta {
 }
 
 export const STATUS_META: Record<StatusChamado, StatusMeta> = {
-  ABERTO:     { label: 'Aberto',       cor: '#eab308' },
-  ANDAMENTO:  { label: 'Em andamento', cor: '#3b82f6' },
-  COMUNICADO: { label: 'Comunicado',   cor: '#f59e0b' },
-  RESOLVIDO:  { label: 'Resolvido',    cor: '#10b981' }
+  ABERTO:                 { label: 'Aberto',                cor: '#eab308' },
+  ENCAMINHADO:            { label: 'Encaminhado',           cor: '#8b5cf6' },
+  ANDAMENTO:              { label: 'Em andamento',          cor: '#3b82f6' },
+  COMUNICADO:             { label: 'Comunicado',            cor: '#f59e0b' },
+  AGUARDANDO_CONFERENCIA: { label: 'Aguardando conferência', cor: '#06b6d4' },
+  RESOLVIDO:              { label: 'Resolvido',             cor: '#10b981' }
 }
 
-export const STATUS_ORDEM: StatusChamado[] = ['ABERTO', 'ANDAMENTO', 'COMUNICADO', 'RESOLVIDO']
+/** Ordem do ciclo de vida do chamado — a mesma de STATUS_EM_ABERTO + RESOLVIDO. */
+export const STATUS_ORDEM: StatusChamado[] = ['ABERTO', 'ENCAMINHADO', 'ANDAMENTO', 'COMUNICADO', 'AGUARDANDO_CONFERENCIA', 'RESOLVIDO']
 
 const STATUS_FALLBACK = '#64748b'
 
