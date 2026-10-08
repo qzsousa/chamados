@@ -22,6 +22,7 @@ model Usuario {
   updatedAt         DateTime @updatedAt
 
   refreshTokens     RefreshToken[]
+  codigosAcesso     CodigoPrimeiroAcesso[]
 
   @@index([email])
   @@index([filial])
@@ -177,6 +178,50 @@ model RefreshToken {
   createdAt DateTime @default(now())
 
   @@index([usuarioId])
+  @@index([expiraEm])
+}
+
+/// Código de 6 dígitos enviado por e-mail para provar a posse da caixa postal
+/// ANTES de a pessoa criar a senha no primeiro acesso.
+///
+/// Existe porque o SCE antigo aceitava `/definir-senha` só com o e-mail — quem
+/// soubesse o endereço de um colega ainda sem senha tomava a conta. Aqui o
+/// e-mail sozinho não abre nada: sem o código, a senha não é criada.
+///
+/// Só o SHA-256 do código é guardado (como o refreshToken); o de 6 dígitos nunca
+/// toca o banco. `tentativas` trava o brute force offline do hash.
+model CodigoPrimeiroAcesso {
+  id         String    @id @default(cuid())
+  usuarioId  String
+  usuario    Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  codigoHash String
+  expiraEm   DateTime
+  tentativas Int       @default(0)
+  usadoEm    DateTime?
+  criadoEm   DateTime  @default(now())
+
+  codigosConfirmados CodigoConfirmado[]
+
+  @@index([usuarioId])
+  @@index([expiraEm])
+}
+
+/// Comprovante de que o código foi conferido, liberando a criação da senha.
+///
+/// Existe para o `/definir-senha` não poder ser chamado "direto": ele exige um
+/// token de uso único, válido por 10 minutos, emitido só depois que o código
+/// bateu. Se o usuário pedir outro código no meio do caminho, este registro é
+/// revogado — o token antigo deixa de valer.
+model CodigoConfirmado {
+  id                String   @id @default(cuid())
+  codigoId          String
+  codigo            CodigoPrimeiroAcesso @relation(fields: [codigoId], references: [id], onDelete: Cascade)
+  tokenHash         String   @unique
+  expiraEm          DateTime
+  revogadoEm        DateTime?
+  criadoEm          DateTime @default(now())
+
+  @@index([codigoId])
   @@index([expiraEm])
 }
 

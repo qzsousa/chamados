@@ -18,16 +18,27 @@ vi.mock('../config/prisma', () => ({
     },
     refreshToken: {
       deleteMany: vi.fn()
+    },
+    codigoPrimeiroAcesso: {
+      create: vi.fn(),
+      deleteMany: vi.fn()
     }
   }
 }))
 
-vi.mock('../utils/tokens', () => ({
-  passwordPolicy: {
-    generateTemp: vi.fn(() => 'TempPass123!'),
-    validate: vi.fn(() => ({ valid: true, errors: [] }))
+// `importOriginal` é obrigatório: o serviço de primeiro acesso usa `hashToken`
+// deste módulo. Um mock de fábrica sem o original deixaria `hashToken`
+// indefinido e o código nem seria gerado.
+vi.mock('../utils/tokens', async (importOriginal) => {
+  const original = await importOriginal<Record<string, unknown>>()
+  return {
+    ...original,
+    passwordPolicy: {
+      generateTemp: vi.fn(() => 'TempPass123!'),
+      validate: vi.fn(() => ({ valid: true, errors: [] }))
+    }
   }
-}))
+})
 
 vi.mock('bcryptjs', () => ({
   default: {
@@ -189,7 +200,7 @@ describe('Usuários Routes (ADMIN)', () => {
       expect(res.body.error).toBe('VALIDATION_ERROR')
     })
 
-    it('should create user with temporary password', async () => {
+    it('deve devolver o código de primeiro acesso (e não uma senha pronta)', async () => {
       vi.mocked(prisma.usuario.findUnique).mockResolvedValue(null)
       vi.mocked(prisma.usuario.create).mockResolvedValue({
         id: 'new-user',
@@ -202,14 +213,24 @@ describe('Usuários Routes (ADMIN)', () => {
         createdAt: new Date(),
         updatedAt: new Date()
       })
+      vi.mocked(prisma.codigoPrimeiroAcesso.deleteMany).mockResolvedValue({ count: 0 })
+      vi.mocked(prisma.codigoPrimeiroAcesso.create).mockResolvedValue({})
 
       const res = await request(app)
         .post('/api/usuarios')
         .send({ email: 'new@test.com', nome: 'New User', nivel: 'TECNICO', filial: 'FILIAL1' })
 
       expect(res.status).toBe(201)
-      expect(res.body.senhaTemporaria).toBe('TempPass123!')
       expect(res.body.id).toBe('new-user')
+      // A senha DEFINITIVA é escolhida pela pessoa, no primeiro acesso. O que o
+      // ADMIN recebe é o código que autoriza essa escolha.
+      expect(res.body.codigoPrimeiroAcesso).toMatch(/^\d{6}$/)
+      expect(res.body.senhaTemporaria).toBeUndefined()
+      // O código em claro NUNCA vai para o banco — só o SHA-256.
+      const gravado = vi.mocked(prisma.codigoPrimeiroAcesso.create).mock.calls[0][0] as any
+      expect(gravado.data.codigoHash).toMatch(/^[a-f0-9]{64}$/)
+      expect(gravado.data.codigoHash).not.toBe(res.body.codigoPrimeiroAcesso)
+
       expect(prisma.usuario.create).toHaveBeenCalledWith(expect.objectContaining({
         data: expect.objectContaining({
           email: 'new@test.com',

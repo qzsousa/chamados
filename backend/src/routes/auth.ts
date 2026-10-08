@@ -4,10 +4,26 @@ import { prisma } from '../config/prisma'
 import { signAccessToken, signRefreshToken, hashToken, verifyRefreshToken } from '../utils/jwt'
 import { passwordPolicy } from '../utils/tokens'
 import { authMiddleware, AuthenticatedRequest, requireRole, attachUserRecord } from '../middleware/auth'
-import { LoginRequestSchema, ChangePasswordSchema, GerarSenhaTemporariaSchema, LoginResponseSchema } from '@shared/api'
+import {
+  LoginRequestSchema,
+  ChangePasswordSchema,
+  GerarCodigoPrimeiroAcessoSchema,
+  LoginResponseSchema,
+  VerificarEmailSchema,
+  ConfirmarCodigoSchema,
+  DefinirSenhaPrimeiroAcessoSchema,
+} from '@shared/api'
 import { ZodError } from 'zod'
 import { isZodError } from '../utils/zodError'
 import { grupoDaUnidade, papelDaUnidade } from '../services/normalization'
+import {
+  gerarCodigoPrimeiroAcesso,
+  confirmarCodigo,
+  validarToken,
+  marcarTokenUsado,
+  definirSenhaPrimeiroAcesso,
+  CODIGO_TTL_MS,
+} from '../services/primeiroAcesso'
 
 const router = Router()
 
@@ -288,29 +304,168 @@ router.post('/change-password', authMiddleware, async (req: AuthenticatedRequest
 // attachUserRecord é obrigatório aqui: rotas /api/auth são montadas ANTES do
 // app.use('/api', authMiddleware, attachUserRecord) global, então sem ele o
 // requireRole nunca vê req.userRecord e responde 401 "Usuário não autenticado".
-router.post('/admin/gerar-senha-temporaria', authMiddleware, attachUserRecord, requireRole('ADMIN'), async (req: AuthenticatedRequest, res) => {
+router.post('/admin/gerar-codigo-primeiro-acesso', authMiddleware, attachUserRecord, requireRole('ADMIN'), async (req: AuthenticatedRequest, res) => {
   try {
-    const { email } = GerarSenhaTemporariaSchema.parse(req.body)
+    const { email } = GerarCodigoPrimeiroAcessoSchema.parse(req.body)
 
-    const user = await prisma.usuario.findUnique({ where: { email: email.toLowerCase() } })
-    if (!user) {
-      return res.status(404).json({ error: 'NOT_FOUND', message: 'Usuário não encontrado' })
+    const resultado = await gerarCodigoPrimeiroAcesso(email)
+
+    if (!resultado.podeGerar) {
+      // Aqui o ADMIN pode e DEVE saber o motivo — é informação operacional
+      // para ele decidir o que fazer, não enumeração anônima.
+      const mensagens = {
+        NAO_CADASTRADO: 'Usuário não encontrado',
+        INATIVO: 'Usuário inativo — reative antes de gerar o código',
+        JA_TEM_SENHA: 'Este usuário já definiu a senha',
+      } as const
+      return res.status(400).json({ error: 'CODIGO_NAO_GERAVEL', message: mensagens[resultado.motivo] })
     }
 
-    const senhaTemporaria = passwordPolicy.generateTemp()
-    const senhaHash = await bcrypt.hash(senhaTemporaria, BCRYPT_COST)
+    return res.json({
+      codigo: resultado.codigo,
+      nome: resultado.nome,
+      expiraEm: new Date(Date.now() + CODIGO_TTL_MS).toISOString(),
+    })
+  } catch (err) {
+    if (isZodError(err)) {
+      return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: err.flatten().fieldErrors })
+    }
+    throw err
+  }
+})
 
-    await prisma.usuario.update({
-      where: { id: user.id },
-      data: {
-        senhaHash,
-        primeiroLogin: true
-      }
+// ============================================
+// PRIMEIRO ACESSO — três rotas públicas
+// ============================================
+//
+// Reproduzem no portal o fluxo que o SCE antigo tinha (verificar o e-mail →
+// primeiro acesso), com a etapa que faltava lá: a prova de que a pessoa foi de
+// fato autorizada. As duas rotas do meio respondem SEM dizer se o e-mail está
+// cadastrado — ver o comentário longo em `services/primeiroAcesso.ts`.
+
+/**
+ * Passo 1 da tela de acesso: diz qual passo mostrar depois do e-mail.
+ *
+ * Aqui a resposta é ambígua de propósito. Um `{ existe: false }` fiel seria um
+ * enumerador de contas da rede escolar: quem visse "não cadastrado" para o
+ * endereço da colega aprenderia que ela não usa o portal, e o inverso também.
+ * Por isso o e-mail inexistente responde o MESMO objeto de um e-mail existente
+ * que já tem senha — só a diferença real entre os casos que importa (ainda
+ * está em primeiro acesso) é que vaza, e isso é justamente o que a pessoa
+ * precisa saber para seguir o fluxo.
+ */
+router.post('/verificar-email', async (req, res) => {
+  try {
+    const { email } = VerificarEmailSchema.parse(req.body)
+
+    const user = await prisma.usuario.findUnique({
+      where: { email: email.toLowerCase() },
+      select: { id: true, status: true, primeiroLogin: true },
     })
 
-    await prisma.refreshToken.deleteMany({ where: { usuarioId: user.id } })
+    // E-mail não cadastrado se passa por um usuário ATIVO sem primeiro acesso:
+    // resposta idêntica à de quem já tem senha, que também não entra neste fluxo.
+    if (!user || user.status !== 'ATIVO' || !user.primeiroLogin) {
+      return res.json({ existe: true, primeiroAcesso: false, ativo: true })
+    }
 
-    return res.json({ senhaTemporaria })
+    return res.json({ existe: true, primeiroAcesso: true, ativo: true })
+  } catch (err) {
+    if (isZodError(err)) {
+      return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'E-mail inválido' })
+    }
+    throw err
+  }
+})
+
+/**
+ * Passo 2: confere o código e devolve o token de criação de senha.
+ *
+ * Erro genérico e único para código errado, expirado, já usado ou inexistente:
+ * distinguir os casos diria a quem está tentando adivinhar se o código estava
+ * certo e só prestava a expirar.
+ */
+router.post('/primeiro-acesso/confirmar', async (req, res) => {
+  try {
+    const { email, codigo } = ConfirmarCodigoSchema.parse(req.body)
+
+    const resultado = await confirmarCodigo(email, codigo)
+    if (!resultado) {
+      return res.status(400).json({
+        error: 'CODIGO_INVALIDO',
+        message: 'Código inválido ou expirado. Peça um novo código.',
+      })
+    }
+
+    return res.json({ token: resultado.token, expiraEm: resultado.expiraEm.toISOString() })
+  } catch (err) {
+    if (isZodError(err)) {
+      return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Código inválido' })
+    }
+    throw err
+  }
+})
+
+/**
+ * Passo 4: cria a senha e JÁ ENTRE na sessão.
+ *
+ * Devolve access token + cookie de refresh como o login, porque a pessoa
+ * acabou de provar que controla o e-mail e já escolheu a senha — pedir o login
+ * de novo seria trabalho inútil.
+ */
+router.post('/primeiro-acesso/definir-senha', async (req, res) => {
+  try {
+    const { token, novaSenha, confirmarSenha } = DefinirSenhaPrimeiroAcessoSchema.parse(req.body)
+
+    const validado = await validarToken(token)
+    if (!validado) {
+      return res.status(401).json({
+        error: 'TOKEN_INVALIDO',
+        message: 'Sua verificação expirou. Peça um novo código.',
+      })
+    }
+
+    const resultado = await definirSenhaPrimeiroAcesso(validado.usuarioId, novaSenha, confirmarSenha)
+    if (!resultado.ok) {
+      return res.status(resultado.status).json({
+        error: resultado.error,
+        message: resultado.message,
+        ...(resultado.errosSenha ? { details: resultado.errosSenha.map(e => ({ field: 'novaSenha', message: e })) } : {}),
+      })
+    }
+
+    // Token consumido: a mesma confirmação não cria uma segunda senha.
+    await marcarTokenUsado(validado.codigoConfirmadoId)
+
+    const user = await prisma.usuario.findUnique({
+      where: { id: validado.usuarioId },
+      select: {
+        id: true,
+        email: true,
+        nome: true,
+        nivel: true,
+        filial: true,
+        status: true,
+        primeiroLogin: true,
+      },
+    })
+    if (!user || user.status !== 'ATIVO') {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'Usuário inativo ou não encontrado' })
+    }
+
+    const { accessToken, refreshToken, refreshTokenHash, user: userResponse } = buildLoginResponse(user)
+
+    await prisma.refreshToken.create({
+      data: {
+        tokenHash: refreshTokenHash,
+        usuarioId: user.id,
+        expiraEm: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+    })
+
+    setRefreshCookie(res, refreshToken)
+
+    return res.json({ accessToken, user: userResponse, primeiroLogin: false })
   } catch (err) {
     if (isZodError(err)) {
       return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: err.flatten().fieldErrors })

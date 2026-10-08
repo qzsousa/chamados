@@ -32,6 +32,7 @@ import dashboardRoutes from './routes/dashboard'
 import { LISTA_ESCOLAS_EMAILS } from './services/normalization'
 import { syncInventario } from './services/migration'
 import { limparAnexosTemporariosExpirados } from './services/anexos'
+import { limparCodigosExpirados } from './services/primeiroAcesso'
 
 // Força DNS a resolver IPv4 primeiro (Render não tem egress IPv6 → evita "ENETUNREACH")
 dns.setDefaultResultOrder('ipv4first')
@@ -101,6 +102,38 @@ const refreshLimiter = rateLimit({
 })
 
 /**
+ * Primeiro acesso — conferência do código e criação da senha.
+ *
+ * Mais generoso que o `authLimiter` porque uma pessoa legítima erra o dígito
+ * com facilidade (o código é de 6 dígitos, copiado do papel ou digitado de
+ * cabeça). Ainda assim bem abaixo: o limite de 5 tentativas **por código**,
+ * dentro do serviço, é o que mantém o brute force sem chance — mesmo que o
+ * limite por IP seja contornado.
+ */
+const primeiroAcessoLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { error: 'RATE_LIMITED', message: 'Muitas tentativas. Aguarde 15 minutos antes de tentar de novo.' },
+  standardHeaders: true,
+  legacyHeaders: false
+})
+
+/**
+ * Verificação de e-mail da tela de acesso.
+ *
+ * A tela consulta enquanto a pessoa digita (com debounce), então o teto é
+ * pensado para não atrapalhar uma digitação normal — mas corta a varredura
+ * automatizada de uma lista de endereços.
+ */
+const verificarEmailLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  message: { error: 'RATE_LIMITED', message: 'Muitas consultas, aguarde um minuto antes de tentar de novo' },
+  standardHeaders: true,
+  legacyHeaders: false
+})
+
+/**
  * Consulta pública de chamado: protocolo é sequencial por dia (CH-AAAAMMDD-NNNN)
  * e, mesmo com o e-mail exigido, tentativa automatizada em massa deve esbarrar aqui.
  */
@@ -139,6 +172,8 @@ app.get('/health', async (_req, res) => {
 // Auth: rate-limit apenas login e refresh (gerar senha e me passam pelo generalLimiter)
 app.use('/api/auth/login', authLimiter)
 app.use('/api/auth/refresh', refreshLimiter)
+app.use('/api/auth/verificar-email', verificarEmailLimiter)
+app.use('/api/auth/primeiro-acesso', primeiroAcessoLimiter)
 app.use('/api/auth', authRoutes)
 
 // Public endpoints para cascata do Forms (sem auth)
@@ -260,6 +295,21 @@ async function autoLimparAnexosTemporarios() {
 }
 setTimeout(autoLimparAnexosTemporarios, 15000)
 setInterval(autoLimparAnexosTemporarios, LIMPEZA_ANEXOS_INTERVAL_MS)
+
+// Códigos e tokens de primeiro acesso. Roda a cada 30 min porque o código
+// gerado pelo ADMIN vale 24h — se a limpeza passasse só de 6 em 6 horas, a
+// tabela acumularia os códigos de quem nunca chegou a usar.
+const LIMPEZA_CODIGOS_INTERVAL_MS = 30 * 60 * 1000
+async function autoLimparCodigosPrimeiroAcesso() {
+  try {
+    const removidos = await limparCodigosExpirados()
+    if (removidos > 0) logger.info(`🔑 ${removidos} código(s)/token(s) de primeiro acesso expirado(s) removido(s)`)
+  } catch (err) {
+    logger.error({ err }, 'falha na limpeza de códigos de primeiro acesso')
+  }
+}
+setTimeout(autoLimparCodigosPrimeiroAcesso, 20000)
+setInterval(autoLimparCodigosPrimeiroAcesso, LIMPEZA_CODIGOS_INTERVAL_MS)
 
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, shutting down gracefully')

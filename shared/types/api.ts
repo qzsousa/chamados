@@ -112,11 +112,12 @@ export const UserUpdateSchema = z.object({
 
 export type UserUpdate = z.infer<typeof UserUpdateSchema>
 
-export const UserWithTempPasswordSchema = UserSchema.extend({
-  senhaTemporaria: z.string()
+/** Usuário recém-criado: vem com o código de primeiro acesso já gerado. */
+export const UserWithCodigoSchema = UserSchema.extend({
+  codigoPrimeiroAcesso: z.string().regex(/^\d{6}$/)
 })
 
-export type UserWithTempPassword = z.infer<typeof UserWithTempPasswordSchema>
+export type UserWithCodigo = z.infer<typeof UserWithCodigoSchema>
 
 // ============================================
 // AUTH
@@ -145,23 +146,72 @@ export const ChangePasswordSchema = z.object({
 
 export type ChangePassword = z.infer<typeof ChangePasswordSchema>
 
-export const GerarSenhaTemporariaSchema = z.object({
+export const GerarCodigoPrimeiroAcessoSchema = z.object({
   email: z.string().email()
 })
 
-export type GerarSenhaTemporaria = z.infer<typeof GerarSenhaTemporariaSchema>
+export type GerarCodigoPrimeiroAcesso = z.infer<typeof GerarCodigoPrimeiroAcessoSchema>
 
-export const GerarSenhaTemporariaResponseSchema = z.object({
-  senhaTemporaria: z.string()
+export const GerarCodigoPrimeiroAcessoResponseSchema = z.object({
+  codigo: z.string().regex(/^\d{6}$/),
+  nome: z.string().optional(),
+  expiraEm: z.string()
 })
 
-export type GerarSenhaTemporariaResponse = z.infer<typeof GerarSenhaTemporariaResponseSchema>
+export type GerarCodigoPrimeiroAcessoResponse = z.infer<typeof GerarCodigoPrimeiroAcessoResponseSchema>
 
 export const RefreshRequestSchema = z.object({
   refreshToken: z.string().optional()
 })
 
 export type RefreshRequest = z.infer<typeof RefreshRequestSchema>
+
+// ============================================
+// PRIMEIRO ACESSO (verificação de e-mail)
+// ============================================
+
+export const VerificarEmailSchema = z.object({
+  email: z.string().email()
+})
+
+export type VerificarEmail = z.infer<typeof VerificarEmailSchema>
+
+/**
+ * Resposta da verificação de e-mail.
+ *
+ * `existe` e `primeiroAcesso` são o mínimo para a tela saber qual passo
+ * mostrar. Nada de nome, nível ou filial sai daqui — ver o comentário da rota
+ * sobre enumeração de usuários.
+ */
+export const VerificarEmailResponseSchema = z.object({
+  existe: z.boolean(),
+  primeiroAcesso: z.boolean(),
+  ativo: z.boolean()
+})
+
+export type VerificarEmailResponse = z.infer<typeof VerificarEmailResponseSchema>
+
+export const ConfirmarCodigoSchema = z.object({
+  email: z.string().email(),
+  codigo: z.string().regex(/^\d{6}$/, 'O código tem 6 dígitos')
+})
+
+export type ConfirmarCodigo = z.infer<typeof ConfirmarCodigoSchema>
+
+export const ConfirmarCodigoResponseSchema = z.object({
+  token: z.string(),
+  expiraEm: z.string()
+})
+
+export type ConfirmarCodigoResponse = z.infer<typeof ConfirmarCodigoResponseSchema>
+
+export const DefinirSenhaPrimeiroAcessoSchema = z.object({
+  token: z.string().min(20),
+  novaSenha: z.string().min(8).max(128),
+  confirmarSenha: z.string().min(1)
+})
+
+export type DefinirSenhaPrimeiroAcesso = z.infer<typeof DefinirSenhaPrimeiroAcessoSchema>
 
 // ============================================
 // CHAMADO

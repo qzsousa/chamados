@@ -20,10 +20,17 @@ function getSender() {
   }
 }
 
-async function sendBrevoEmail(to: string, subject: string, text: string, html: string): Promise<void> {
+/**
+ * Envia por e-mail via Brevo.
+ *
+ * Devolve `true` só quando a API aceitou. Nunca propaga exceção: falha de
+ * e-mail não deve derrubar a requisição que a disparou (Express 4 + erro
+ * async não tratado derruba o processo inteiro).
+ */
+async function sendBrevoEmail(to: string, subject: string, text: string, html: string): Promise<boolean> {
   if (!env.BREVO_API_KEY) {
     console.warn('[email] BREVO_API_KEY não configurada — envio ignorado')
-    return
+    return false
   }
 
   try {
@@ -46,11 +53,15 @@ async function sendBrevoEmail(to: string, subject: string, text: string, html: s
     if (!res.ok) {
       const err = await res.text()
       console.error(`[email] Falha ao enviar para ${to}: Brevo ${res.status}: ${err}`)
+      return false
     }
+
+    return true
   } catch (err) {
     // Nunca propagar exceção: falha de e-mail não deve derrubar a requisição
     // (Express 4 + erro async não tratado = processo Node inteiro crasha)
     console.error(`[email] Falha ao enviar para ${to}:`, err)
+    return false
   }
 }
 

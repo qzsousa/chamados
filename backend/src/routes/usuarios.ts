@@ -2,8 +2,9 @@ import { Router, Response } from 'express'
 import bcrypt from 'bcryptjs'
 import { prisma } from '../config/prisma'
 import { authMiddleware, AuthenticatedRequest, requireRole } from '../middleware/auth'
-import { UserCreateSchema, UserUpdateSchema, UserWithTempPasswordSchema, PaginatedResponseSchema, UserSchema } from '@shared/api'
+import { UserCreateSchema, UserUpdateSchema, UserWithCodigoSchema, PaginatedResponseSchema, UserSchema } from '@shared/api'
 import { passwordPolicy } from '../utils/tokens'
+import { criarCodigoPrimeiroAcesso } from '../services/primeiroAcesso'
 import { syncUsuarioParaSce } from '../services/sceSync'
 import { ZodError } from 'zod'
 import { isZodError } from '../utils/zodError'
@@ -118,8 +119,16 @@ router.post('/', authMiddleware, adminOuGestor, async (req: AuthenticatedRequest
       return res.status(409).json({ error: 'VALIDATION_ERROR', message: 'Email já cadastrado' })
     }
 
-    const senhaTemporaria = passwordPolicy.generateTemp()
-    const senhaHash = await bcrypt.hash(senhaTemporaria, BCRYPT_COST)
+    /**
+     * A senha do cadastro é um valor aleatório que NINGUÉM vai conhecer.
+     *
+     * Ela existe só porque a coluna `senhaHash` é obrigatória — e é justamente
+     * isso que impede o login direto: sem o código de primeiro acesso, ninguém
+     * tem credencial para esta conta. A pessoa cria a senha dela no
+     * `/primeiro-acesso/definir-senha`, e a senha temporária nunca é usada.
+     */
+    const senhaSemDono = passwordPolicy.generateTemp()
+    const senhaHash = await bcrypt.hash(senhaSemDono, BCRYPT_COST)
 
     const user = await prisma.usuario.create({
       data: {
@@ -133,10 +142,15 @@ router.post('/', authMiddleware, adminOuGestor, async (req: AuthenticatedRequest
       select: { id: true, email: true, nome: true, nivel: true, filial: true, status: true, primeiroLogin: true, createdAt: true, updatedAt: true }
     })
 
+    // O código de primeiro acesso já sai pronto na criação: o ADMIN repassa
+    // para a pessoa e ela cria a própria senha. Usa a função de baixo nível
+    // porque o registro acabou de ser gravado — não há o que buscar de novo.
+    const codigoPrimeiroAcesso = await criarCodigoPrimeiroAcesso(user.id)
+
     // Mantém a tabela `usuarios` do SCE sincronizada (portal usa um login só)
     syncUsuarioParaSce(user).catch(() => {})
 
-    return res.status(201).json({ ...user, senhaTemporaria })
+    return res.status(201).json({ ...user, codigoPrimeiroAcesso })
   } catch (err) {
     if (isZodError(err)) {
       return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: err.flatten().fieldErrors })
