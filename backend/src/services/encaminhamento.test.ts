@@ -14,7 +14,7 @@ vi.mock('../config/prisma', () => ({
     usuario: { findMany: vi.fn(), findFirst: vi.fn() },
     chamado: { update: vi.fn(), groupBy: vi.fn(), findMany: vi.fn() },
     encaminhamentoRegra: { findMany: vi.fn() },
-    formularioCategoria: { findUnique: vi.fn() },
+    formularioCategoria: { findUnique: vi.fn(), findMany: vi.fn() },
   },
 }))
 
@@ -99,6 +99,128 @@ describe('tecnicosDaUnidade', () => {
     ] as any)
     const lista = await tecnicosDaUnidade('E.E. BELIZE')
     expect(lista[0].nome).toBe('B')
+  })
+})
+
+/**
+ * ESCOPO DE TIPOS — a conta de quem atende só alguns tipos de chamado, de
+ * qualquer escola. Sem nenhum usuário com escopo cadastrado, tudo acima
+ * continua valendo igual.
+ */
+describe('tecnicosDaUnidade — escopo de tipos', () => {
+  const SISTEMAS = {
+    id: 'ch-sist',
+    protocolo: 'CH-20260925-0002',
+    unidade: 'E.E. VILA BELA', // escola que o técnico de sistemas não atende
+    tipo: 'Sistemas - PortalNet',
+    urgencia: 'Média',
+    responsavel: null,
+    status: 'ABERTO',
+    categoriaChave: 'sistemas',
+    historico: null,
+  }
+
+  /** Técnico de sistemas: escopo em vez de unidade. */
+  const DE_SISTEMAS = {
+    id: 'tec-sist',
+    nome: 'Da Sistemas',
+    email: 'sistemas@educacao.sp.gov.br',
+    filial: 'E.E. URE LESTE 3',
+    createdAt: new Date('2026-01-01'),
+    escopoTipos: ['sistemas::PortalNet', 'sistemas::SEI'],
+  }
+
+  beforeEach(() => {
+    vi.mocked(prisma.formularioCategoria.findMany).mockImplementation(async (args: any) => {
+      const chaves = args?.where?.chave?.in as string[] | undefined
+      const todas = [
+        { chave: 'sistemas', nome: 'Sistemas' },
+        { chave: 'equipamento', nome: 'Equipamento' },
+      ]
+      return (chaves ? todas.filter((c) => chaves.includes(c.chave)) : todas) as any
+    })
+  })
+
+  it('entra na fila pelo tipo, mesmo sem atender a escola', async () => {
+    vi.mocked(prisma.usuario.findMany).mockResolvedValue([DE_SISTEMAS] as any)
+
+    const lista = await tecnicosDaUnidade('E.E. VILA BELA', SISTEMAS as any)
+
+    expect(lista.map((t) => t.nome)).toEqual(['Da Sistemas'])
+  })
+
+  it('NÃO entra na fila quando o chamado é de outro tipo', async () => {
+    vi.mocked(prisma.usuario.findMany).mockResolvedValue([DE_SISTEMAS] as any)
+
+    const lista = await tecnicosDaUnidade('E.E. VILA BELA', { ...SISTEMAS, tipo: 'Equipamento - Formatação', categoriaChave: 'equipamento' } as any)
+
+    expect(lista).toEqual([])
+  })
+
+  /**
+   * A prioridade do especialista é o motivo de a conta existir: se o técnico da
+   * unidade ganhasse, o chamado de sistemas nunca chegaria em quem só faz
+   * sistemas.
+   */
+  it('tem prioridade sobre o técnico da unidade', async () => {
+    vi.mocked(prisma.usuario.findMany).mockResolvedValue([
+      { ...TECNICO, id: 'tec-unidade', nome: 'Da Unidade', filial: 'E.E. VILA BELA' },
+      DE_SISTEMAS,
+    ] as any)
+
+    const lista = await tecnicosDaUnidade('E.E. VILA BELA', SISTEMAS as any)
+
+    expect(lista[0].nome).toBe('Da Sistemas')
+  })
+
+  it('técnico da unidade ainda leva o chamado de tipo fora do escopo dele', async () => {
+    vi.mocked(prisma.usuario.findMany).mockResolvedValue([
+      { ...TECNICO, id: 'tec-unidade', nome: 'Da Unidade', filial: 'E.E. VILA BELA' },
+      DE_SISTEMAS,
+    ] as any)
+
+    const lista = await tecnicosDaUnidade('E.E. VILA BELA', { ...SISTEMAS, tipo: 'Equipamento - Formatação', categoriaChave: 'equipamento' } as any)
+
+    expect(lista.map((t) => t.nome)).toEqual(['Da Unidade'])
+  })
+
+  it('sem o chamado (chamada sem contexto) o técnico de escopo não entra', async () => {
+    vi.mocked(prisma.usuario.findMany).mockResolvedValue([DE_SISTEMAS] as any)
+
+    // Não dá para decidir o tipo: melhor não escolher ninguém restrito do que
+    // escolher a pessoa errada.
+    expect(await tecnicosDaUnidade('E.E. VILA BELA')).toEqual([])
+  })
+
+  it('modo TECNICO: regra fixa aceita quando o tipo está no escopo', async () => {
+    vi.mocked(prisma.usuario.findFirst).mockResolvedValue(DE_SISTEMAS as any)
+
+    const r = await encaminharChamado(SISTEMAS as any, { modo: 'TECNICO', tecnicoId: 'tec-sist' })
+
+    expect(r.ok).toBe(true)
+    expect(r.tecnico?.nome).toBe('Da Sistemas')
+  })
+
+  it('modo TECNICO: regra fixa é recusada quando o tipo está fora do escopo', async () => {
+    vi.mocked(prisma.usuario.findFirst).mockResolvedValue(DE_SISTEMAS as any)
+
+    const r = await encaminharChamado(
+      { ...SISTEMAS, tipo: 'Equipamento - Formatação', categoriaChave: 'equipamento' } as any,
+      { modo: 'TECNICO', tecnicoId: 'tec-sist' },
+    )
+
+    expect(r.ok).toBe(false)
+    // A mensagem precisa dizer que é o escopo, senão o ADMIN acha que o
+    // técnico foi desativado e reconfigura a regra à toa.
+    expect(r.motivo).toContain('tipo')
+  })
+
+  it('modo TECNICO: técnico sem escopo continua aceito sempre', async () => {
+    vi.mocked(prisma.usuario.findFirst).mockResolvedValue({ ...TECNICO, escopoTipos: [] } as any)
+
+    const r = await encaminharChamado(SISTEMAS as any, { modo: 'TECNICO', tecnicoId: 'tec-1' })
+
+    expect(r.ok).toBe(true)
   })
 })
 

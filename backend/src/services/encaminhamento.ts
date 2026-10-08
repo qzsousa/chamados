@@ -17,6 +17,7 @@ import { prisma } from '../config/prisma'
 import { normalizarNomeEscola } from './normalization'
 import { notificarUsuario } from './notificacoes'
 import { normalizarUnidade, unidadesDoUsuario, usuarioAtendeUnidade } from './unidades'
+import { casaComEscopo } from './escopo'
 
 export type ModoEncaminhamento = 'UNIDADE' | 'TECNICO'
 
@@ -116,57 +117,97 @@ async function abertosPorTecnico(nomes: string[]): Promise<Map<string, number>> 
  * Só TECNICO, mesmo com ADMIN valendo como destino: o encaminhamento
  * automático é o do volante da unidade, e o chefe entra na fila só se o
  * Admin escolher a mão (o "Técnico da unidade" do modal).
+ *
+ * ESCOPO DE TIPOS (ver `services/escopo.ts`): quem tem `escopoTipos` não é
+ * escolhido por unidade — é escolhido pelo TIPO do chamado, de qualquer escola.
+ * Quem tem escopo e NÃO atende este tipo sai da fila (é o "não receber
+ * encaminhamento"). E quem atende pelo tipo tem PRIORIDADE sobre o técnico da
+ * unidade: é o motivo de existirem contas assim (alguém de fora do setor que
+ * só faz sistemas não pode ficar na fila atrás do volante que faz tudo).
+ *
+ * Sem nenhum usuário com escopo, a ordenação é exatamente a de sempre.
  */
-export async function tecnicosDaUnidade(unidade: string): Promise<TecnicoDestino[]> {
+export async function tecnicosDaUnidade(
+  unidade: string,
+  chamado?: ChamadoParaEncaminhar | null,
+): Promise<TecnicoDestino[]> {
   const candidatos = await prisma.usuario.findMany({
     where: { nivel: 'TECNICO', status: 'ATIVO' },
-    select: { id: true, nome: true, email: true, filial: true, createdAt: true },
+    select: { id: true, nome: true, email: true, filial: true, createdAt: true, escopoTipos: true },
     orderBy: { createdAt: 'asc' },
   })
 
   const alvo = normalizarUnidade(unidade)
-  const elegiveis = candidatos
-    .map((c) => {
-      const exata = unidadesDoUsuario(c.filial).some((u) => normalizarUnidade(u) === alvo)
-      const casa = exata || usuarioAtendeUnidade(c.filial, unidade)
-      return { ...c, casa, exata }
-    })
-    .filter((c) => c.casa)
+  type Candidato = (typeof candidatos)[number] & {
+    escopoTipos: string[]
+    exata: boolean
+    casa: boolean
+    porEscopo: boolean
+  }
+  const base: Candidato[] = []
 
+  for (const c of candidatos) {
+    const escopoTipos = c.escopoTipos ?? []
+    if (escopoTipos.length) {
+      base.push({ ...c, escopoTipos, casa: chamado ? await casaComEscopo(chamado, c) : false, exata: false, porEscopo: true })
+      continue
+    }
+    const exata = unidadesDoUsuario(c.filial).some((u) => normalizarUnidade(u) === alvo)
+    base.push({ ...c, escopoTipos, exata, casa: exata || usuarioAtendeUnidade(c.filial, unidade), porEscopo: false })
+  }
+
+  const elegiveis = base.filter((c) => c.casa)
   if (!elegiveis.length) return []
   const abertos = await abertosPorTecnico(elegiveis.map((c) => c.nome))
 
   return elegiveis
     .map((c) => ({
       destino: { id: c.id, nome: c.nome, email: c.email, filial: c.filial, abertos: abertos.get(c.nome) ?? 0 },
-      exata: c.exata,
+      // Atende pelo tipo vem antes do técnico da unidade; entre os da unidade,
+      // a casa exata vem antes da casa por escola irmã.
+      faixa: c.porEscopo ? 0 : c.exata ? 1 : 2,
+      createdAt: c.createdAt,
     }))
     .sort((a, b) => {
-      if (a.exata !== b.exata) return a.exata ? -1 : 1
+      if (a.faixa !== b.faixa) return a.faixa - b.faixa
       if (a.destino.abertos !== b.destino.abertos) return a.destino.abertos - b.destino.abertos
-      return 0 // createdAt asc já veio da query
+      return a.createdAt.getTime() - b.createdAt.getTime() // createdAt asc já veio na query
     })
     .map((r) => r.destino)
 }
 
-async function tecnicoFixo(tecnicoId: string): Promise<TecnicoDestino | null> {
+/**
+ * Técnico fixo da regra (`modo: TECNICO`).
+ *
+ * O escopo de tipos é respeitado aqui também: a regra fixa aponta para UMA
+ * pessoa, e se o chamado é de um tipo que está fora do escopo dela o
+ * encaminhamento é recusado. Configurar a regra é escolha do ADMIN, mas
+ * "aceitar tudo sem conferir" entregaria chamado de rede para quem só atende
+ * sistemas — exatamente o que a restrição existe para evitar.
+ */
+async function tecnicoFixo(
+  tecnicoId: string,
+  chamado?: ChamadoParaEncaminhar | null,
+): Promise<TecnicoDestino | null> {
   const u = await prisma.usuario.findFirst({
     where: { id: tecnicoId, ...destinoWhere },
-    select: { id: true, nome: true, email: true, filial: true },
+    select: { id: true, nome: true, email: true, filial: true, escopoTipos: true },
   })
   if (!u) return null
-  return { ...u, abertos: 0 }
+  if (chamado && !(await casaComEscopo(chamado, u))) return null
+  return { id: u.id, nome: u.nome, email: u.email, filial: u.filial, abertos: 0 }
 }
 
 /** Resolve o técnico de destino conforme a regra/modo informado. */
 export async function resolverTecnico(
   unidade: string,
   opcoes: { modo: ModoEncaminhamento; tecnicoId?: string | null },
+  chamado?: ChamadoParaEncaminhar | null,
 ): Promise<TecnicoDestino | null> {
   if (opcoes.modo === 'TECNICO' && opcoes.tecnicoId) {
-    return tecnicoFixo(opcoes.tecnicoId)
+    return tecnicoFixo(opcoes.tecnicoId, chamado)
   }
-  const [primeiro] = await tecnicosDaUnidade(unidade)
+  const [primeiro] = await tecnicosDaUnidade(unidade, chamado)
   return primeiro ?? null
 }
 
@@ -193,11 +234,14 @@ export async function encaminharChamado(
     autor?: string
   } = { modo: 'UNIDADE' },
 ): Promise<ResultadoEncaminhamento> {
-  const tecnico = await resolverTecnico(chamado.unidade, opcoes)
+  const tecnico = await resolverTecnico(chamado.unidade, opcoes, chamado)
   const origem = opcoes.origem ?? 'Automático'
 
   if (!tecnico) {
-    const motivo = 'Nenhum técnico ativo atendendo esta unidade está cadastrado.'
+    const motivo =
+      opcoes.modo === 'TECNICO' && opcoes.tecnicoId
+        ? 'O técnico fixo da regra não atende este tipo de chamado.'
+        : 'Nenhum técnico ativo atendendo esta unidade está cadastrado.'
     const entrada = `[${fmtHoraLocal(new Date())}] Sem técnico para encaminhamento: ${motivo}`
     const atualizado = await prisma.chamado.update({
       where: { id: chamado.id },

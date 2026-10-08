@@ -73,6 +73,13 @@ const CAMPOS_PUBLICAVEIS = [
   'filial',
   'status',
   'primeiroLogin',
+  /**
+   * Vai para o cliente porque o portal usa para ESCONDER o que o usuário não pode
+   * ver (menu de equipamentos, opções de categoria no filtro). Não é o que
+   * protege o dado — a autorização é toda no servidor; serve para a tela não
+   * oferecer atalho para algo que vai dar 403.
+   */
+  'escopoTipos',
   'createdAt',
   'updatedAt',
 ] as const
@@ -110,6 +117,7 @@ router.post('/login', async (req, res) => {
         filial: true,
         status: true,
         primeiroLogin: true,
+        escopoTipos: true,
         senhaHash: true,
       },
     })
@@ -181,7 +189,7 @@ router.post('/refresh', async (req, res) => {
 
     const user = await prisma.usuario.findUnique({
       where: { id: payload.sub },
-      select: { id: true, email: true, nome: true, nivel: true, filial: true, primeiroLogin: true, status: true }
+      select: { id: true, email: true, nome: true, nivel: true, filial: true, primeiroLogin: true, status: true, escopoTipos: true }
     })
 
     if (!user || user.status !== 'ATIVO') {
@@ -241,7 +249,7 @@ router.get('/me', authMiddleware, async (req: AuthenticatedRequest, res) => {
 
     const user = await prisma.usuario.findUnique({
       where: { id: req.user.sub },
-      select: { id: true, email: true, nome: true, nivel: true, filial: true, status: true, primeiroLogin: true, createdAt: true, updatedAt: true }
+      select: { id: true, email: true, nome: true, nivel: true, filial: true, status: true, primeiroLogin: true, escopoTipos: true, createdAt: true, updatedAt: true }
     })
 
     if (!user) {

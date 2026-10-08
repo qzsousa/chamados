@@ -6,6 +6,7 @@ import { normalizarNomeEscola, normalizarTexto, getMapaTecnicos, getEmailsContat
 import { getMapaInventario } from '../services/migration'
 import { resumoAvaliacoes } from '../services/avaliacoes'
 import { filtroUnidadesDoUsuario } from '../services/unidades'
+import { clauseDeEscopo, temEscopo } from '../services/escopo'
 
 /** Match tolerante de unidade (geminadas, honoríficos). Espelha o helper de chamados.ts. */
 function normUnidadeDash(s: string): string {
@@ -29,19 +30,50 @@ function filtroUnidadeToleranteDash(filial: string) {
 
 const router = Router()
 
-async function getDashboardData(filtroFilial?: string, filtroNivel?: string) {
+/**
+ * Recorte de visibilidade de um usuário autenticado — o MESMO dos cartões de
+ * KPI (`/stats`) e da listagem (`/chamados`).
+ *
+ * Fica aqui em vez de repetido nas duas rotas porque a tela de chamados mostra
+ * os KPIs no topo e a lista logo abaixo: se os dois recortassem diferente, o
+ * usuário leria "total: 400" em cima de uma lista com 12 chamados.
+ *
+ * `null` = sem recorte (ADMIN vê tudo).
+ *
+ * Ordem de decisão:
+ *  1. escopo de tipos → limita pelo TIPO, de qualquer escola
+ *  2. técnico → pelas unidades do `filial` (lista separada por vírgula)
+ *  3. escola → pela unidade, com casamento tolerante
+ */
+async function filtroVisibilidade(
+  user: { filial?: string; nivel?: string; escopoTipos?: string[] | null } | undefined,
+): Promise<Record<string, unknown> | null> {
+  if (!user || !user.filial || user.nivel === 'ADMIN') return null
+
+  if (temEscopo({ filial: user.filial, escopoTipos: user.escopoTipos })) {
+    const AND = await clauseDeEscopo(user.escopoTipos || [])
+    return AND.length ? { AND } : null
+  }
+
+  if (user.nivel === 'TECNICO') {
+    // Técnico atende VÁRIAS unidades (filial separada por vírgula): um
+    // `contains` da string inteira nunca casaria com nenhuma escola.
+    return filtroUnidadesDoUsuario(user.filial)
+  }
+
+  // Casamento tolerante: unidades geminadas ("E.E. A / E.E. B") e honoríficos.
+  return { OR: filtroUnidadeToleranteDash(user.filial) }
+}
+
+async function getDashboardData(filtroFilial?: string, filtroNivel?: string, escopoTipos?: string[]) {
   const where: any = { excluido: false }
 
-  if (filtroFilial && filtroNivel !== 'ADMIN') {
-    if (filtroNivel === 'TECNICO') {
-      // Técnico atende VÁRIAS unidades (filial separada por vírgula): um
-      // `contains` da string inteira nunca casaria com nenhuma escola.
-      where.OR = filtroUnidadesDoUsuario(filtroFilial).OR
-    } else {
-      // casamento tolerante: unidades geminadas ("E.E. A / E.E. B") e honoríficos
-      where.OR = filtroUnidadeToleranteDash(filtroFilial)
-    }
-  }
+  const visibilidade = await filtroVisibilidade({
+    filial: filtroFilial,
+    nivel: filtroNivel,
+    escopoTipos,
+  })
+  if (visibilidade) Object.assign(where, visibilidade)
 
   const [chamados, totalCount] = await Promise.all([
     prisma.chamado.findMany({
@@ -116,7 +148,8 @@ router.get('/filtrado', authMiddleware, attachUserRecord, async (req: Authentica
   try {
     const { chamados, kpis, mapaInventario } = await getDashboardData(
       req.userRecord?.filial,
-      req.userRecord?.nivel
+      req.userRecord?.nivel,
+      req.userRecord?.escopoTipos,
     )
 
     const avisos: any[] = []
@@ -180,9 +213,8 @@ router.get('/stats', authMiddleware, attachUserRecord, async (req: Authenticated
     // contado por estas contas). Era a diferença entre o KPI do painel
     // autenticado e o do painel público — 9 chamados, todos já excluídos.
     const where: any = { excluido: false }
-    if (req.userRecord && req.userRecord.nivel !== 'ADMIN') {
-      where.OR = filtroUnidadeToleranteDash(req.userRecord.filial)
-    }
+    const visibilidade = await filtroVisibilidade(req.userRecord)
+    if (visibilidade) Object.assign(where, visibilidade)
 
     const [total, abertos, andamento, comunicado, aguardandoConferencia, resolvidos, altaPrioridade] = await Promise.all([
       prisma.chamado.count({ where }),
