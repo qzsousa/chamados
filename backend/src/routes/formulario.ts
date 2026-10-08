@@ -183,7 +183,7 @@ const SEED_FORMULARIO: CategoriaSeed[] = [
         tipo: 'OPCOES',
         obrigatoria: true,
         ordem: 1,
-        opcoes: [{ rotulo: 'PortalNet' }]
+        opcoes: [{ rotulo: 'PortalNet' }, { rotulo: 'SEI' }]
       },
       {
         id: 'seed-perg-sist-2',
@@ -221,6 +221,116 @@ const SEED_FORMULARIO: CategoriaSeed[] = [
         ordem: 5,
         dependeDePerguntaId: 'seed-perg-sist-1',
         dependeDeOpcao: 'PortalNet'
+      },
+      {
+        id: 'seed-perg-sist-6',
+        rotulo: 'O que você precisa no SEI?',
+        tipo: 'OPCOES',
+        obrigatoria: true,
+        ordem: 6,
+        dependeDePerguntaId: 'seed-perg-sist-1',
+        dependeDeOpcao: 'SEI',
+        opcoes: [
+          { rotulo: 'Solicitação de acesso' },
+          {
+            rotulo: 'Reportar problema',
+            alerta: {
+              texto: 'É obrigatório anexar uma imagem do erro para que o chamado seja analisado.',
+              tipo: 'aviso',
+              exigeAnexo: true
+            }
+          }
+        ]
+      },
+      {
+        id: 'seed-perg-sist-7',
+        rotulo: 'Nome',
+        tipo: 'TEXTO',
+        obrigatoria: true,
+        ordem: 7,
+        dependeDePerguntaId: 'seed-perg-sist-6',
+        dependeDeOpcao: 'Solicitação de acesso'
+      },
+      {
+        id: 'seed-perg-sist-8',
+        rotulo: 'CPF',
+        tipo: 'TEXTO',
+        obrigatoria: true,
+        ordem: 8,
+        dependeDePerguntaId: 'seed-perg-sist-6',
+        dependeDeOpcao: 'Solicitação de acesso'
+      },
+      {
+        id: 'seed-perg-sist-9',
+        rotulo: 'E-mail institucional',
+        tipo: 'TEXTO',
+        obrigatoria: true,
+        ordem: 9,
+        dependeDePerguntaId: 'seed-perg-sist-6',
+        dependeDeOpcao: 'Solicitação de acesso'
+      },
+      {
+        id: 'seed-perg-sist-10',
+        rotulo: 'Escola',
+        tipo: 'TEXTO',
+        obrigatoria: true,
+        ordem: 10,
+        dependeDePerguntaId: 'seed-perg-sist-6',
+        dependeDeOpcao: 'Solicitação de acesso'
+      },
+      {
+        id: 'seed-perg-sist-11',
+        rotulo: 'CIE',
+        tipo: 'TEXTO',
+        obrigatoria: true,
+        ordem: 11,
+        dependeDePerguntaId: 'seed-perg-sist-6',
+        dependeDeOpcao: 'Solicitação de acesso'
+      },
+      {
+        id: 'seed-perg-sist-12',
+        rotulo: 'Nome',
+        tipo: 'TEXTO',
+        obrigatoria: true,
+        ordem: 12,
+        dependeDePerguntaId: 'seed-perg-sist-6',
+        dependeDeOpcao: 'Reportar problema'
+      },
+      {
+        id: 'seed-perg-sist-13',
+        rotulo: 'CPF',
+        tipo: 'TEXTO',
+        obrigatoria: true,
+        ordem: 13,
+        dependeDePerguntaId: 'seed-perg-sist-6',
+        dependeDeOpcao: 'Reportar problema'
+      },
+      {
+        id: 'seed-perg-sist-14',
+        rotulo: 'E-mail institucional',
+        tipo: 'TEXTO',
+        obrigatoria: true,
+        ordem: 14,
+        dependeDePerguntaId: 'seed-perg-sist-6',
+        dependeDeOpcao: 'Reportar problema'
+      },
+      {
+        id: 'seed-perg-sist-15',
+        rotulo: 'Escola',
+        tipo: 'TEXTO',
+        obrigatoria: true,
+        ordem: 15,
+        dependeDePerguntaId: 'seed-perg-sist-6',
+        dependeDeOpcao: 'Reportar problema'
+      },
+      {
+        id: 'seed-perg-sist-16',
+        rotulo: 'CIE',
+        tipo: 'TEXTO',
+        obrigatoria: true,
+        ordem: 16,
+        dependeDePerguntaId: 'seed-perg-sist-6',
+        dependeDeOpcao: 'Reportar problema'
       }
     ]
   },
