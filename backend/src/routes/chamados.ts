@@ -85,8 +85,21 @@ const includeAtividades = {
   }
 }
 
-/** Detalhe completo do chamado: conversa + registros de atendimento. */
-const includeDetalhe = { ...includeMensagens, ...includeAtividades }
+/**
+ * Anexos enviados pelo solicitante nas perguntas do formulário público, na
+ * abertura. Vêm junto do detalhe porque são parte da descrição do problema —
+ * o técnico precisa abrir a foto que a escola mandou junto com a pergunta.
+ * Não expiram (ao contrário do anexo de conversa).
+ */
+const includeAnexosAbertura = {
+  anexos: {
+    orderBy: { criadoEm: 'asc' as const },
+    select: { id: true, perguntaId: true, pergunta: true, nome: true, tipo: true, url: true }
+  }
+}
+
+/** Detalhe completo do chamado: conversa + registros de atendimento + anexos da abertura. */
+const includeDetalhe = { ...includeMensagens, ...includeAtividades, ...includeAnexosAbertura }
 
 /** Anexos de perguntas/respostas são temporários: expiram 7 dias após o envio. */
 const DIAS_VALIDADE_ANEXO = 7
@@ -135,6 +148,31 @@ async function salvarAtividade(
  * ficavam deslocados (e misturavam fusos quando gravados por ambientes diferentes).
  */
 const fmtHoraLocal = (d: Date): string => d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+
+/**
+ * Sobe os anexos enviados nas perguntas do formulário público e grava um
+ * registro por arquivo em `ChamadoAnexo`.
+ *
+ * Sem `expiresAt` (ao contrário do anexo de conversa): o anexo da abertura é
+ * permanente, porque é o material que o técnico precisa para resolver o
+ * chamado. Arquivo que falha no upload é simplesmente pulado — perder um anexo
+ * não pode impedir a abertura do chamado, que é o que a pessoa está tentando
+ * resolver.
+ */
+async function salvarAnexosDePerguntas(
+  chamadoId: string,
+  protocolo: string,
+  anexos: Array<{ perguntaId: string; pergunta?: string; nome: string; tipo?: string; base64: string }> | undefined
+) {
+  const salvos: Array<{ perguntaId: string; pergunta?: string; nome: string; tipo?: string; url: string }> = []
+  for (const a of anexos ?? []) {
+    const salvo = await salvarAnexo(a.base64, a.nome, a.tipo || '', `abertura/${protocolo}`)
+    if (!salvo) continue
+    salvos.push({ perguntaId: a.perguntaId, pergunta: a.pergunta || null, nome: a.nome, tipo: a.tipo || null, url: salvo })
+  }
+  if (salvos.length === 0) return
+  await prisma.chamadoAnexo.createMany({ data: salvos.map((s) => ({ ...s, chamadoId })) })
+}
 
 /**
  * Registra uma mensagem (PERGUNTA da matriz ou RESPOSTA da escola) no chamado,
@@ -312,7 +350,10 @@ export async function consultarChamadoPublic(req: Request, res: Response) {
         atividades: {
           orderBy: { criadoEm: 'asc' },
           include: { anexos: { select: { nome: true, tipo: true, url: true } } }
-        }
+        },
+        // Anexos das perguntas do formulário na abertura. São do solicitante,
+        // então aparecem na consulta pública junto do `anexoUrl`.
+        ...includeAnexosAbertura,
       }
     })
     // Chamado legado (sem e-mail gravado) também fica inacessível: o e-mail é
@@ -333,6 +374,7 @@ export async function consultarChamadoPublic(req: Request, res: Response) {
       descricaoResolucao: chamado.descricaoResolucao,
       reaberturas: chamado.reaberturas,
       anexoUrl: chamado.anexoUrl,
+      anexos: chamado.anexos,
       timestamp: chamado.timestamp,
       ultimaAtualizacao: chamado.ultimaAtualizacao,
       avaliacao: chamado.avaliacao ? { nota: chamado.avaliacao.nota, comentario: chamado.avaliacao.comentario } : null,
@@ -453,6 +495,11 @@ export async function criarChamadoPublic(req: Request, res: Response) {
       }
     }
     if (!chamado) throw ultimoErro
+
+    // Anexos das perguntas do formulário (fora do `anexoUrl` da identificação).
+    // Fora do laço de protocolo: é preciso do id do chamado, que só existe
+    // depois que o create tem sucesso.
+    await salvarAnexosDePerguntas(chamado.id, chamado.protocolo, data.anexosPergunta)
 
     if (data.urgencia.startsWith('Alta')) {
       await notificarAltaPrioridade(chamado)

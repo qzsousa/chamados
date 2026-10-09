@@ -8,7 +8,9 @@ import {
   AtualizarFormularioPerguntaSchema,
   CriarFormularioCategoriaSchema,
   CriarFormularioPerguntaSchema,
-  FormularioOpcao
+  FormularioCondicao,
+  FormularioOpcao,
+  TipoPerguntaFormulario
 } from '@shared/api'
 
 const router = Router()
@@ -37,11 +39,39 @@ function slugify(nome: string): string {
 // apontarem para as perguntas corretas.
 // ============================================
 
+/**
+ * Converte o par legado (uma condição só) no formato novo e vice-versa.
+ *
+ * As colunas `dependeDePerguntaId`/`dependeDeOpcao` continuam sendo gravadas
+ * sempre que existe uma única condição: é o que permite um frontend antigo
+ * (que só lê o par) exibir corretamente as perguntas já cadastradas.
+ */
+function condicoesDaLegado(
+  perguntaId?: string | null,
+  opcao?: string | null,
+): { condicoes?: FormularioCondicao[]; dependeDePerguntaId: string | null; dependeDeOpcao: string | null } {
+  const tem = !!perguntaId && !!opcao
+  return {
+    ...(tem ? { condicoes: [{ perguntaId: perguntaId as string, opcao: opcao as string }] } : {}),
+    dependeDePerguntaId: tem ? (perguntaId as string) : null,
+    dependeDeOpcao: tem ? (opcao as string) : null,
+  }
+}
+
+/** Espelha `condicoes` nas colunas legadas quando há 0 ou 1 condição. */
+function espelharLegado(condicoes: FormularioCondicao[] | undefined) {
+  const unica = condicoes?.length === 1 ? (condicoes[0] as FormularioCondicao) : undefined
+  return {
+    dependeDePerguntaId: unica?.perguntaId ?? null,
+    dependeDeOpcao: unica?.opcao ?? null,
+  }
+}
+
 type PerguntaSeed = {
   id: string
   rotulo: string
   ajuda?: string
-  tipo: 'OPCOES' | 'TEXTO' | 'TEXTO_LONGO'
+  tipo: TipoPerguntaFormulario
   obrigatoria: boolean
   ordem: number
   dependeDePerguntaId?: string
@@ -391,7 +421,14 @@ async function seedFormularioPadrao(): Promise<void> {
           descricao: cat.descricao,
           cor: cat.cor,
           ordem: cat.ordem,
-          perguntas: { create: cat.perguntas }
+          perguntas: {
+            // O seed usa o par legado; gravar também em `condicoes` evita que a
+            // primeira abertura pública dependa do fallback de compatibilidade.
+            create: cat.perguntas.map((p) => ({
+              ...p,
+              ...condicoesDaLegado(p.dependeDePerguntaId, p.dependeDeOpcao),
+            })),
+          },
         }
       })
     } catch {
@@ -503,6 +540,42 @@ router.delete('/categorias/:id', requireRole('ADMIN'), async (req, res) => {
 // ADMIN — PERGUNTAS
 // ============================================
 
+/**
+ * Confere cada condição: a pergunta de origem precisa existir, estar na mesma
+ * categoria, ser do tipo OPCOES e ter a opção citada. Sem essa checagem uma
+ * condição órfã (pergunta excluída depois) viraria um item que nunca aparece,
+ * e o ADMIN não teria como perceber o erro pela tela.
+ *
+ * Devolve `null` quando está tudo certo, ou a mensagem de erro.
+ */
+async function validarCondicoes(
+  condicoes: FormularioCondicao[] | undefined,
+  categoriaId: string,
+  legado: { perguntaId?: string | null; opcao?: string | null },
+): Promise<string | null> {
+  // O par legado vira uma condição e passa pelo mesmo caminho — assim não há
+  // dois lugares com regra de validação para divergirem.
+  const lista: FormularioCondicao[] = condicoes?.length
+    ? condicoes
+    : legado.perguntaId && legado.opcao
+      ? [{ perguntaId: legado.perguntaId, opcao: legado.opcao }]
+      : []
+  for (const c of lista) {
+    const pai = await prisma.formularioPergunta.findUnique({ where: { id: c.perguntaId } })
+    if (!pai || pai.categoriaId !== categoriaId) {
+      return 'Toda pergunta de uma condição deve pertencer à mesma categoria.'
+    }
+    if (pai.tipo !== 'OPCOES') {
+      return `A pergunta "${pai.rotulo}" não tem opções, então não pode liberar a exibição.`
+    }
+    const opcoes = Array.isArray(pai.opcoes) ? (pai.opcoes as FormularioOpcao[]) : []
+    if (!opcoes.some((o) => o.rotulo === c.opcao)) {
+      return `A opção "${c.opcao}" não existe mais em "${pai.rotulo}".`
+    }
+  }
+  return null
+}
+
 router.post('/perguntas', requireRole('ADMIN'), async (req, res) => {
   try {
     const data = CriarFormularioPerguntaSchema.parse(req.body)
@@ -512,14 +585,21 @@ router.post('/perguntas', requireRole('ADMIN'), async (req, res) => {
       return res.status(404).json({ error: 'NOT_FOUND', message: 'Categoria não encontrada.' })
     }
 
-    if (data.dependeDePerguntaId) {
-      const pai = await prisma.formularioPergunta.findUnique({ where: { id: data.dependeDePerguntaId } })
-      if (!pai || pai.categoriaId !== data.categoriaId) {
-        return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'A pergunta da qual depende deve pertencer à mesma categoria.' })
-      }
+    const erroCondicao = await validarCondicoes(data.condicoes, data.categoriaId, {
+      perguntaId: data.dependeDePerguntaId,
+      opcao: data.dependeDeOpcao,
+    })
+    if (erroCondicao) {
+      return res.status(400).json({ error: 'VALIDATION_ERROR', message: erroCondicao })
     }
 
-    const pergunta = await prisma.formularioPergunta.create({ data })
+    const pergunta = await prisma.formularioPergunta.create({
+      data: {
+        ...data,
+        // `condicoes` manda no comportamento; o par legado é só espelho.
+        ...(data.condicoes ? espelharLegado(data.condicoes) : condicoesDaLegado(data.dependeDePerguntaId, data.dependeDeOpcao)),
+      },
+    })
     return res.status(201).json(pergunta)
   } catch (err) {
     if (isZodError(err)) {
@@ -532,9 +612,37 @@ router.post('/perguntas', requireRole('ADMIN'), async (req, res) => {
 router.patch('/perguntas/:id', requireRole('ADMIN'), async (req, res) => {
   try {
     const data = AtualizarFormularioPerguntaSchema.parse(req.body)
+
+    // A categoria pode vir no PATCH: sem ela, a validação das condições usa a
+    // categoria da pergunta já gravada.
+    let categoriaId = data.categoriaId
+    if (categoriaId === undefined) {
+      const atual = await prisma.formularioPergunta.findUnique({
+        where: { id: req.params.id },
+        select: { categoriaId: true },
+      })
+      if (!atual) {
+        return res.status(404).json({ error: 'NOT_FOUND', message: 'Pergunta não encontrada.' })
+      }
+      categoriaId = atual.categoriaId
+    }
+
+    const erroCondicao = await validarCondicoes(data.condicoes, categoriaId, {
+      perguntaId: data.dependeDePerguntaId,
+      opcao: data.dependeDeOpcao,
+    })
+    if (erroCondicao) {
+      return res.status(400).json({ error: 'VALIDATION_ERROR', message: erroCondicao })
+    }
+
     const pergunta = await prisma.formularioPergunta.update({
       where: { id: req.params.id },
-      data
+      data: {
+        ...data,
+        // Só mexe no espelho legado quando `condicoes` veio no PATCH; sem ele,
+        // quem chama pode estar mexendo só em `ordem`/`rotulo`.
+        ...(data.condicoes ? espelharLegado(data.condicoes) : {}),
+      },
     })
     return res.json(pergunta)
   } catch (err) {

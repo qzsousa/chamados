@@ -91,6 +91,7 @@ model Chamado {
   avaliacao          Avaliacao?
   mensagens          ChamadoMensagem[]
   atividades         ChamadoAtividade[]
+  anexos             ChamadoAnexo[]
 
   @@index([unidade])
   @@index([status])
@@ -317,6 +318,26 @@ model ChamadoMensagemAnexo {
   @@index([expiresAt])
 }
 
+// Anexos enviados nas perguntas do formulário público na abertura do chamado.
+// Anexo de abertura é PERMANENTE (sem `expiresAt`, ao contrário do de conversa):
+// é o técnico que precisa do arquivo para resolver o chamado depois.
+// `perguntaId`/`pergunta` ligam o arquivo à pergunta que o pediu. O texto da
+// pergunta é cópia de propósito: a pergunta pode ser excluída ou renomeada no
+// formulário e o chamado precisa continuar dizendo de onde veio o arquivo.
+model ChamadoAnexo {
+  id         String  @id @default(cuid())
+  chamadoId  String
+  chamado    Chamado @relation(fields: [chamadoId], references: [id], onDelete: Cascade)
+  perguntaId String?
+  pergunta   String?
+  nome       String
+  tipo       String?
+  url        String
+  criadoEm   DateTime @default(now())
+
+  @@index([chamadoId])
+}
+
 model Notificacao {
   id        String   @id @default(cuid())
   usuarioId String?
@@ -357,10 +378,13 @@ model FormularioPergunta {
   categoria           FormularioCategoria @relation(fields: [categoriaId], references: [id], onDelete: Cascade)
   rotulo              String
   ajuda               String?
-  tipo                String              // OPCOES | TEXTO | TEXTO_LONGO
+  tipo                String              // OPCOES | TEXTO | TEXTO_LONGO | ESCOLA | ARQUIVO
   obrigatoria         Boolean             @default(true)
   ordem               Int                 @default(0)
   ativa               Boolean             @default(true)
+  // Condições de exibição (OU): [{perguntaId, opcao}]. Vazio/NULL = sempre exibir.
+  // `dependeDePerguntaId`/`dependeDeOpcao` seguem em paralelo por compatibilidade.
+  condicoes           Json?
   dependeDePerguntaId String?
   dependeDeOpcao      String?
   opcoes              Json?

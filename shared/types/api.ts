@@ -292,6 +292,26 @@ export const CriarChamadoSchema = z.object({
   anexoNome: z.string().optional(),
   anexoTipo: z.string().optional(),
   /**
+   * Anexos das perguntas do formulário (tipo ARQUIVO). Vários arquivos, um
+   * por pergunta — o anexo acima é o geral da etapa de identificação e segue
+   * existindo em `anexoUrl`.
+   *
+   * `pergunta` é o rótulo da pergunta, enviado pelo frontend, para o arquivo
+   * ficar identificado mesmo que a pergunta seja renomeada ou excluída depois.
+   */
+  anexosPergunta: z
+    .array(
+      z.object({
+        perguntaId: z.string().min(1),
+        pergunta: z.string().max(300).optional(),
+        nome: z.string().min(1).max(255),
+        tipo: z.string().optional(),
+        base64: z.string().min(1)
+      })
+    )
+    .max(20)
+    .optional(),
+  /**
    * Chave da categoria do formulário público (ex.: 'equipamento').
    * É o que permite encaminhar o chamado automaticamente para o técnico
    * sem depender do texto livre de `tipo` (que quebra se a categoria for renomeada).
@@ -586,23 +606,61 @@ export const FormularioOpcaoSchema = z.object({
 
 export type FormularioOpcao = z.infer<typeof FormularioOpcaoSchema>
 
+/**
+ * Tipos de resposta de uma pergunta do formulário público.
+ *
+ * `ESCOLA` e `ARQUIVO` não aceitam `opcoes`: a lista de escolas vem do catálogo
+ * (`/escolas/nomes`) e o anexo é um upload — não faz sentido configurá-los como
+ * opções fixas.
+ */
+export const TIPOS_PERGUNTA_FORMULARIO = ['OPCOES', 'TEXTO', 'TEXTO_LONGO', 'ESCOLA', 'ARQUIVO'] as const
+
+export type TipoPerguntaFormulario = (typeof TIPOS_PERGUNTA_FORMULARIO)[number]
+
+/** Tipos que aceitam a lista `opcoes`. */
+export const TIPOS_COM_OPCOES: TipoPerguntaFormulario[] = ['OPCOES']
+
+/**
+ * Uma condição de exibição: a pergunta aparece quando a resposta da pergunta
+ * `perguntaId` for `opcao`. Várias condições formam uma OU.
+ */
+export const FormularioCondicaoSchema = z.object({
+  perguntaId: z.string().min(1, 'Condição sem pergunta de origem.'),
+  opcao: z.string().min(1, 'Condição sem opção.')
+})
+
+export type FormularioCondicao = z.infer<typeof FormularioCondicaoSchema>
+
 function refinarFormularioPergunta(
   val: {
-    tipo?: 'OPCOES' | 'TEXTO' | 'TEXTO_LONGO'
+    tipo?: TipoPerguntaFormulario
     opcoes?: FormularioOpcao[]
     dependeDePerguntaId?: string | null
     dependeDeOpcao?: string | null
+    condicoes?: FormularioCondicao[]
   },
   ctx: z.RefinementCtx
 ) {
   if (val.tipo === 'OPCOES' && (!val.opcoes || val.opcoes.length === 0)) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['opcoes'], message: 'Pergunta do tipo OPCOES exige ao menos uma opção.' })
   }
-  if ((val.tipo === 'TEXTO' || val.tipo === 'TEXTO_LONGO') && val.opcoes && val.opcoes.length > 0) {
+  if (val.tipo && val.tipo !== 'OPCOES' && val.opcoes && val.opcoes.length > 0) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['opcoes'], message: 'Pergunta de texto não aceita opções.' })
   }
   if (val.dependeDeOpcao != null && val.dependeDeOpcao !== '' && (val.dependeDePerguntaId == null || val.dependeDePerguntaId === '')) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['dependeDePerguntaId'], message: 'dependeDeOpcao exige dependeDePerguntaId.' })
+  }
+  // A mesma pergunta de origem não pode repetir a opção: é a mesma condição
+  // escrita duas vezes e só confunde quem lê o formulário na tela.
+  if (val.condicoes) {
+    const vistas = new Set<string>()
+    for (const [i, c] of val.condicoes.entries()) {
+      const chave = `${c.perguntaId}::${c.opcao}`
+      if (vistas.has(chave)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['condicoes', i], message: 'Condição repetida.' })
+      }
+      vistas.add(chave)
+    }
   }
 }
 
@@ -611,10 +669,11 @@ export const CriarFormularioPerguntaSchema = z
     categoriaId: z.string().min(1),
     rotulo: z.string().min(1).max(300),
     ajuda: z.string().max(500).optional(),
-    tipo: z.enum(['OPCOES', 'TEXTO', 'TEXTO_LONGO']),
+    tipo: z.enum(TIPOS_PERGUNTA_FORMULARIO),
     obrigatoria: z.boolean().default(true),
     ordem: z.number().int().default(0),
     ativa: z.boolean().default(true),
+    condicoes: z.array(FormularioCondicaoSchema).max(10).optional(),
     dependeDePerguntaId: z.string().nullish(),
     dependeDeOpcao: z.string().nullish(),
     opcoes: z.array(FormularioOpcaoSchema).optional()
@@ -628,10 +687,11 @@ export const AtualizarFormularioPerguntaSchema = z
     categoriaId: z.string().min(1).optional(),
     rotulo: z.string().min(1).max(300).optional(),
     ajuda: z.string().max(500).optional(),
-    tipo: z.enum(['OPCOES', 'TEXTO', 'TEXTO_LONGO']).optional(),
+    tipo: z.enum(TIPOS_PERGUNTA_FORMULARIO).optional(),
     obrigatoria: z.boolean().optional(),
     ordem: z.number().int().optional(),
     ativa: z.boolean().optional(),
+    condicoes: z.array(FormularioCondicaoSchema).max(10).optional(),
     dependeDePerguntaId: z.string().nullish(),
     dependeDeOpcao: z.string().nullish(),
     opcoes: z.array(FormularioOpcaoSchema).optional()
