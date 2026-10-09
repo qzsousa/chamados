@@ -68,6 +68,12 @@ model Chamado {
   inventarioStatus   String?  // CONCLUIDO, EM_ANDAMENTO, NAO_REALIZADO, NAO_INFORMADO
   email              String?  // e-mail do solicitante
   categoriaChave     String?  // chave da categoria do formulário público (ex.: 'equipamento')
+  // Respostas do formulário dinâmico, como foram respondidas na abertura.
+  // Vai como Json (lista de { perguntaId, rotulo, resposta }) e não como linhas
+  // de tabela porque é um retrato do momento da abertura: se o ADMIN reescrever a
+  // pergunta depois, o técnico tem de continuar vendo o texto que a escola leu.
+  // NULL nos chamados abertos sem formulário (todo o histórico anterior).
+  formularioRespostas Json?
   aceitoEm           DateTime? // quando o técnico aceitou o chamado (botão "Aceitar"). Gravado só na ida para ANDAMENTO a partir de ABERTO/ENCAMINHADO
   concluidoEm        DateTime? // técnico registrou a conclusão (AGUARDANDO_CONFERENCIA); a RESOLVIDO final vira `conferidoEm`
   excluido           Boolean  @default(false) // soft delete
@@ -85,6 +91,7 @@ model Chamado {
   avaliacao          Avaliacao?
   mensagens          ChamadoMensagem[]
   atividades         ChamadoAtividade[]
+  anexos             ChamadoAnexo[]
 
   @@index([unidade])
   @@index([status])
@@ -94,6 +101,29 @@ model Chamado {
   @@index([responsavel])
   @@index([responsavelId])
   @@index([categoriaChave])
+}
+
+/// Arquivos enviados na ABERTURA do chamado pelo formulário público.
+///
+/// Fica em tabela própria (e não no `Chamado.anexoUrl`, que é a coluna única que
+/// o histórico trazia) porque o formulário pede VÁRIOS arquivos de uma vez — o
+/// aviso de "solicitação de pontos de rede" exige foto de cada sala, e o do SEI
+/// exige a imagem do erro. `anexoUrl` continua sendo gravado com o primeiro
+/// arquivo para as telas antigas não mudarem de comportamento.
+///
+/// Diferente dos anexos da conversa, estes NÃO expiram: eles são parte da
+/// descrição do problema e o técnico precisa deles enquanto atende.
+model ChamadoAnexo {
+  id        String   @id @default(cuid())
+  chamadoId String
+  chamado   Chamado  @relation(fields: [chamadoId], references: [id], onDelete: Cascade)
+  nome      String
+  tipo      String?
+  url       String
+  path      String   // path interno no bucket `anexos` (necessário para remoção)
+  criadoEm  DateTime @default(now())
+
+  @@index([chamadoId])
 }
 
 /// Registro datado do atendimento: o que o técnico fez, a conclusão, a

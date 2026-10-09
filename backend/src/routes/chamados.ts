@@ -1,4 +1,5 @@
 import { Router, Response, Request } from 'express'
+import { Prisma } from '@prisma/client'
 import { prisma } from '../config/prisma'
 import { authMiddleware, AuthenticatedRequest, requireRole, requireFilialAccess } from '../middleware/auth'
 import { CriarChamadoSchema, FiltrosChamadoSchema, AtualizarStatusChamadoSchema, ResponderChamadoSchema, BatchUpdateChamadosSchema, BatchDeleteChamadosSchema, EncaminharChamadoSchema, ChamadoSchema, PaginatedResponseSchema, ConsultarChamadoPublicoSchema, CATEGORIA_SEM_CHAVE, RegistrarAtividadeSchema, ConcluirChamadoSchema, ConferirChamadoSchema, TipoAtividadeSchema } from '@shared/api'
@@ -10,10 +11,129 @@ import { notificarChamadoStatusAlterado, notificarChamadoCriado } from '../servi
 import { notificarAdmins, notificarUnidade, notificarTecnicoResponsavel } from '../services/notificacoes'
 import { encaminharChamado, encaminharPorRegras, tecnicosDaUnidade, destinoWhere } from '../services/encaminhamento'
 import { filtroUnidadesDoUsuario, usuarioAtendeUnidade } from '../services/unidades'
-import { salvarAnexo, salvarAnexoComPath } from '../services/anexos'
+import { salvarAnexoComPath } from '../services/anexos'
+import {
+  avaliarRespostasFormulario,
+  carregarCategoriaFormulario,
+  RespostaAceita,
+  RespostaFormulario
+} from './formulario'
 
 // sempre ignorar chamados marcados como excluídos
 const filtroExcluido = { excluido: false }
+
+// ============================================
+// CONTRATO DO FORMULÁRIO NA ABERTURA DO CHAMADO
+// ============================================
+//
+// `CriarChamadoSchema` (em @shared/api) continua sendo a porta de entrada do
+// resto do payload — unidade, solicitante, e-mail, `categoriaChave` e o
+// `anexoBase64` único do formulário antigo. Aqui embaixo entram DUAS coisas que
+// o formulário dinâmico passou a exigir e que ainda não tinham lugar no schema:
+//
+//   respostas: [{ perguntaId, resposta }]  — o que a escola respondeu
+//   anexos:     [{ nome, tipo, base64 }]    — VÁRIOS arquivos de uma vez
+//
+// Ficam no arquivo em vez de irem para @shared/api porque o contrato é do
+// endpoint e o arquivo já é o dono dele; quando outro repositório precisar
+// tipar o payload, o certo é mover este bloco para shared/types/api.ts.
+
+/** Limite por arquivo e por pedido — os mesmos da conversa (5 arquivos, 5MB). */
+const MAX_ANEXOS_FORMULARIO = 5
+const TAMANHO_MAX_ANEXO_FORMULARIO = 5 * 1024 * 1024
+
+type AnexoFormulario = {
+  nome: string
+  tipo?: string
+  base64: string
+}
+
+/**
+ * Lê `anexos` do corpo sem estourar em payload quebrado.
+ *
+ * Devolve lista de problema em vez de lançar: quem chama decide o status, e
+ * `criarChamadoPublic` precisa continuar devolvendo 400 (e não 500) para corpo
+ * inválido. Um `anexos: "texto"` no lugar da lista é erro do cliente, não
+ * motivo para derrubar o processo.
+ *
+ * Todo item ruim é FATAL: quem mandou arquivo sem nome/base64 ou grande demais
+ * está esperando que ele esteja no chamado — deixar passar em silêncio faria o
+ * técnico receber um chamado "sem anexo" e a escola acreditar que anexou.
+ */
+function lerAnexosFormulario(bruto: unknown): { anexos: AnexoFormulario[]; problemas: string[] } {
+  const problemas: string[] = []
+
+  // Tolerância: um portal mandando UM objeto em vez da lista ainda funciona. (O
+  // `anexoBase64` do formulário antigo NÃO vem aqui — vem no topo do corpo e é
+  // costurado na lista mais abaixo.)
+  if (bruto && typeof bruto === 'object' && !Array.isArray(bruto)) {
+    const o = bruto as Record<string, unknown>
+    const base64 = typeof o.base64 === 'string' ? o.base64.trim() : ''
+    const nome = typeof o.nome === 'string' ? o.nome.trim() : ''
+    if (!base64 || !nome) return { anexos: [], problemas }
+    return {
+      anexos: [{ nome, tipo: typeof o.tipo === 'string' ? o.tipo : undefined, base64 }],
+      problemas
+    }
+  }
+
+  if (bruto === undefined || bruto === null) return { anexos: [], problemas }
+  if (!Array.isArray(bruto)) {
+    problemas.push('anexos deve ser uma lista de arquivos')
+    return { anexos: [], problemas }
+  }
+  if (bruto.length > MAX_ANEXOS_FORMULARIO) {
+    problemas.push(`envie no máximo ${MAX_ANEXOS_FORMULARIO} arquivos por chamado`)
+    return { anexos: [], problemas }
+  }
+
+  const anexos: AnexoFormulario[] = []
+  for (const [i, item] of bruto.entries()) {
+    const o = (item ?? {}) as Record<string, unknown>
+    const nome = typeof o.nome === 'string' ? o.nome.trim() : ''
+    const base64 = typeof o.base64 === 'string' ? o.base64.trim() : ''
+    if (!nome || !base64) {
+      problemas.push(`anexos[${i}] precisa de "nome" e "base64"`)
+      continue
+    }
+    // base64 codifica 3 bytes em 4 chars — o tamanho real é ~ length * 3/4.
+    if ((base64.length * 3) / 4 > TAMANHO_MAX_ANEXO_FORMULARIO) {
+      problemas.push(`anexos[${i}] maior que 5MB`)
+      continue
+    }
+    anexos.push({ nome, tipo: typeof o.tipo === 'string' ? o.tipo : undefined, base64 })
+  }
+  return { anexos, problemas }
+}
+
+/**
+ * Lê `respostas` do corpo. Diferente do anexo, item malformado aqui é DESCARTADO
+ * e não vira 400: uma resposta fora de ordem não tem por que impedir a escola de
+ * registrar o problema — e `avaliarRespostasFormulario` já valida o que importa
+ * (a resposta precisa ser de uma pergunta visível e, em `OPCOES`, ser uma opção
+ * de verdade).
+ *
+ * O que NÃO é tolerado é a forma do payload: `respostas` fora de lista é erro de
+ * cliente e volta 400.
+ */
+function lerRespostasFormulario(bruto: unknown): { respostas: RespostaFormulario[]; problema?: string } {
+  if (bruto === undefined || bruto === null) return { respostas: [] }
+  if (!Array.isArray(bruto)) return { respostas: [], problema: 'respostas deve ser uma lista' }
+  // Teto folgado: nenhuma categoria do formulário chega perto disso, e o limite
+  // existe para segurar corpo gigante sem precisar carregar o formulário inteiro.
+  if (bruto.length > 100) {
+    return { respostas: [], problema: 'respostas tem mais itens que o formulário tem perguntas' }
+  }
+
+  const respostas: RespostaFormulario[] = []
+  for (const item of bruto) {
+    const o = (item ?? {}) as Record<string, unknown>
+    if (typeof o.perguntaId === 'string' && o.perguntaId && typeof o.resposta === 'string') {
+      respostas.push({ perguntaId: o.perguntaId, resposta: o.resposta })
+    }
+  }
+  return { respostas }
+}
 
 /**
  * O que faz um chamado "pertencer" a uma categoria do formulário.
@@ -84,8 +204,16 @@ const includeAtividades = {
   }
 }
 
-/** Detalhe completo do chamado: conversa + registros de atendimento. */
-const includeDetalhe = { ...includeMensagens, ...includeAtividades }
+/**
+ * Anexos enviados na abertura, pelo formulário. Não expiram: são parte da
+ * descrição do problema, então entram no detalhe junto com a conversa.
+ */
+const includeAnexosAbertura = {
+  anexos: { select: { id: true, nome: true, tipo: true, url: true, criadoEm: true } }
+}
+
+/** Detalhe completo do chamado: anexos da abertura + conversa + registros de atendimento. */
+const includeDetalhe = { ...includeAnexosAbertura, ...includeMensagens, ...includeAtividades }
 
 /** Anexos de perguntas/respostas são temporários: expiram 7 dias após o envio. */
 const DIAS_VALIDADE_ANEXO = 7
@@ -293,6 +421,9 @@ export async function consultarChamadoPublic(req: Request, res: Response) {
       where: { protocolo },
       include: {
         avaliacao: true,
+        // Arquivos enviados na abertura (formulário). São permanentes: o
+        // solicitante precisa conferir o que mandou junto com o relato.
+        anexos: { select: { nome: true, tipo: true, url: true } },
         // Conversa matriz ↔ unidade (perguntas "Aguardando resposta" e respostas),
         // visível na consulta pública de protocolo
         mensagens: {
@@ -324,6 +455,10 @@ export async function consultarChamadoPublic(req: Request, res: Response) {
       descricaoResolucao: chamado.descricaoResolucao,
       reaberturas: chamado.reaberturas,
       anexoUrl: chamado.anexoUrl,
+      // O que a escola respondeu no formulário dinâmico e os arquivos que mandou
+      // na abertura. NULL/vazio nos chamados sem formulário — todo o histórico.
+      formularioRespostas: chamado.formularioRespostas ?? [],
+      anexos: chamado.anexos,
       timestamp: chamado.timestamp,
       ultimaAtualizacao: chamado.ultimaAtualizacao,
       avaliacao: chamado.avaliacao ? { nota: chamado.avaliacao.nota, comentario: chamado.avaliacao.comentario } : null,
@@ -401,24 +536,151 @@ export async function avaliarChamadoPublic(req: Request, res: Response) {
   }
 }
 
+/**
+ * Aplica as condições do formulário ao payload de abertura.
+ *
+ * ⚠️ Só roda quando o portal MANDOU `respostas`. Sem essa trava, todo cliente
+ * antigo (que manda só `categoriaChave`, das versões anteriores do formulário)
+ * passaria a receber 400 por "pergunta obrigatória faltando" — as condições do
+ * formulário virariam uma mudança quebrada em vez de uma validação a mais.
+ * Cliente que não manda respostas tem o contrato antigo garantido.
+ *
+ * Devolve `bloqueio: null` + as respostas aceitas quando o payload passou; nos
+ * demais casos a resposta HTTP já está pronta e o chamador só a devolve.
+ */
+async function validarFormularioDaAbertura(
+  categoriaChave: string | undefined,
+  respostas: RespostaFormulario[],
+  quantidadeAnexos: number
+): Promise<{
+  bloqueio: { status: number; corpo: unknown } | null
+  aceitas: RespostaAceita[]
+}> {
+  const semValidacao = { bloqueio: null, aceitas: [] as RespostaAceita[] }
+  if (!categoriaChave || respostas.length === 0) return semValidacao
+
+  // Categoria inexistente/desativada não invalida nada: é o caso de qualquer
+  // portal desatualizado e de todo o histórico, e sem as perguntas não há
+  // condição possível de checar.
+  const categoria = await carregarCategoriaFormulario(categoriaChave)
+  if (!categoria) return semValidacao
+
+  const avaliacao = avaliarRespostasFormulario(categoria, respostas, quantidadeAnexos)
+
+  // "A escola está sem energia, aguarde voltarem": a resposta está CORRETA e
+  // mesmo assim o chamado não deve existir. 422 (não 400) porque o corpo é
+  // válido — é o pedido que não pode ser atendido.
+  if (avaliacao.encerra) {
+    return {
+      bloqueio: {
+        status: 422,
+        corpo: {
+          error: 'FORMULARIO_ENCERRADO',
+          message: avaliacao.encerra.texto,
+          details: { perguntaId: avaliacao.encerra.perguntaId, pergunta: avaliacao.encerra.rotulo }
+        }
+      },
+      aceitas: []
+    }
+  }
+
+  if (avaliacao.faltando.length > 0) {
+    return {
+      bloqueio: {
+        status: 400,
+        corpo: {
+          error: 'VALIDATION_ERROR',
+          message: 'Falta responder às perguntas obrigatórias do formulário',
+          details: { respostas: avaliacao.faltando.map((f) => `${f.rotulo} (${f.perguntaId})`) }
+        }
+      },
+      aceitas: []
+    }
+  }
+
+  // `exigeAnexo` já vem resolvido com a contagem: true significa "cobra anexo e
+  // não chegou nenhum".
+  if (avaliacao.exigeAnexo) {
+    return {
+      bloqueio: {
+        status: 400,
+        corpo: {
+          error: 'VALIDATION_ERROR',
+          message: 'A resposta escolhida exige anexo',
+          details: { anexos: ['Envie ao menos um arquivo junto com o chamado'] }
+        }
+      },
+      aceitas: []
+    }
+  }
+
+  return { bloqueio: null, aceitas: avaliacao.respostas }
+}
+
 export async function criarChamadoPublic(req: Request, res: Response) {
   try {
     const data = CriarChamadoSchema.parse(req.body)
+
+    // ---- formulário dinâmico: respostas + anexos ----
+    const { anexos, problemas } = lerAnexosFormulario(req.body?.anexos)
+    const { respostas, problema: problemaRespostas } = lerRespostasFormulario(req.body?.respostas)
+
+    if (problemas.length > 0 || problemaRespostas) {
+      return res.status(400).json({
+        error: 'VALIDATION_ERROR',
+        message: 'Dados inválidos',
+        details: {
+          ...(problemas.length > 0 ? { anexos: problemas } : {}),
+          ...(problemaRespostas ? { respostas: [problemaRespostas] } : {})
+        }
+      })
+    }
+
+    // O formulário antigo mandava um arquivo só em anexoBase64/anexoNome, no
+    // topo do corpo. Entra na mesma lista para o caminho de baixo ser único.
+    const anexosTotais: AnexoFormulario[] =
+      anexos.length > 0
+        ? anexos
+        : data.anexoBase64 && data.anexoNome
+          ? [{ nome: data.anexoNome, tipo: data.anexoTipo, base64: data.anexoBase64 }]
+          : []
+
+    const validacao = await validarFormularioDaAbertura(
+      data.categoriaChave,
+      respostas,
+      anexosTotais.length
+    )
+    if (validacao.bloqueio) {
+      return res.status(validacao.bloqueio.status).json(validacao.bloqueio.corpo)
+    }
 
     const tecnicoSetor = getTecnicoSetor(data.unidade)
     const inventarioStatus = await getInventarioStatus(data.unidade)
 
     // Protocolo é sequencial por dia; duas requisições simultâneas podem gerar o
     // mesmo número e estourar o unique (P2002). Nesse caso regera e tenta de novo.
+    let protocolo = await gerarProtocolo()
+
+    // Os anexos sobem UMA vez, fora da repetição: reenviar a cada tentativa
+    // deixaria um arquivo órfão no bucket a cada colisão de protocolo. A pasta
+    // usa o primeiro protocolo gerado — numa colisão o número final é outro, o
+    // que muda é só o nome da pasta (a URL salva é a que vale).
+    const salvos: Array<{ nome: string; tipo: string | null; url: string; path: string }> = []
+    for (const a of anexosTotais) {
+      const salvo = await salvarAnexoComPath(a.base64, a.nome, a.tipo || '', protocolo)
+      if (salvo) salvos.push({ nome: a.nome, tipo: a.tipo || null, ...salvo })
+    }
+
+    // Só o que sobreviveu às condições do formulário é gravado — e sempre com o
+    // rótulo da pergunta ao lado, para o técnico ler o que a escola leu. Vazio
+    // vira NULL, que é o que distingue "chamado sem formulário" de "formulário
+    // em branco".
+    const formularioRespostas = validacao.aceitas.length > 0 ? validacao.aceitas : null
+
     let chamado: any = null
     let ultimoErro: any = null
     for (let tentativa = 0; tentativa < 5 && !chamado; tentativa++) {
-      const protocolo = await gerarProtocolo()
-
-      let anexoUrl: string | null = null
-      if (data.anexoBase64 && data.anexoNome) {
-        anexoUrl = await salvarAnexo(data.anexoBase64, data.anexoNome, data.anexoTipo || '', protocolo)
-      }
+      if (tentativa > 0) protocolo = await gerarProtocolo()
 
       try {
         chamado = await prisma.chamado.create({
@@ -430,13 +692,21 @@ export async function criarChamadoPublic(req: Request, res: Response) {
             tipo: data.tipo,
             descricao: data.descricao,
             urgencia: data.urgencia,
-            anexoUrl,
+            // `anexoUrl` continua sendo o PRIMEIRO arquivo: as telas antigas e o
+            // painel leem só esta coluna, e não há por que mudá-las agora.
+            anexoUrl: salvos[0]?.url ?? null,
             email: data.email || null,
             tecnicoSetor,
             categoriaChave: data.categoriaChave || null,
+            // `Prisma.DbNull` (e não `null`) porque coluna Json nullable em Prisma 5 exige o
+  // marcador explícito para gravar NULL — é o que separa "sem formulário" de
+  // "formulário em branco".
+  formularioRespostas: formularioRespostas ?? Prisma.DbNull,
             inventarioStatus: inventarioStatus as any,
+            anexos: { create: salvos },
             historico: `Chamado criado em ${fmtHoraLocal(new Date())}`
-          }
+          },
+          include: { anexos: { select: { id: true, nome: true, tipo: true, url: true } } }
         })
       } catch (err) {
         if ((err as any)?.code === 'P2002') { ultimoErro = err; continue }
@@ -466,7 +736,9 @@ export async function criarChamadoPublic(req: Request, res: Response) {
       `/chamados/${chamado.id}`
     ).catch(() => {})
 
-    return res.status(201).json(chamado)
+    // 201 com a lista de anexos que de fato subiu: o portal mostra o que foi
+    // gravado, e um anexo que o Supabase recusou não aparece como enviado.
+    return res.status(201).json({ ...chamado, anexos: salvos.map((a) => ({ nome: a.nome, tipo: a.tipo, url: a.url })) })
   } catch (err) {
     if (isZodError(err)) {
       return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: err.flatten().fieldErrors })
