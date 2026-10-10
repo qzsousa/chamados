@@ -309,9 +309,11 @@ describe('Usuários Routes (ADMIN)', () => {
     })
 
     it('should update user', async () => {
-      vi.mocked(prisma.usuario.findUnique)
-        .mockResolvedValueOnce({ id: 'user-1', email: 'user@test.com' })
-        .mockResolvedValueOnce(null)
+      // Uma única vez: a rota consulta o usuário uma vez nesse caminho. O
+      // segundo mockResolvedValueOnce(null) nunca era consumido e ficava na
+      // fila, sendo entregue ao teste seguinte — que por isso recebia 404 e
+      // falhava sem que houvesse defeito no código.
+      vi.mocked(prisma.usuario.findUnique).mockResolvedValue({ id: 'user-1', email: 'user@test.com' })
       vi.mocked(prisma.usuario.update).mockResolvedValue({
         id: 'user-1',
         email: 'user@test.com',
@@ -333,6 +335,10 @@ describe('Usuários Routes (ADMIN)', () => {
     })
 
     it('should delete refresh tokens when status changes to INATIVO', async () => {
+      // mockResolvedValue, não Once: o teste anterior usou Once duas vezes e,
+      // quando a rota passou a consultar o usuário mais de uma vez nesse
+      // caminho, a terceira chamada caiu para undefined — a rota respondeu 404
+      // e este teste falhava sem que houvesse defeito no código.
       vi.mocked(prisma.usuario.findUnique).mockResolvedValue({ id: 'user-1', email: 'user@test.com' })
       vi.mocked(prisma.usuario.update).mockResolvedValue({ id: 'user-1', status: 'INATIVO' })
       vi.mocked(prisma.refreshToken.deleteMany).mockResolvedValue({ count: 1 })

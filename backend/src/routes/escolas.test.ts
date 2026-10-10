@@ -28,7 +28,12 @@ vi.mock('../config/prisma', () => ({
 
 vi.mock('../services/normalization', () => ({
   normalizarNomeEscola: vi.fn((nome: string) => nome.toUpperCase().replace(/[^A-Z0-9]/g, '')),
-  getMapaTecnicos: vi.fn(() => ({ ESCOLA1: 'TECNICO1', ESCOLA2: 'TECNICO2' })),
+  // A rota GET / resolve por mapaTecnicos[normalizarNomeEscola(nome)], e o
+  // normalizarNomeEscola mockado aqui remove o prefixo "E.E." e tudo que não é
+  // A-Z0-9. Com a chave antiga ('ESCOLA1'), a busca por 'EETESTE1' vinha vazia,
+  // a rota caía no fallback e devolvia o `tecnico: 'OLD'` do banco. As chaves
+  // precisam casar com a normalização.
+  getMapaTecnicos: vi.fn(() => ({ EETESTE1: 'TECNICO1', EETESTE2: 'TECNICO2' })),
   getTecnicoPorEscola: vi.fn(() => 'TECNICO1'),
   listarGruposUnidades: vi.fn(() => [
     { nome: 'E.E. TESTE 1', grupo: 'E.E. TESTE 1 / E.E. TESTE 2', irma: 'E.E. TESTE 2' },
@@ -85,7 +90,11 @@ describe('Escolas Routes', () => {
       const res = await request(app).get('/api/escolas/tecnicos')
 
       expect(res.status).toBe(200)
-      expect(res.body).toEqual({ ESCOLA1: 'TECNICO1', ESCOLA2: 'TECNICO2' })
+      // Espelha o mock de getMapaTecnicos, cujas chaves são os nomes já
+      // normalizados. GET /tecnicos devolve o mapa cru — a normalização é do
+      // lado de quem consome, e o teste anterior comparava com as chaves
+      // antigas.
+      expect(res.body).toEqual({ EETESTE1: 'TECNICO1', EETESTE2: 'TECNICO2' })
     })
   })
 
