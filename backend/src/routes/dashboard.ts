@@ -7,6 +7,16 @@ import { getMapaInventario } from '../services/migration'
 import { resumoAvaliacoes } from '../services/avaliacoes'
 import { filtroUnidadesDoUsuario } from '../services/unidades'
 
+/**
+ * Teto de chamados devolvidos pela matriz.
+ *
+ * A matriz serve para o técnico ver o que tem na mesa agora, não para gerar
+ * relatório. Sem teto, uma unidade com muitos chamados carrega a tabela
+ * inteira em memória e manda tudo para o navegador. O total continuum exato,
+ * vem do count() separado — limitar a lista não falseia o número do backlog.
+ */
+export const LIMITE_MATRIZ = 100
+
 /** Match tolerante de unidade (geminadas, honoríficos). Espelha o helper de chamados.ts. */
 function normUnidadeDash(s: string): string {
   let n = String(s || '')
@@ -46,7 +56,13 @@ async function getDashboardData(filtroFilial?: string, filtroNivel?: string) {
   const [chamados, totalCount] = await Promise.all([
     prisma.chamado.findMany({
       where,
-      orderBy: { timestamp: 'desc' }
+      orderBy: { timestamp: 'desc' },
+      // A matriz é uma visão de trabalho, não um relatório: sem teto, o
+      // endpoint carrega a tabela inteira em memória e devolve para o
+      // navegador. O total real vem do count() logo abaixo, então o limite não
+      // mente sobre o tamanho do backlog. O teste "should limit chamados a
+      // 100" já exigia isso desde que foi escrito.
+      take: LIMITE_MATRIZ,
     }),
     prisma.chamado.count({ where })
   ])
