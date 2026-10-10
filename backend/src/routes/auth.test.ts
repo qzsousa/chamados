@@ -33,13 +33,27 @@ vi.mock('../utils/tokens', async (importOriginal) => {
   }
 })
 
+// O mock precisa implementar a convenção que os fixtures usam: o hash é
+// "hashed-" + a senha. Antes ele só reconhecia o par literal
+// 'correct-password'/'hashed-correct-password', então o login de sucesso
+// (hash 'hashed-password123', senha 'password123') caía em compare() falso e
+// o teste recebia 401 — falha de mock, não de rota.
+//
+// vi.hoisted é obrigatório: o factory do vi.mock é içado para antes dos
+// imports, então referenciar uma const comum daria "Cannot access before
+// initialization".
+const { bcryptCompare, bcryptHash } = vi.hoisted(() => ({
+  bcryptCompare: (plain: string, hash: string) => Promise.resolve(hash === `hashed-${plain}`),
+  bcryptHash: (plain: string) => Promise.resolve(`hashed-${plain}`),
+}))
+
 vi.mock('bcryptjs', () => ({
   default: {
-    compare: vi.fn((plain: string, hash: string) => Promise.resolve(plain === 'correct-password' || hash === 'hashed-correct-password')),
-    hash: vi.fn((plain: string) => Promise.resolve(`hashed-${plain}`))
+    compare: vi.fn(bcryptCompare),
+    hash: vi.fn(bcryptHash)
   },
-  compare: vi.fn((plain: string, hash: string) => Promise.resolve(plain === 'correct-password' || hash === 'hashed-correct-password')),
-  hash: vi.fn((plain: string) => Promise.resolve(`hashed-${plain}`))
+  compare: vi.fn(bcryptCompare),
+  hash: vi.fn(bcryptHash)
 }))
 
 vi.mock('../middleware/auth', () => ({
@@ -92,7 +106,12 @@ describe('Auth Routes', () => {
   })
 
   afterEach(() => {
-    vi.resetAllMocks()
+    // clearAllMocks, nunca resetAllMocks: resetAllMocks descarta também a
+    // implementação dos mocks criados dentro de um factory vi.mock, e daqui em
+    // diante prisma.usuario.findUnique voltava a devolver undefined. Os testes
+    // que esperavam 401 continuavam passando por acaso (401 era o esperado de
+    // qualquer jeito) e só o login de sucesso denunciava.
+    vi.clearAllMocks()
   })
 
   describe('POST /login', () => {
