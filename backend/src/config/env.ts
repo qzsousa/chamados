@@ -37,7 +37,18 @@ const envSchema = z.object({
   SCE_API_URL: z.string().url().optional(),
   SCE_SYNC_KEY: z.string().optional(),
 
-  LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info')
+  LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
+
+  /* ---------- UPLOAD / ANEXO ----------
+     Todas OPCIONAIS de propósito: quem não setar nada leva o padrão do contrato,
+     que é a fonte única (bloco "TRAVAS DE ANEXO" em @shared/api, que lê estas
+     mesmas variáveis). Aqui só validamos o formato — o número vive em um lugar
+     só, justamente para não voltar a existir cópia em cada rota.
+     ANEXO_EXTENSOES é uma lista separada por vírgula, sem o ponto. */
+  ANEXO_MAX_BYTES: z.coerce.number().int().positive().optional(),
+  ANEXO_MAX_POR_PEDIDO: z.coerce.number().int().positive().optional(),
+  ANEXO_EXTENSOES: z.string().optional(),
+  LIMITE_CORPO_JSON: z.string().optional()
 })
 
 export type Env = z.infer<typeof envSchema>

@@ -7,6 +7,7 @@ import { errorHandler } from '../middleware/errorHandler'
 import { prisma } from '../config/prisma'
 import { avaliarRespostasFormulario, CategoriaAvaliavel } from './formulario'
 import { criarChamadoPublic } from './chamados'
+import { LIMITE_CORPO_JSON } from '@shared/api'
 
 vi.mock('../config/prisma', () => ({
   prisma: {
@@ -262,9 +263,10 @@ const PAYLOAD_BASE = {
 
 const createApp = () => {
   const app = express()
-  // Mesmo limite do index.ts: sem ele o body-parser cortaria o anexo grande
-  // antes do código do formulário chegar a olhá-lo.
-  app.use(express.json({ limit: '25mb' }))
+  // Mesmo limite do index.ts, importado do contrato (@shared/api): sem ele o
+  // body-parser cortaria o anexo grande antes do código do formulário chegar a
+  // olhá-lo. Replicar '25mb' à mão aqui fazia o teste mentir quando o limite muda.
+  app.use(express.json({ limit: LIMITE_CORPO_JSON }))
   app.post('/api/chamados', criarChamadoPublic)
   app.use(errorHandler(pino({ level: 'silent' })))
   return app
