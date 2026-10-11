@@ -677,28 +677,42 @@ export async function criarChamadoPublic(req: Request, res: Response) {
     const data = CriarChamadoSchema.parse(req.body)
 
     // ---- formulário dinâmico: respostas + anexos ----
+    // Os três nomes entram na MESMA lista e na mesma trava: `anexos` (vários
+    // arquivos), `anexosPergunta` (arquivo lido dentro de uma pergunta do tipo
+    // ARQUIVO) e o `anexoBase64` legado do formulário antigo.
     const { anexos, problemas } = lerAnexosFormulario(req.body?.anexos)
+    const { anexos: anexosPergunta, problemas: problemasPergunta } = lerAnexosPerguntaFormulario(req.body?.anexosPergunta)
     const { respostas, problema: problemaRespostas } = lerRespostasFormulario(req.body?.respostas)
 
-    if (problemas.length > 0 || problemaRespostas) {
+    // O formulário antigo mandava um arquivo só em anexoBase64/anexoNome, no
+    // topo do corpo. Entra na mesma lista para o caminho de baixo ser único.
+    // O schema já recusa o que for grande demais ou extensão proibida, mas a
+    // lista final é revalidada aqui: é o ÚLTIMO ponto antes do upload, e foi
+    // por ele que 24MB em anexoBase64 passavam.
+    const anexoLegado: AnexoFormulario[] = data.anexoBase64 && data.anexoNome
+      ? [{ nome: data.anexoNome, tipo: data.anexoTipo, base64: data.anexoBase64 }]
+      : []
+    const problemasLegado = anexoLegado.flatMap((a) =>
+      validarAnexo(a.nome, a.base64, a.tipo).map((p) => `anexoBase64: ${p}`)
+    )
+
+    const anexosTotais: AnexoFormulario[] = [...anexos, ...anexoLegado, ...anexosPergunta]
+
+    const todosProblemas = [...problemas, ...problemasPergunta, ...problemasLegado]
+    if (anexosTotais.length > ANEXO_MAX_POR_PEDIDO) {
+      todosProblemas.push(`envie no máximo ${ANEXO_MAX_POR_PEDIDO} arquivos por chamado (veio ${anexosTotais.length})`)
+    }
+
+    if (todosProblemas.length > 0 || problemaRespostas) {
       return res.status(400).json({
         error: 'VALIDATION_ERROR',
         message: 'Dados inválidos',
         details: {
-          ...(problemas.length > 0 ? { anexos: problemas } : {}),
+          ...(todosProblemas.length > 0 ? { anexos: todosProblemas } : {}),
           ...(problemaRespostas ? { respostas: [problemaRespostas] } : {})
         }
       })
     }
-
-    // O formulário antigo mandava um arquivo só em anexoBase64/anexoNome, no
-    // topo do corpo. Entra na mesma lista para o caminho de baixo ser único.
-    const anexosTotais: AnexoFormulario[] =
-      anexos.length > 0
-        ? anexos
-        : data.anexoBase64 && data.anexoNome
-          ? [{ nome: data.anexoNome, tipo: data.anexoTipo, base64: data.anexoBase64 }]
-          : []
 
     const validacao = await validarFormularioDaAbertura(
       data.categoriaChave,
@@ -722,7 +736,14 @@ export async function criarChamadoPublic(req: Request, res: Response) {
     // que muda é só o nome da pasta (a URL salva é a que vale).
     const salvos: Array<{ nome: string; tipo: string | null; url: string; path: string }> = []
     for (const a of anexosTotais) {
-      const salvo = await salvarAnexoComPath(a.base64, a.nome, a.tipo || '', protocolo)
+      // O anexo de uma pergunta vai para a subpasta da pergunta: o modelo
+      // ChamadoAnexo não tem coluna para perguntaId (criá-la é migration, fora
+      // do escopo desta task), então o vínculo fica no path interno do bucket,
+      // que é de onde a remoção futura lê. A URL pública não muda.
+      const pasta = a.perguntaId
+        ? `${protocolo}/p-${a.perguntaId.replace(/[^\w-]/g, '')}`
+        : protocolo
+      const salvo = await salvarAnexoComPath(a.base64, a.nome, a.tipo || '', pasta)
       if (salvo) salvos.push({ nome: a.nome, tipo: a.tipo || null, ...salvo })
     }
 
