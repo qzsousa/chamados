@@ -734,7 +734,17 @@ export async function criarChamadoPublic(req: Request, res: Response) {
     // deixaria um arquivo órfão no bucket a cada colisão de protocolo. A pasta
     // usa o primeiro protocolo gerado — numa colisão o número final é outro, o
     // que muda é só o nome da pasta (a URL salva é a que vale).
-    const salvos: Array<{ nome: string; tipo: string | null; url: string; path: string }> = []
+    const salvos: Array<{
+      nome: string
+      tipo: string | null
+      url: string
+      path: string
+      /** Vem só do anexo de pergunta: qual pergunta do formulário o arquivo respondeu. */
+      perguntaId?: string
+      pergunta?: string
+      /** Subpasta do bucket onde o arquivo foi gravado. */
+      pasta?: string
+    }> = []
     for (const a of anexosTotais) {
       // O anexo de uma pergunta vai para a subpasta da pergunta: o modelo
       // ChamadoAnexo não tem coluna para perguntaId (criá-la é migration, fora
@@ -744,7 +754,19 @@ export async function criarChamadoPublic(req: Request, res: Response) {
         ? `${protocolo}/p-${a.perguntaId.replace(/[^\w-]/g, '')}`
         : protocolo
       const salvo = await salvarAnexoComPath(a.base64, a.nome, a.tipo || '', pasta)
-      if (salvo) salvos.push({ nome: a.nome, tipo: a.tipo || null, ...salvo })
+      // O vínculo com a pergunta viaja junto do anexo: é o que permite ao portal
+      // mostrar "a foto que a escola anexou na pergunta X" em vez de uma lista
+      // solta de arquivos. Vem do AnexoFormulario de entrada, então o serviço
+      // de storage não precisa mudar de contrato.
+      if (salvo) {
+        salvos.push({
+          nome: a.nome,
+          tipo: a.tipo || null,
+          ...salvo,
+          pasta,
+          ...(a.perguntaId ? { perguntaId: a.perguntaId, pergunta: a.pergunta } : {})
+        })
+      }
     }
 
     // Só o que sobreviveu às condições do formulário é gravado — e sempre com o
@@ -814,7 +836,21 @@ export async function criarChamadoPublic(req: Request, res: Response) {
 
     // 201 com a lista de anexos que de fato subiu: o portal mostra o que foi
     // gravado, e um anexo que o Supabase recusou não aparece como enviado.
-    return res.status(201).json({ ...chamado, anexos: salvos.map((a) => ({ nome: a.nome, tipo: a.tipo, url: a.url })) })
+    //
+    // `perguntaId`/`pergunta` só existem nos anexos de pergunta — o caminho
+    // legado e os anexos comuns não têm pergunta de origem, e o JSON os omite
+    // em vez de devolver campos vazios que o portal teria que tratar.
+    return res.status(201).json({
+      ...chamado,
+      anexos: salvos.map((a) => ({
+        nome: a.nome,
+        tipo: a.tipo,
+        url: a.url,
+        path: a.path,
+        pasta: a.pasta,
+        ...(a.perguntaId ? { perguntaId: a.perguntaId, pergunta: a.pergunta } : {})
+      }))
+    })
   } catch (err) {
     if (isZodError(err)) {
       return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: err.flatten().fieldErrors })
