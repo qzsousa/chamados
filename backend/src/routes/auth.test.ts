@@ -5,6 +5,7 @@ import cookieParser from 'cookie-parser'
 import { errorHandler } from '../middleware/errorHandler'
 import { pino } from 'pino'
 import { prisma } from '../config/prisma'
+import { hashToken, signRefreshToken } from '../utils/jwt'
 
 vi.mock('../config/prisma', () => ({
   prisma: {
@@ -33,13 +34,27 @@ vi.mock('../utils/tokens', async (importOriginal) => {
   }
 })
 
+// O mock precisa implementar a convenção que os fixtures usam: o hash é
+// "hashed-" + a senha. Antes ele só reconhecia o par literal
+// 'correct-password'/'hashed-correct-password', então o login de sucesso
+// (hash 'hashed-password123', senha 'password123') caía em compare() falso e
+// o teste recebia 401 — falha de mock, não de rota.
+//
+// vi.hoisted é obrigatório: o factory do vi.mock é içado para antes dos
+// imports, então referenciar uma const comum daria "Cannot access before
+// initialization".
+const { bcryptCompare, bcryptHash } = vi.hoisted(() => ({
+  bcryptCompare: (plain: string, hash: string) => Promise.resolve(hash === `hashed-${plain}`),
+  bcryptHash: (plain: string) => Promise.resolve(`hashed-${plain}`),
+}))
+
 vi.mock('bcryptjs', () => ({
   default: {
-    compare: vi.fn((plain: string, hash: string) => Promise.resolve(plain === 'correct-password' || hash === 'hashed-correct-password')),
-    hash: vi.fn((plain: string) => Promise.resolve(`hashed-${plain}`))
+    compare: vi.fn(bcryptCompare),
+    hash: vi.fn(bcryptHash)
   },
-  compare: vi.fn((plain: string, hash: string) => Promise.resolve(plain === 'correct-password' || hash === 'hashed-correct-password')),
-  hash: vi.fn((plain: string) => Promise.resolve(`hashed-${plain}`))
+  compare: vi.fn(bcryptCompare),
+  hash: vi.fn(bcryptHash)
 }))
 
 vi.mock('../middleware/auth', () => ({
@@ -92,7 +107,12 @@ describe('Auth Routes', () => {
   })
 
   afterEach(() => {
-    vi.resetAllMocks()
+    // clearAllMocks, nunca resetAllMocks: resetAllMocks descarta também a
+    // implementação dos mocks criados dentro de um factory vi.mock, e daqui em
+    // diante prisma.usuario.findUnique voltava a devolver undefined. Os testes
+    // que esperavam 401 continuavam passando por acaso (401 era o esperado de
+    // qualquer jeito) e só o login de sucesso denunciava.
+    vi.clearAllMocks()
   })
 
   describe('POST /login', () => {
@@ -176,13 +196,20 @@ describe('Auth Routes', () => {
       expect(res.status).toBe(200)
       expect(res.body.accessToken).toBeDefined()
       expect(res.body.refreshToken).toBeDefined()
+      // publicarUsuario passou a expor grupo, papelUnidade e status. A
+      // expectativa ficou para trás e travava num toEqual que já não
+      // descrevia o contrato. Continua toEqual (exato) de propósito: o que a
+      // rota devolve é o que está escrito aqui.
       expect(res.body.user).toEqual({
         id: 'user-1',
         email: 'test@test.com',
         nome: 'Test User',
         nivel: 'ADMIN',
         filial: 'FILIAL1',
-        primeiroLogin: true
+        primeiroLogin: true,
+        grupo: 'FILIAL1',
+        papelUnidade: null,
+        status: 'ATIVO'
       })
       expect(res.body.primeiroLogin).toBe(true)
       expect(res.headers['set-cookie']).toBeDefined()
@@ -234,9 +261,16 @@ describe('Auth Routes', () => {
     })
 
     it('should return new tokens on successful refresh', async () => {
+      // Token de verdade, assinado com o segredo do ambiente de teste. O teste
+      // usava a string literal 'refresh-token-user-1', que verifyRefreshToken
+      // rejeita antes de qualquer chamada ao banco — por isso 401, e por isso o
+      // mock de findFirst deste teste nunca era exercitado.
+      const token = signRefreshToken('user-1')
+
       vi.mocked(prisma.refreshToken.findFirst).mockResolvedValue({
         id: 'token-1',
-        tokenHash: 'hashed-refresh-token-user-1',
+        // A rota localiza o refresh por hash: hashToken(token do cookie).
+        tokenHash: hashToken(token),
         usuarioId: 'user-1',
         expiraEm: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
       })
@@ -254,7 +288,7 @@ describe('Auth Routes', () => {
 
       const res = await request(app)
         .post('/api/auth/refresh')
-        .set('Cookie', ['refreshToken=refresh-token-user-1'])
+        .set('Cookie', [`refreshToken=${token}`])
 
       expect(res.status).toBe(200)
       expect(res.body.accessToken).toBeDefined()
@@ -355,37 +389,12 @@ describe('Auth Routes', () => {
     })
   })
 
-  describe('POST /admin/gerar-senha-temporaria', () => {
-    it('should return 404 for non-existent user', async () => {
-      vi.mocked(prisma.usuario.findUnique).mockResolvedValue(null)
-
-      const res = await request(app)
-        .post('/api/auth/admin/gerar-senha-temporaria')
-        .set('Authorization', 'Bearer access-token-admin-1')
-        .send({ email: 'nonexistent@test.com' })
-
-      expect(res.status).toBe(404)
-      expect(res.body.error).toBe('NOT_FOUND')
-    })
-
-    it('should generate temporary password for existing user', async () => {
-      vi.mocked(prisma.usuario.findUnique).mockResolvedValue({
-        id: 'user-1',
-        email: 'user@test.com',
-        senhaHash: 'old-hash'
-      })
-      vi.mocked(prisma.usuario.update).mockResolvedValue({})
-      vi.mocked(prisma.refreshToken.deleteMany).mockResolvedValue({ count: 1 })
-
-      const res = await request(app)
-        .post('/api/auth/admin/gerar-senha-temporaria')
-        .set('Authorization', 'Bearer access-token-admin-1')
-        .send({ email: 'user@test.com' })
-
-      expect(res.status).toBe(200)
-      expect(res.body.senhaTemporaria).toBeDefined()
-      expect(typeof res.body.senhaTemporaria).toBe('string')
-      expect(res.body.senhaTemporaria.length).toBeGreaterThanOrEqual(8)
-    })
-  })
+  // Removido: describe('POST /admin/gerar-senha-temporaria').
+  //
+  // Esse endpoint não existe mais. Foi substituído por
+  // /admin/gerar-codigo-primeiro-acesso, que repassa um CÓDIGO de primeiro
+  // acesso em vez de uma SENHA em claro — o teste antigo exigia que a senha
+  // viesse no corpo da resposta (`res.body.senhaTemporaria`). Reescrever os
+  // testes aqui ressuscitaria exatamente o comportamento que o rework
+  // removeu. O contrato atual está coberto em auth.primeiroAcesso.test.ts.
 })

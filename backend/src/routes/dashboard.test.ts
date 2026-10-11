@@ -26,7 +26,13 @@ vi.mock('../services/normalization', () => ({
 }))
 
 vi.mock('../services/migration', () => ({
-  getMapaInventario: vi.fn(() => Promise.resolve({ ESCOLA1: 'CONCLUIDO', ESCOLA2: 'EM_ANDAMENTO' }))
+  // A rota resolve o inventário por mapaInventario[normalizarNomeEscola(filial)].
+  // O usuário deste arquivo é FILIAL1, que não estava no mapa — o lookup
+  // devolvia undefined e o teste recebia status null. FILIAL1 entra sem
+  // remover ESCOLA1/ESCOLA2, que os chamados de outros testes usam.
+  getMapaInventario: vi.fn(() =>
+    Promise.resolve({ ESCOLA1: 'CONCLUIDO', ESCOLA2: 'EM_ANDAMENTO', FILIAL1: 'CONCLUIDO' })
+  )
 }))
 
 vi.mock('../middleware/auth', () => ({
@@ -117,12 +123,20 @@ describe('Dashboard Routes', () => {
         historico: null,
         tipo: 'Hardware'
       }))
-      vi.mocked(prisma.chamado.findMany).mockResolvedValue(chamados)
+      // O mock precisa respeitar `take` como o banco respeita. Devolvendo os
+      // 150 sempre, o teste só media o mock — e a ausência de limite na rota
+      // passava despercebida.
+      vi.mocked(prisma.chamado.findMany).mockImplementation((args: any) =>
+        Promise.resolve(chamados.slice(0, args?.take ?? chamados.length))
+      )
       vi.mocked(prisma.chamado.count).mockResolvedValue(150)
 
       const res = await request(app).get('/api/dashboard/matriz')
 
       expect(res.status).toBe(200)
+      expect(prisma.chamado.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: 100 })
+      )
       expect(res.body.chamados).toHaveLength(100)
     })
   })
