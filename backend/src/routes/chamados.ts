@@ -11,7 +11,8 @@ import { notificarChamadoStatusAlterado, notificarChamadoCriado } from '../servi
 import { notificarAdmins, notificarUnidade, notificarTecnicoResponsavel } from '../services/notificacoes'
 import { encaminharChamado, encaminharPorRegras, tecnicosDaUnidade, destinoWhere } from '../services/encaminhamento'
 import { filtroUnidadesDoUsuario, usuarioAtendeUnidade } from '../services/unidades'
-import { salvarAnexoComPath } from '../services/anexos'
+import { casaComEscopo, clauseDeEscopo, temEscopo } from '../services/escopo'
+import { salvarAnexo, salvarAnexoComPath } from '../services/anexos'
 import {
   avaliarRespostasFormulario,
   carregarCategoriaFormulario,
@@ -344,12 +345,20 @@ function getTecnicoSetor(unidade: string): string {
  *
  * Substitui a comparação antiga `tecnicoSetor === user.filial`, que quebrava
  * assim que o técnico passou a atender mais de uma escola.
+ *
+ * ESCOPO DE TIPOS: usuário com `escopoTipos` preenchido atende os chamados
+ * destes tipos, de QUALQUER escola — a trava de unidade não vale para ele. Sem
+ * escopo, a regra é a de sempre, só por unidade. Ver `services/escopo.ts`.
+ *
+ * É `async` por causa dessa segunda consulta; quem chama em laço deve usar
+ * `filtrarPorEscopo`, que resolve os nomes das categorias uma vez só.
  */
-function tecnicoAtende(
-  chamado: { unidade: string; responsavel: string | null },
+async function tecnicoAtende(
+  chamado: { unidade: string; responsavel: string | null; tipo?: string | null; categoriaChave?: string | null },
   user: AuthenticatedRequest['userRecord'],
-): boolean {
+): Promise<boolean> {
   if (!user || user.nivel !== 'TECNICO') return false
+  if (temEscopo(user)) return casaComEscopo(chamado, user)
   if (chamado.responsavel && chamado.responsavel === user.nome) return true
   return usuarioAtendeUnidade(user.filial, chamado.unidade)
 }
@@ -758,7 +767,16 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res) => {
     const where: any = { ...filtroExcluido }
 
     if (req.userRecord && req.userRecord.nivel !== 'ADMIN') {
-      if (req.userRecord.nivel === 'TECNICO') {
+      if (temEscopo(req.userRecord)) {
+        // Usuário com escopo de tipos: a unidade DEIXA de valer (ele atende
+        // todas as escolas) e o que limita é o tipo. Vai em `AND` e não em `OR`
+        // porque o `OR` do técnico abaixo é o das unidades — um sobrescreveria
+        // o outro.
+        where.AND = [
+          ...(where.AND || []),
+          ...(await clauseDeEscopo(req.userRecord.escopoTipos)),
+        ]
+      } else if (req.userRecord.nivel === 'TECNICO') {
         // Técnico: chamados que ele atende (lista de unidades) OU que são dele
         where.OR = [
           ...filtroUnidadesDoUsuario(req.userRecord.filial).OR,
@@ -928,7 +946,7 @@ router.post('/:id/encaminhar', authMiddleware, requireRole('ADMIN', 'TECNICO'), 
     }
 
     // Técnico só encaminha chamado que ele atende; a matriz vê todos.
-    if (req.userRecord?.nivel === 'TECNICO' && !tecnicoAtende(chamado, req.userRecord)) {
+    if (req.userRecord?.nivel === 'TECNICO' && !(await tecnicoAtende(chamado, req.userRecord))) {
       return res.status(403).json({ error: 'FORBIDDEN', message: 'Sem acesso a este chamado' })
     }
 
@@ -976,7 +994,7 @@ router.get('/:id', authMiddleware, async (req: AuthenticatedRequest, res) => {
 
     if (req.userRecord && req.userRecord.nivel !== 'ADMIN') {
       const canAccess =
-        tecnicoAtende(chamado, req.userRecord) ||
+        (await tecnicoAtende(chamado, req.userRecord)) ||
         (req.userRecord.nivel === 'GESTOR' || req.userRecord.nivel === 'VISUALIZADOR') && unidadeCasa(chamado.unidade, req.userRecord.filial)
 
       if (!canAccess) {
@@ -1001,7 +1019,7 @@ router.patch('/:id/status', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GES
 
     if (req.userRecord && req.userRecord.nivel !== 'ADMIN') {
       const canUpdate =
-        tecnicoAtende(chamado, req.userRecord) ||
+        (await tecnicoAtende(chamado, req.userRecord)) ||
         ['GESTOR','VISUALIZADOR'].includes(req.userRecord.nivel) && unidadeCasa(chamado.unidade, req.userRecord.filial)
 
       if (!canUpdate) {
@@ -1097,7 +1115,7 @@ router.post('/:id/resposta', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GE
 
     if (req.userRecord && req.userRecord.nivel !== 'ADMIN') {
       const canAccess =
-        tecnicoAtende(chamado, req.userRecord) ||
+        (await tecnicoAtende(chamado, req.userRecord)) ||
         (req.userRecord.nivel === 'GESTOR' || req.userRecord.nivel === 'VISUALIZADOR') && unidadeCasa(chamado.unidade, req.userRecord.filial)
 
       if (!canAccess) {
@@ -1180,7 +1198,8 @@ router.post('/:id/aceitar', authMiddleware, requireRole('ADMIN', 'TECNICO'), asy
 
     // TECNICO pode aceitar se é o responsável OU atende a unidade do chamado
     // (aceitar é "assumir" o serviço; um colega de plantão pode pegar o caso).
-    if (req.userRecord?.nivel === 'TECNICO' && !ehDonoDoChamado(chamado, req.userRecord) && !tecnicoAtende(chamado, req.userRecord)) {
+    // Com escopo de tipos, atende o chamado pelo tipo, de qualquer escola.
+    if (req.userRecord?.nivel === 'TECNICO' && !ehDonoDoChamado(chamado, req.userRecord) && !(await tecnicoAtende(chamado, req.userRecord))) {
       return res.status(403).json({ error: 'FORBIDDEN', message: 'Sem acesso a este chamado' })
     }
 
@@ -1458,7 +1477,16 @@ router.patch('/batch', authMiddleware, requireRole('ADMIN', 'TECNICO'), async (r
 
     if (req.userRecord && req.userRecord.nivel !== 'ADMIN') {
       const chamados = await prisma.chamado.findMany({ where: { id: { in: ids } } })
-      const unauthorized = chamados.some(c => !tecnicoAtende(c, req.userRecord))
+      // Laço com `await` em vez de `.some()`: `tecnicoAtende` é assíncrono
+      // (resolve o escopo de tipos). Numa lista pequena de ids a query extra
+      // de nomes de categoria é a mesma para todos — o custo é de uma por lote.
+      let unauthorized = false
+      for (const c of chamados) {
+        if (!(await tecnicoAtende(c, req.userRecord))) {
+          unauthorized = true
+          break
+        }
+      }
       if (unauthorized) {
         return res.status(403).json({ error: 'FORBIDDEN', message: 'Sem permissão para alterar alguns chamados' })
       }
@@ -1539,7 +1567,7 @@ router.delete('/:id', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GESTOR', 
 
     if (req.userRecord && req.userRecord.nivel !== 'ADMIN') {
       const canDelete =
-        tecnicoAtende(chamado, req.userRecord) ||
+        (await tecnicoAtende(chamado, req.userRecord)) ||
         ['GESTOR','VISUALIZADOR'].includes(req.userRecord.nivel) && chamado.unidade === req.userRecord.filial
 
       if (!canDelete) {

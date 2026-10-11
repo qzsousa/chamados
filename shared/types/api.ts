@@ -85,6 +85,12 @@ export const UserSchema = z.object({
   filial: z.string(),
   status: StatusUsuarioSchema,
   primeiroLogin: z.boolean(),
+  /**
+   * Escopo de TIPOS de chamado: ["<chaveDaCategoria>::<rótulo>", ...].
+   * Lista vazia = SEM RESTRIÇÃO (o usuário respeita só o `filial`, como
+   * sempre). Preenchida, a trava de unidade é substituída pela trava de tipo.
+   */
+  escopoTipos: z.array(z.string()).default([]),
   /** Nome composto do grupo ("E.E. A / E.E. B") — mesma quando a unidade está sozinha. */
   grupo: z.string().optional(),
   papelUnidade: PapelUnidadeSchema.nullable().optional(),
@@ -94,19 +100,39 @@ export const UserSchema = z.object({
 
 export type User = z.infer<typeof UserSchema>
 
+/**
+ * `"<chaveDaCategoria>::<rótulo da opção>"`. O par é validado contra o
+ * formulário ativo no `POST`/`PATCH /usuarios` — a chave sobrevive a renomear
+ * a categoria, o rótulo NÃO sobrevive a renomear a opção (ver
+ * `backend/src/services/escopo.ts`).
+ */
+export const EscopoTipoSchema = z
+  .string()
+  .min(3)
+  .max(120)
+  .refine((v) => v.includes('::'), { message: 'Formato esperado: categoria::tipo' })
+
 export const UserCreateSchema = z.object({
   email: z.string().email(),
   nome: z.string().min(1),
   nivel: NivelSchema,
-  filial: z.string().min(1)
+  filial: z.string().min(1),
+  /** Só o ADMIN pode mandar; o Gestor tem o campo descartado no backend. */
+  escopoTipos: z.array(EscopoTipoSchema).max(100).optional()
 })
 
 export type UserCreate = z.infer<typeof UserCreateSchema>
 
+/**
+ * Não é `UserCreateSchema.partial()`: o PATCH não aceita `email` (a troca de
+ * e-mail é outro fluxo) e aceitar o campo para ignorá-lo só esconde o erro de
+ * quem mandar.
+ */
 export const UserUpdateSchema = z.object({
   nome: z.string().min(1).optional(),
   nivel: NivelSchema.optional(),
   filial: z.string().min(1).optional(),
+  escopoTipos: z.array(EscopoTipoSchema).max(100).optional(),
   status: StatusUsuarioSchema.optional()
 })
 

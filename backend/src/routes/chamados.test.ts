@@ -61,7 +61,7 @@ vi.mock('../services/encaminhamento', async (importOriginal) => ({
 }))
 
 /** Usuário do request — os testes trocam o nível (o DELETE em lote é só ADMIN). */
-const usuario = { id: 'user-1', email: 'user@test.com', nome: 'Test User', nivel: 'TECNICO', filial: 'E.E. TESTE', status: 'ATIVO', primeiroLogin: false }
+const usuario = { id: 'user-1', email: 'user@test.com', nome: 'Test User', nivel: 'TECNICO', filial: 'E.E. TESTE', status: 'ATIVO', primeiroLogin: false, escopoTipos: [] as string[] }
 
 vi.mock('../middleware/auth', () => {
   const authMiddleware = (req: any, _res: any, next: any) => {
@@ -106,7 +106,10 @@ describe('Chamados Routes', () => {
   beforeEach(() => {
     app = createApp()
     vi.clearAllMocks()
-    Object.assign(usuario, { nivel: 'TECNICO', filial: 'E.E. TESTE', nome: 'Test User' })
+    // `escopoTipos` precisa voltar a vazio: o objeto `usuario` é mutável e
+    // compartilhado, e um describe que testa escopo deixaria o resto do
+    // arquivo com o usuário restrito (virando 403 onde esperava 200).
+    Object.assign(usuario, { nivel: 'TECNICO', filial: 'E.E. TESTE', nome: 'Test User', escopoTipos: [] })
   })
 
   describe('POST / (público)', () => {
@@ -285,6 +288,186 @@ describe('Chamados Routes', () => {
       expect(where).not.toHaveProperty('categoriaChave')
       expect(where).not.toHaveProperty('responsavel')
       expect(where).not.toHaveProperty('AND')
+    })
+  })
+
+  /* ---- Escopo de tipos (conta criada só para certos tipos de chamado) ---- */
+  describe('escopo de tipos', () => {
+    beforeEach(() => {
+      vi.mocked(prisma.chamado.count).mockResolvedValue(0)
+      vi.mocked(prisma.chamado.findMany).mockResolvedValue([])
+      // `nomesDasCategorias` pede só as chaves do escopo — o mock precisa
+      // respeitar o `in`, senão devolveria a lista inteira e o 'sistemas' do
+      // escopo não seria resolvido.
+      vi.mocked(prisma.formularioCategoria.findMany).mockImplementation(async (args: any) => {
+        const chaves = args?.where?.chave?.in as string[] | undefined
+        const todas = [
+          { chave: 'sistemas', nome: 'Sistemas' },
+          { chave: 'rede', nome: 'Rede' },
+        ]
+        return (chaves ? todas.filter((c) => chaves.includes(c.chave)) : todas) as any
+      })
+      Object.assign(usuario, { nivel: 'TECNICO', filial: 'E.E. TESTE', nome: 'Test User', escopoTipos: [] })
+    })
+
+    /** Usuário de fora do setor: atende tipos, não escolas. */
+    function comEscopo(...tipos: string[]) {
+      Object.assign(usuario, { escopoTipos: tipos })
+    }
+
+    async function whereDaListagem(query = '') {
+      await request(app).get(`/api/chamados${query ? `?${query}` : ''}`)
+      return vi.mocked(prisma.chamado.findMany).mock.calls[0][0]?.where
+    }
+
+    it('escopo restringe pelo tipo e ignora as unidades do filial', async () => {
+      comEscopo('sistemas::PortalNet', 'sistemas::SEI')
+
+      const where = await whereDaListagem()
+
+      // Sem `OR` de unidade: a trava de escola não vale para quem tem escopo.
+      expect(where.OR).toBeUndefined()
+      expect(where.AND).toEqual([
+        { OR: [{ tipo: { equals: 'Sistemas - PortalNet', mode: 'insensitive' } }, { tipo: { startsWith: 'Sistemas - PortalNet - ', mode: 'insensitive' } }] },
+        { OR: [{ tipo: { equals: 'Sistemas - SEI', mode: 'insensitive' } }, { tipo: { startsWith: 'Sistemas - SEI - ', mode: 'insensitive' } }] },
+      ])
+    })
+
+    it('escopo convive com o filtro de categoria (os dois vão em AND)', async () => {
+      comEscopo('sistemas::SEI')
+
+      const where = await whereDaListagem('categoriaChave=sistemas')
+
+      // Sobrescrever o AND aqui apagaria a restrição e o usuário veria a
+      // categoria inteira — inclusive os tipos que não marcou.
+      expect(where.AND).toHaveLength(2)
+    })
+
+    it('escopo vazio mantém o comportamento por unidade', async () => {
+      const where = await whereDaListagem()
+
+      expect(where.AND).toBeUndefined()
+      expect(where.OR).toBeDefined()
+    })
+
+    it('ADMIN com escopo não é filtrado (nivel ADMIN passa inteiro)', async () => {
+      Object.assign(usuario, { nivel: 'ADMIN' })
+      comEscopo('sistemas::SEI')
+
+      const where = await whereDaListagem()
+
+      expect(where.OR).toBeUndefined()
+      expect(where.AND).toBeUndefined()
+    })
+
+    it('detalhe: chamado dentro do escopo abre, fora do escopo é 403', async () => {
+      comEscopo('sistemas::SEI')
+      vi.mocked(prisma.chamado.findUnique).mockResolvedValue({
+        id: CUID_1,
+        protocolo: 'CH-20240101-0001',
+        unidade: 'E.E. DE OUTRA CIDADE',
+        solicitante: 'João',
+        tipo: 'Sistemas - SEI',
+        categoriaChave: 'sistemas',
+        descricao: 'x',
+        urgencia: 'Alta',
+        status: 'ABERTO',
+        responsavel: null,
+        ultimaAtualizacao: new Date(),
+        excluido: false,
+      } as any)
+
+      const dentro = await request(app).get(`/api/chamados/${CUID_1}`)
+      expect(dentro.status).toBe(200)
+
+      vi.mocked(prisma.chamado.findUnique).mockResolvedValue({
+        id: CUID_1,
+        protocolo: 'CH-20240101-0002',
+        unidade: 'E.E. DE OUTRA CIDADE',
+        solicitante: 'João',
+        tipo: 'Rede - Lentidão',
+        categoriaChave: 'rede',
+        descricao: 'x',
+        urgencia: 'Alta',
+        status: 'ABERTO',
+        responsavel: null,
+        ultimaAtualizacao: new Date(),
+        excluido: false,
+      } as any)
+
+      const fora = await request(app).get(`/api/chamados/${CUID_1}`)
+      expect(fora.status).toBe(403)
+    })
+
+    it('aceite: aceita chamado do escopo mesmo de outra cidade', async () => {
+      comEscopo('sistemas::PortalNet')
+      vi.mocked(prisma.chamado.findUnique)
+        .mockResolvedValueOnce({
+          id: CUID_1,
+          protocolo: 'CH-20240101-0001',
+          unidade: 'E.E. DE OUTRA CIDADE',
+          solicitante: 'João',
+          tipo: 'Sistemas - PortalNet',
+          categoriaChave: 'sistemas',
+          status: 'ABERTO',
+          aceitoEm: null,
+          responsavel: null,
+          responsavelId: null,
+          ultimaAtualizacao: new Date(),
+          historico: null,
+          reaberturas: 0,
+          excluido: false,
+        } as any)
+        .mockResolvedValue({ id: CUID_1 } as any)
+      vi.mocked(prisma.chamado.update).mockResolvedValue({ id: CUID_1 } as any)
+
+      const res = await request(app).post(`/api/chamados/${CUID_1}/aceitar`)
+
+      expect(res.status).toBe(200)
+    })
+
+    it('aceite: chamado fora do escopo é 403 mesmo sendo de outra cidade', async () => {
+      comEscopo('sistemas::PortalNet')
+      vi.mocked(prisma.chamado.findUnique).mockResolvedValue({
+        id: CUID_1,
+        protocolo: 'CH-20240101-0002',
+        unidade: 'E.E. DE OUTRA CIDADE',
+        solicitante: 'João',
+        tipo: 'Equipamento - Formatação',
+        categoriaChave: 'equipamento',
+        status: 'ABERTO',
+        aceitoEm: null,
+        responsavel: null,
+        responsavelId: null,
+        ultimaAtualizacao: new Date(),
+        historico: null,
+        excluido: false,
+      } as any)
+
+      const res = await request(app).post(`/api/chamados/${CUID_1}/aceitar`)
+
+      expect(res.status).toBe(403)
+    })
+
+    it('responder: bloqueia chamado fora do escopo', async () => {
+      comEscopo('sistemas::SEI')
+      vi.mocked(prisma.chamado.findUnique).mockResolvedValue({
+        id: CUID_1,
+        protocolo: 'CH-20240101-0002',
+        unidade: 'E.E. DE OUTRA CIDADE',
+        solicitante: 'João',
+        tipo: 'Rede - Queda total de internet',
+        categoriaChave: 'rede',
+        status: 'ABERTO',
+        responsavel: null,
+        ultimaAtualizacao: new Date(),
+        historico: null,
+        excluido: false,
+      } as any)
+
+      const res = await request(app).post(`/api/chamados/${CUID_1}/resposta`).send({ texto: 'oi' })
+
+      expect(res.status).toBe(403)
     })
   })
 

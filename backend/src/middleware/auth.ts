@@ -13,6 +13,12 @@ export interface AuthenticatedRequest extends Request {
     filial: string
     status: string
     primeiroLogin: boolean
+    /**
+     * Escopo de tipos de chamado (`["sistemas::PortalNet", ...]`). Lista vazia
+     * = sem restrição, e aí quem limita a visibilidade é o `filial` — é o
+     * comportamento de sempre. Ver `services/escopo.ts`.
+     */
+    escopoTipos: string[]
   }
 }
 
@@ -57,7 +63,8 @@ export async function attachUserRecord(req: AuthenticatedRequest, res: Response,
         nivel: true,
         filial: true,
         status: true,
-        primeiroLogin: true
+        primeiroLogin: true,
+        escopoTipos: true
       }
     })
 

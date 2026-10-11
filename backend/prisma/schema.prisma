@@ -18,6 +18,12 @@ model Usuario {
   status            String   @default("ATIVO") // ATIVO, INATIVO
   primeiroLogin     Boolean  @default(true)
   refreshTokenHash  String?
+  // Escopo de TIPOS de chamado que este usuário enxerga, no formato
+  // "<chaveDaCategoria>::<rótulo da opção>" (ex.: "sistemas::PortalNet").
+  // VAZIO = SEM RESTRIÇÃO: é o comportamento de sempre, o usuário respeita
+  // apenas o `filial` como antes. preenchido, a trava de unidade é substituída
+  // pela trava de tipo (ver `services/escopo.ts`).
+  escopoTipos       String[] @default([])
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 

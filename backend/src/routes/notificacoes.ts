@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { prisma } from '../config/prisma'
 import { authMiddleware, attachUserRecord, requireRole, AuthenticatedRequest } from '../middleware/auth'
 import { unidadesDoUsuario, normalizarUnidade, usuarioAtendeUnidade } from '../services/unidades'
+import { temEscopo } from '../services/escopo'
 
 const router = Router()
 
@@ -25,7 +26,16 @@ function filtroVisiveis(user: AuthenticatedRequest['user'], record: Authenticate
     { usuarioId: user?.sub },
     // Técnico tem VÁRIAS unidades no filial (separadas por vírgula) — casar por
     // igualdade com a string inteira esconderia as notificações das escolas dele.
-    ...(record?.filial ? [filtroNotificacoesDaFilial(record.filial)] : []),
+    //
+    // Usuário com ESCOPO DE TIPOS fica de fora desse broadcast: a notificação de
+    // filial não carrega o tipo do chamado (a tabela `Notificacao` não tem
+    // `categoriaChave`), então não dá para filtrar por categoria aqui. O efeito
+    // seria o sino chiar chamado de rede de uma escola que ele não pode nem
+    // abrir. Fica só o que é pessoal (`usuarioId = sub`), que só existe quando
+    // ele é o responsável — e ser responsável exige estar dentro do escopo.
+    ...(record?.filial && !temEscopo(record)
+      ? [filtroNotificacoesDaFilial(record.filial)]
+      : []),
   ]
   if (record?.nivel === 'ADMIN') or.push({ usuarioId: null })
   return {

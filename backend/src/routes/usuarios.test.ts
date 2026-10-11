@@ -19,9 +19,17 @@ vi.mock('../config/prisma', () => ({
     refreshToken: {
       deleteMany: vi.fn()
     },
-    codigoPrimeiroAcesso: {
+codigoPrimeiroAcesso: {
       create: vi.fn(),
       deleteMany: vi.fn()
+    },
+    // Usados por `validarEscopo`: o escopo só é aceito se cada tipo existir
+    // de fato no formulário ativo.
+    formularioCategoria: {
+      findMany: vi.fn()
+    },
+    formularioPergunta: {
+      findFirst: vi.fn()
     }
   }
 }))
@@ -385,6 +393,183 @@ describe('Usuários Routes (ADMIN)', () => {
         data: { status: 'INATIVO' }
       })
       expect(prisma.refreshToken.deleteMany).toHaveBeenCalledWith({ where: { usuarioId: 'user-1' } })
+    })
+  })
+
+  /* ---- Escopo de tipos (conta que atende só certos tipos) ---- */
+  describe('escopoTipos', () => {
+    beforeEach(() => {
+      vi.mocked(prisma.formularioCategoria.findMany).mockResolvedValue([
+        { chave: 'sistemas', nome: 'Sistemas' },
+        { chave: 'rede', nome: 'Rede' },
+        { chave: 'email', nome: 'E-mail institucional' },
+      ] as any)
+      vi.mocked(prisma.formularioPergunta.findFirst).mockResolvedValue({ id: 'p1' } as any)
+    })
+
+    const novoUsuario = {
+      email: 'novo@test.com',
+      nome: 'Novo',
+      nivel: 'TECNICO',
+      filial: 'E.E. TESTE',
+      escopoTipos: ['sistemas::PortalNet', 'sistemas::SEI'],
+    }
+
+    it('ADMIN cria usuário com escopo gravado', async () => {
+      vi.mocked(prisma.usuario.findUnique).mockResolvedValue(null)
+      vi.mocked(prisma.usuario.create).mockResolvedValue({
+        id: 'u1',
+        email: 'novo@test.com',
+        nome: 'Novo',
+        nivel: 'TECNICO',
+        filial: 'E.E. TESTE',
+        status: 'ATIVO',
+        primeiroLogin: true,
+        escopoTipos: ['sistemas::PortalNet', 'sistemas::SEI'],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as any)
+
+      const res = await request(app).post('/api/usuarios').send(novoUsuario)
+
+      expect(res.status).toBe(201)
+      expect(res.body.escopoTipos).toEqual(['sistemas::PortalNet', 'sistemas::SEI'])
+      expect(vi.mocked(prisma.usuario.create).mock.calls[0][0].data.escopoTipos).toEqual([
+        'sistemas::PortalNet',
+        'sistemas::SEI',
+      ])
+    })
+
+    it('ADMIN cria sem escopo quando não manda o campo', async () => {
+      vi.mocked(prisma.usuario.findUnique).mockResolvedValue(null)
+      vi.mocked(prisma.usuario.create).mockResolvedValue({ id: 'u1' } as any)
+
+      const { escopoTipos, ...semEscopo } = novoUsuario
+      const res = await request(app).post('/api/usuarios').send(semEscopo)
+
+      expect(res.status).toBe(201)
+      expect(vi.mocked(prisma.usuario.create).mock.calls[0][0].data.escopoTipos).toEqual([])
+    })
+
+    it('recusa tipo que não existe no formulário (400, não grava)', async () => {
+      vi.mocked(prisma.formularioPergunta.findFirst).mockResolvedValue(null as any)
+      vi.mocked(prisma.usuario.findUnique).mockResolvedValue(null)
+
+      const res = await request(app)
+        .post('/api/usuarios')
+        .send({ ...novoUsuario, escopoTipos: ['sistemas::PortalNetX'] })
+
+      expect(res.status).toBe(400)
+      expect(res.body.message).toContain('sistemas::PortalNetX')
+      expect(prisma.usuario.create).not.toHaveBeenCalled()
+    })
+
+    it('recusa categoria inexistente', async () => {
+      vi.mocked(prisma.usuario.findUnique).mockResolvedValue(null)
+
+      const res = await request(app)
+        .post('/api/usuarios')
+        .send({ ...novoUsuario, escopoTipos: ['categoriaFantasma::X'] })
+
+      expect(res.status).toBe(400)
+      expect(prisma.usuario.create).not.toHaveBeenCalled()
+    })
+
+    it('recusa valor sem o separador categoria::tipo', async () => {
+      const res = await request(app)
+        .post('/api/usuarios')
+        .send({ ...novoUsuario, escopoTipos: ['soTexto'] })
+
+      expect(res.status).toBe(400)
+      expect(prisma.usuario.create).not.toHaveBeenCalled()
+    })
+
+    it('categoria inteira (rótulo vazio) é aceita sem consultar pergunta', async () => {
+      vi.mocked(prisma.usuario.findUnique).mockResolvedValue(null)
+      vi.mocked(prisma.usuario.create).mockResolvedValue({ id: 'u1' } as any)
+
+      const res = await request(app)
+        .post('/api/usuarios')
+        .send({ ...novoUsuario, escopoTipos: ['email::'] })
+
+      expect(res.status).toBe(201)
+      expect(prisma.formularioPergunta.findFirst).not.toHaveBeenCalled()
+    })
+
+    it('PATCH sem escopo no corpo preserva o que está gravado', async () => {
+      vi.mocked(prisma.usuario.findUnique).mockResolvedValue({
+        id: 'user-1',
+        nivel: 'TECNICO',
+        filial: 'FILIAL1',
+        escopoTipos: ['sistemas::SEI'],
+      } as any)
+      vi.mocked(prisma.usuario.update).mockResolvedValue({ id: 'user-1' } as any)
+
+      await request(app).patch('/api/usuarios/user-1').send({ nome: 'Outro nome' })
+
+      // `undefined` = não mexe; um `[]` aqui apagaria o escopo sem querer.
+      expect(vi.mocked(prisma.usuario.update).mock.calls[0][0].data.escopoTipos).toBeUndefined()
+    })
+
+    it('PATCH com lista vazia limpa o escopo (volta a ver tudo)', async () => {
+      vi.mocked(prisma.usuario.findUnique).mockResolvedValue({ id: 'user-1', nivel: 'TECNICO' } as any)
+      vi.mocked(prisma.usuario.update).mockResolvedValue({ id: 'user-1' } as any)
+
+      await request(app).patch('/api/usuarios/user-1').send({ escopoTipos: [] })
+
+      expect(vi.mocked(prisma.usuario.update).mock.calls[0][0].data.escopoTipos).toEqual([])
+    })
+
+    /**
+     * O GESTOR tem o campo DESCARTADO, não recusado — igual já acontece com
+     * `nivel` e `filial`, que viram `undefined` e seguem o resto do PATCH. É
+     * "fail closed": nenhuma configuração de escopo é concedida. A tela de
+     * usuários esconde as checkboxes para não-ADMIN, então o caso só sai por
+     * chamada direta à API.
+     */
+    it('GESTOR tenta definir escopo e o campo é ignorado', async () => {
+      const gestor = { sub: 'g-1', email: 'gestor@test.com', nome: 'Gestor', nivel: 'GESTOR', filial: 'FILIAL1', type: 'access', iat: Date.now(), exp: Date.now() + 900000 }
+      vi.mocked(authMiddleware).mockImplementation(((req: any, _res: any, next: any) => {
+        req.user = gestor
+        req.userRecord = { id: 'g-1', ...gestor, status: 'ATIVO', primeiroLogin: false, escopoTipos: [] }
+        next()
+      }) as any)
+      vi.mocked(prisma.usuario.findUnique).mockResolvedValue({
+        id: 'user-1',
+        nivel: 'VISUALIZADOR',
+        filial: 'FILIAL1',
+      } as any)
+      vi.mocked(prisma.usuario.update).mockResolvedValue({ id: 'user-1' } as any)
+
+      const res = await request(app)
+        .patch('/api/usuarios/user-1')
+        .send({ nome: 'Renomeado', escopoTipos: ['sistemas::SEI'] })
+
+      expect(res.status).toBe(200)
+      const data = vi.mocked(prisma.usuario.update).mock.calls[0][0].data
+      expect(data.escopoTipos).toBeUndefined()
+      // E o resto do PATCH do Gestor continua valendo.
+      expect(data.nome).toBe('Renomeado')
+    })
+
+    it('GESTOR não amplia acesso: o escopo do alvo não é tocado', async () => {
+      const gestor = { sub: 'g-1', email: 'gestor@test.com', nome: 'Gestor', nivel: 'GESTOR', filial: 'FILIAL1', type: 'access', iat: Date.now(), exp: Date.now() + 900000 }
+      vi.mocked(authMiddleware).mockImplementation(((req: any, _res: any, next: any) => {
+        req.user = gestor
+        req.userRecord = { id: 'g-1', ...gestor, status: 'ATIVO', primeiroLogin: false, escopoTipos: [] }
+        next()
+      }) as any)
+      vi.mocked(prisma.usuario.findUnique).mockResolvedValue({
+        id: 'user-1',
+        nivel: 'VISUALIZADOR',
+        filial: 'FILIAL1',
+        escopoTipos: ['sistemas::SEI'],
+      } as any)
+      vi.mocked(prisma.usuario.update).mockResolvedValue({ id: 'user-1' } as any)
+
+      await request(app).patch('/api/usuarios/user-1').send({ nome: 'Renomeado' })
+
+      expect(vi.mocked(prisma.usuario.update).mock.calls[0][0].data.escopoTipos).toBeUndefined()
     })
   })
 })

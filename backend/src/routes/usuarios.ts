@@ -6,6 +6,7 @@ import { UserCreateSchema, UserUpdateSchema, UserWithCodigoSchema, PaginatedResp
 import { passwordPolicy } from '../utils/tokens'
 import { criarCodigoPrimeiroAcesso } from '../services/primeiroAcesso'
 import { syncUsuarioParaSce } from '../services/sceSync'
+import { escoposInvalidos } from '../services/escopo'
 import { ZodError } from 'zod'
 import { isZodError } from '../utils/zodError'
 
@@ -14,6 +15,71 @@ const BCRYPT_COST = 12
 
 /** Limite de visualizadores ativos por unidade (regra vinda do SCE: gestor + 2). */
 const MAX_GESTORES_UNIDADE = 2
+
+/**
+ * Campos devolvidos nas respostas de usuário. `escopoTipos` entra aqui porque a
+ * tela de usuários mostra as checkboxes de tipo já marcadas ao abrir o cadastro.
+ *
+ * Fica em uma constante porque as quatro rotas repetiam a mesma lista — e uma
+ * delas esquecer o campo novo faria a tela abrir vazia sem aviso.
+ */
+const selectUsuario = {
+  id: true,
+  email: true,
+  nome: true,
+  nivel: true,
+  filial: true,
+  status: true,
+  primeiroLogin: true,
+  escopoTipos: true,
+  createdAt: true,
+  updatedAt: true,
+} as const
+
+/**
+ * Valida o `escopoTipos` informado no corpo do request.
+ *
+ * - Só o ADMIN grava escopo: ele é um AUMENTO de acesso (quem tem escopo vê
+ *   chamado de qualquer escola), então o Gestor fica de fora — igual já
+ *   acontece com `nivel` e `filial` logo abaixo.
+ * - Cada valor precisa existir no formulário ativo. Gravar um escopo órfão é o
+ *   pior desfecho possível: o usuário voltaria a ver TUDO sem ninguém perceber
+ *   que a restrição não está valendo.
+ *
+ * `escopo === undefined` devolve lista vazia com `ok`: quem não mandou o campo
+ * não quer mexer nele.
+ */
+async function validarEscopo(
+  req: AuthenticatedRequest,
+  escopo: string[] | undefined,
+): Promise<
+  | { ok: true; escopo: string[] }
+  | { ok: false; status: number; error: string; message: string }
+> {
+  if (escopo === undefined) return { ok: true, escopo: [] }
+
+  const nivel = req.userRecord?.nivel || req.user?.nivel
+  if (nivel !== 'ADMIN') {
+    return {
+      ok: false,
+      status: 403,
+      error: 'FORBIDDEN',
+      message: 'Apenas o Administrador define o escopo de tipos de chamado.',
+    }
+  }
+
+  const invalidos = await escoposInvalidos(escopo)
+  if (invalidos.length) {
+    return {
+      ok: false,
+      status: 400,
+      error: 'VALIDATION_ERROR',
+      message: `Tipo de chamado inexistente no formulário: ${invalidos.join(', ')}.`,
+    }
+  }
+
+  return { ok: true, escopo }
+}
 
 /** ADMIN ou GESTOR (gestor fica restrito à própria filial nas regras abaixo). */
 function adminOuGestor(req: AuthenticatedRequest, res: Response, next: () => void): void {
@@ -78,7 +144,7 @@ router.get('/', authMiddleware, adminOuGestor, async (req: AuthenticatedRequest,
       prisma.usuario.count({ where }),
       prisma.usuario.findMany({
         where,
-        select: { id: true, email: true, nome: true, nivel: true, filial: true, status: true, primeiroLogin: true, createdAt: true, updatedAt: true },
+        select: selectUsuario,
         skip: (page - 1) * limit,
         take: limit,
         orderBy: { createdAt: 'desc' }
@@ -114,6 +180,11 @@ router.post('/', authMiddleware, adminOuGestor, async (req: AuthenticatedRequest
       }
     }
 
+    const escopo = await validarEscopo(req, data.escopoTipos)
+    if (!escopo.ok) {
+      return res.status(escopo.status).json({ error: escopo.error, message: escopo.message })
+    }
+
     const existing = await prisma.usuario.findUnique({ where: { email: data.email.toLowerCase() } })
     if (existing) {
       return res.status(409).json({ error: 'VALIDATION_ERROR', message: 'Email já cadastrado' })
@@ -137,9 +208,10 @@ router.post('/', authMiddleware, adminOuGestor, async (req: AuthenticatedRequest
         nivel: data.nivel,
         filial: data.filial,
         senhaHash,
-        primeiroLogin: true
+        primeiroLogin: true,
+        escopoTipos: escopo.escopo
       },
-      select: { id: true, email: true, nome: true, nivel: true, filial: true, status: true, primeiroLogin: true, createdAt: true, updatedAt: true }
+      select: selectUsuario
     })
 
     // O código de primeiro acesso já sai pronto na criação: o ADMIN repassa
@@ -163,7 +235,7 @@ router.get('/:id', authMiddleware, requireRole('ADMIN'), async (req: Authenticat
   try {
     const user = await prisma.usuario.findUnique({
       where: { id: req.params.id },
-      select: { id: true, email: true, nome: true, nivel: true, filial: true, status: true, primeiroLogin: true, createdAt: true, updatedAt: true }
+      select: selectUsuario
     })
 
     if (!user) {
@@ -194,16 +266,30 @@ router.patch('/:id', authMiddleware, adminOuGestor, async (req: AuthenticatedReq
       }
       data.nivel = undefined
       data.filial = undefined
+      data.escopoTipos = undefined
     }
+
+    // `undefined` deixa a coluna como está; `[]` limpa o escopo (volta a ver
+    // tudo). A distinção importa: o checkbox "sem restrição" manda lista vazia.
+    let escopo: string[] | undefined
+    if (data.escopoTipos !== undefined) {
+      const validado = await validarEscopo(req, data.escopoTipos)
+      if (!validado.ok) {
+        return res.status(validado.status).json({ error: validado.error, message: validado.message })
+      }
+      escopo = validado.escopo
+    }
+
     const updated = await prisma.usuario.update({
       where: { id: req.params.id },
       data: {
         nome: data.nome,
         nivel: data.nivel,
         filial: data.filial,
-        status: data.status
+        status: data.status,
+        escopoTipos: escopo
       },
-      select: { id: true, email: true, nome: true, nivel: true, filial: true, status: true, primeiroLogin: true, createdAt: true, updatedAt: true }
+      select: selectUsuario
     })
 
     if (data.status === 'INATIVO') {
