@@ -24,6 +24,12 @@ model Usuario {
   // apenas o `filial` como antes. preenchido, a trava de unidade é substituída
   // pela trava de tipo (ver `services/escopo.ts`).
   escopoTipos       String[] @default([])
+  // Rotas da API que este usuário pode alcançar. VAZIO = SEM RESTRIÇÃO: é o
+  // comportamento de sempre, em que o acesso é decidido só pelo `nivel`.
+  // preenchido, tudo fora da lista responde 403 — é a trava que impede um
+  // técnico restrito de abrir /equipamentos, /usuarios etc. chamando a API
+  // direto, e não só escondendo o item de menu no portal.
+  rotasPermitidas  String[] @default([])
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
