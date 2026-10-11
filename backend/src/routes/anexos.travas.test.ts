@@ -327,4 +327,70 @@ describe('Travas de anexo do chamado público', () => {
       expect(JSON.stringify(res.body.details)).toContain('perguntaId')
     })
   })
+
+  // O portal precisa saber a qual pergunta cada anexo pertence. Sem isso ele
+  // recebe o arquivo e não tem como colocá-lo junto da pergunta que o pediu.
+  describe('contrato da resposta 201', () => {
+    it('anexo de pergunta volta com perguntaId, pergunta e pasta', async () => {
+      const res = await request(app).post('/api/chamados').send({
+        ...PAYLOAD_BASE,
+        anexosPergunta: [
+          { perguntaId: 'seed-perg-sist-1', pergunta: 'Anexo do erro na tela', nome: 'erro.jpg', tipo: 'image/jpeg', base64: base64De(1024) }
+        ]
+      })
+
+      expect(res.status).toBe(201)
+      expect(res.body.anexos[0]).toMatchObject({
+        nome: 'erro.jpg',
+        perguntaId: 'seed-perg-sist-1',
+        pergunta: 'Anexo do erro na tela'
+      })
+      expect(res.body.anexos[0].pasta).toContain('p-seed-perg-sist-1')
+      expect(res.body.anexos[0].url).toBeTruthy()
+      expect(res.body.anexos[0].path).toBeTruthy()
+    })
+
+    it('anexo comum volta sem perguntaId, e o campo é omitido (não vem vazio)', async () => {
+      const res = await request(app).post('/api/chamados').send({
+        ...PAYLOAD_BASE,
+        anexos: [{ nome: 'foto.jpg', tipo: 'image/jpeg', base64: base64De(1024) }]
+      })
+
+      expect(res.status).toBe(201)
+      expect(res.body.anexos[0].nome).toBe('foto.jpg')
+      expect(res.body.anexos[0]).not.toHaveProperty('perguntaId')
+      expect(res.body.anexos[0]).not.toHaveProperty('pergunta')
+    })
+
+    it('caminho legado segue sem perguntaId', async () => {
+      const res = await request(app).post('/api/chamados').send({
+        ...PAYLOAD_BASE,
+        anexoNome: 'foto.png',
+        anexoTipo: 'image/png',
+        anexoBase64: base64De(1024)
+      })
+
+      expect(res.status).toBe(201)
+      expect(res.body.anexos[0].nome).toBe('foto.png')
+      expect(res.body.anexos[0]).not.toHaveProperty('perguntaId')
+    })
+
+    it('mistura anexo de pergunta e comum na mesma resposta, cada um com seu vínculo', async () => {
+      const res = await request(app).post('/api/chamados').send({
+        ...PAYLOAD_BASE,
+        anexos: [{ nome: 'geral.jpg', tipo: 'image/jpeg', base64: base64De(1024) }],
+        anexosPergunta: [
+          { perguntaId: 'p9', pergunta: 'Print da tela', nome: 'print.png', tipo: 'image/png', base64: base64De(1024) }
+        ]
+      })
+
+      expect(res.status).toBe(201)
+      expect(res.body.anexos).toHaveLength(2)
+      const comPergunta = res.body.anexos.find((a: any) => a.nome === 'print.png')
+      const semPergunta = res.body.anexos.find((a: any) => a.nome === 'geral.jpg')
+      expect(comPergunta.perguntaId).toBe('p9')
+      expect(comPergunta.pergunta).toBe('Print da tela')
+      expect(semPergunta).not.toHaveProperty('perguntaId')
+    })
+  })
 })
