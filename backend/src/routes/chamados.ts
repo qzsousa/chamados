@@ -2,7 +2,7 @@ import { Router, Response, Request } from 'express'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../config/prisma'
 import { authMiddleware, AuthenticatedRequest, requireRole, requireFilialAccess } from '../middleware/auth'
-import { CriarChamadoSchema, FiltrosChamadoSchema, AtualizarStatusChamadoSchema, ResponderChamadoSchema, BatchUpdateChamadosSchema, BatchDeleteChamadosSchema, EncaminharChamadoSchema, ChamadoSchema, PaginatedResponseSchema, ConsultarChamadoPublicoSchema, CATEGORIA_SEM_CHAVE, RegistrarAtividadeSchema, ConcluirChamadoSchema, ConferirChamadoSchema, TipoAtividadeSchema } from '@shared/api'
+import { CriarChamadoSchema, FiltrosChamadoSchema, AtualizarStatusChamadoSchema, ResponderChamadoSchema, BatchUpdateChamadosSchema, BatchDeleteChamadosSchema, EncaminharChamadoSchema, ChamadoSchema, PaginatedResponseSchema, ConsultarChamadoPublicoSchema, CATEGORIA_SEM_CHAVE, RegistrarAtividadeSchema, ConcluirChamadoSchema, ConferirChamadoSchema, TipoAtividadeSchema, ANEXO_MAX_POR_PEDIDO, validarAnexo } from '@shared/api'
 import { ZodError } from 'zod'
 import { isZodError, respostaValidacao } from '../utils/zodError'
 import { normalizarNomeEscola, getMapaTecnicos } from '../services/normalization'
@@ -32,79 +32,125 @@ const filtroExcluido = { excluido: false }
 // `anexoBase64` único do formulário antigo. Aqui embaixo entram DUAS coisas que
 // o formulário dinâmico passou a exigir e que ainda não tinham lugar no schema:
 //
-//   respostas: [{ perguntaId, resposta }]  — o que a escola respondeu
-//   anexos:     [{ nome, tipo, base64 }]    — VÁRIOS arquivos de uma vez
+//   respostas:  [{ perguntaId, resposta }]  — o que a escola respondeu
+//   anexos:      [{ nome, tipo, base64 }]    — VÁRIOS arquivos de uma vez
+//   anexosPergunta: [{ perguntaId, pergunta, nome, tipo, base64 }] — arquivo lido
+//                  dentro de uma pergunta do formulário (a resposta em si é
+//                  texto; o arquivo vem em anexoPergunta)
 //
 // Ficam no arquivo em vez de irem para @shared/api porque o contrato é do
 // endpoint e o arquivo já é o dono dele; quando outro repositório precisar
 // tipar o payload, o certo é mover este bloco para shared/types/api.ts.
 
-/** Limite por arquivo e por pedido — os mesmos da conversa (5 arquivos, 5MB). */
-const MAX_ANEXOS_FORMULARIO = 5
-const TAMANHO_MAX_ANEXO_FORMULARIO = 5 * 1024 * 1024
-
 type AnexoFormulario = {
   nome: string
   tipo?: string
   base64: string
+  /** Só nos anexos de pergunta: de qual pergunta do formulário o arquivo veio. */
+  perguntaId?: string
+  pergunta?: string
+}
+
+/** Campo pelo qual a escola mandou o arquivo; a resposta em `details` volta nele. */
+function campoDoAnexo(a: AnexoFormulario): string {
+  return a.perguntaId ? `anexosPergunta(${a.perguntaId})` : 'anexos'
 }
 
 /**
- * Lê `anexos` do corpo sem estourar em payload quebrado.
+ * Lê uma lista de anexos do corpo sem estourar em payload quebrado.
  *
  * Devolve lista de problema em vez de lançar: quem chama decide o status, e
  * `criarChamadoPublic` precisa continuar devolvendo 400 (e não 500) para corpo
  * inválido. Um `anexos: "texto"` no lugar da lista é erro do cliente, não
  * motivo para derrubar o processo.
  *
- * Todo item ruim é FATAL: quem mandou arquivo sem nome/base64 ou grande demais
- * está esperando que ele esteja no chamado — deixar passar em silêncio faria o
- * técnico receber um chamado "sem anexo" e a escola acreditar que anexou.
+ * Todo item ruim é FATAL: quem mandou arquivo sem nome/base64, grande demais ou
+ * com extensão fora da allowlist está esperando que ele esteja no chamado —
+ * deixar passar em silêncio faria o técnico receber um chamado "sem anexo" e a
+ * escola acreditar que anexou. A validação de arquivo é `validarAnexo` (de
+ * @shared/api), a MESMA dos anexos de mensagem e de tutorial — não uma cópia
+ * desta rota.
  */
-function lerAnexosFormulario(bruto: unknown): { anexos: AnexoFormulario[]; problemas: string[] } {
+function lerAnexosDoFormulario(
+  bruto: unknown,
+  campo: string,
+  preservarPergunta = false
+): { anexos: AnexoFormulario[]; problemas: string[] } {
   const problemas: string[] = []
 
   // Tolerância: um portal mandando UM objeto em vez da lista ainda funciona. (O
   // `anexoBase64` do formulário antigo NÃO vem aqui — vem no topo do corpo e é
   // costurado na lista mais abaixo.)
   if (bruto && typeof bruto === 'object' && !Array.isArray(bruto)) {
-    const o = bruto as Record<string, unknown>
-    const base64 = typeof o.base64 === 'string' ? o.base64.trim() : ''
-    const nome = typeof o.nome === 'string' ? o.nome.trim() : ''
-    if (!base64 || !nome) return { anexos: [], problemas }
-    return {
-      anexos: [{ nome, tipo: typeof o.tipo === 'string' ? o.tipo : undefined, base64 }],
-      problemas
-    }
+    return lerUmAnexo(bruto as Record<string, unknown>, campo, preservarPergunta)
   }
 
   if (bruto === undefined || bruto === null) return { anexos: [], problemas }
   if (!Array.isArray(bruto)) {
-    problemas.push('anexos deve ser uma lista de arquivos')
-    return { anexos: [], problemas }
-  }
-  if (bruto.length > MAX_ANEXOS_FORMULARIO) {
-    problemas.push(`envie no máximo ${MAX_ANEXOS_FORMULARIO} arquivos por chamado`)
+    problemas.push(`${campo} deve ser uma lista de arquivos`)
     return { anexos: [], problemas }
   }
 
   const anexos: AnexoFormulario[] = []
   for (const [i, item] of bruto.entries()) {
-    const o = (item ?? {}) as Record<string, unknown>
-    const nome = typeof o.nome === 'string' ? o.nome.trim() : ''
-    const base64 = typeof o.base64 === 'string' ? o.base64.trim() : ''
-    if (!nome || !base64) {
-      problemas.push(`anexos[${i}] precisa de "nome" e "base64"`)
+    const { anexos: lidos, problemas: ruins } = lerUmAnexo(
+      (item ?? {}) as Record<string, unknown>,
+      `${campo}[${i}]`,
+      preservarPergunta
+    )
+    if (ruins.length > 0) {
+      problemas.push(...ruins)
       continue
     }
-    // base64 codifica 3 bytes em 4 chars — o tamanho real é ~ length * 3/4.
-    if ((base64.length * 3) / 4 > TAMANHO_MAX_ANEXO_FORMULARIO) {
-      problemas.push(`anexos[${i}] maior que 5MB`)
-      continue
-    }
-    anexos.push({ nome, tipo: typeof o.tipo === 'string' ? o.tipo : undefined, base64 })
+    anexos.push(...lidos)
   }
   return { anexos, problemas }
+}
+
+/** Lê e valida UM item (lista de 1 ou objeto solto). */
+function lerUmAnexo(
+  o: Record<string, unknown>,
+  campo: string,
+  preservarPergunta: boolean
+): { anexos: AnexoFormulario[]; problemas: string[] } {
+  const problemas: string[] = []
+  const base64 = typeof o.base64 === 'string' ? o.base64.trim() : ''
+  const nome = typeof o.nome === 'string' ? o.nome.trim() : ''
+  const tipo = typeof o.tipo === 'string' ? o.tipo : undefined
+
+  if (!nome || !base64) {
+    return { anexos: [], problemas: [`${campo} precisa de "nome" e "base64"`] }
+  }
+
+  validarAnexo(nome, base64, tipo).forEach((p) => problemas.push(`${campo}: ${p}`))
+
+  const anexo: AnexoFormulario = { nome, tipo, base64 }
+  if (preservarPergunta) {
+    // A pergunta é o motivo do arquivo existir: sem isto o técnico recebe uma
+    // foto sem saber a qual pergunta ela responde.
+    anexo.perguntaId = typeof o.perguntaId === 'string' && o.perguntaId.trim() ? o.perguntaId.trim() : undefined
+    anexo.pergunta = typeof o.pergunta === 'string' && o.pergunta.trim() ? o.pergunta.trim() : undefined
+    if (!anexo.perguntaId) {
+      problemas.push(`${campo} precisa de "perguntaId" para identificar a pergunta do arquivo`)
+    }
+  }
+
+  return problemas.length > 0 ? { anexos: [], problemas } : { anexos: [anexo], problemas }
+}
+
+/** `anexos` — os vários arquivos do formulário. */
+function lerAnexosFormulario(bruto: unknown): { anexos: AnexoFormulario[]; problemas: string[] } {
+  return lerAnexosDoFormulario(bruto, 'anexos')
+}
+
+/**
+ * `anexosPergunta` — o mesmo arquivo, mas vindo por dentro de uma pergunta do
+ * tipo ARQUIVO. O portal público envia este nome (portal/src/api/publico.ts) e o
+ * backend só lia `anexos`: o arquivo era aceito no corpo e DESCARTADO em
+ * silêncio, sem erro. Agora entra na mesma lista e passa pelas mesmas travas.
+ */
+function lerAnexosPerguntaFormulario(bruto: unknown): { anexos: AnexoFormulario[]; problemas: string[] } {
+  return lerAnexosDoFormulario(bruto, 'anexosPergunta', true)
 }
 
 /**

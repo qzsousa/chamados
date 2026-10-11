@@ -12,6 +12,7 @@ import pino from 'pino'
 import * as Sentry from '@sentry/node'
 
 import { env } from './config/env'
+import { LIMITE_CORPO_JSON } from '@shared/api'
 import { prisma } from './config/prisma'
 import { authMiddleware, attachUserRecord } from './middleware/auth'
 import { errorHandler } from './middleware/errorHandler'
@@ -70,10 +71,14 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }))
 
-// Tutoriais aceitam até 5 anexos (cada um ≤5MB decodificado, validado no
-// schema) em base64 no corpo. 25MB cobre o caso realista; 5 anexos todos no
-// limite exato (~35MB em base64) retornariam 413 e devem ser enviados em PATCH.
-app.use(express.json({ limit: '25mb' }))
+// Tutoriais aceitam até ANEXO_MAX_POR_PEDIDO anexos (cada um ≤ANEXO_MAX_BYTES
+// decodificado, validado no schema) em base64 no corpo. O limite do corpo vem
+// de @shared/api (LIMITE_CORPO_JSON) — é o mesmo número usado pelos testes, e
+// não mais um '25mb' replicado à mão. Payload acima disso volta 413 pelo
+// errorHandler, sem virar 500 nem notificar a administração.
+// Quando 5 anexos todos no limite exato (~35MB em base64) estourarem, o
+// cliente envia em PATCH.
+app.use(express.json({ limit: LIMITE_CORPO_JSON }))
 app.use(express.urlencoded({ extended: true }))
 app.use(cookieParser())
 

@@ -286,10 +286,15 @@ export type Chamado = z.infer<typeof ChamadoSchema>
    (backend/src/routes/chamados.ts), que valida fora do zod.
 
    Os limites são sobrescritíveis por variável de ambiente (ver
-   backend/src/config/env.ts) sem ninguém ter que editar código.
+   backend/src/config/env.ts) sem ninguém ter que editar código. A leitura é
+   feita por `globalThis` porque este arquivo é compartilhado com o portal
+   (browser), que não tem `process` — e o pacote shared não depende de
+   @types/node.
 */
-const ANEXO_ENV: Record<string, string | undefined> =
-  typeof process !== 'undefined' && process.env ? (process.env as Record<string, string | undefined>) : {}
+const ANEXO_ENV: Record<string, string | undefined> = ((): Record<string, string | undefined> => {
+  const g = globalThis as { process?: { env?: Record<string, string | undefined> } }
+  return g?.process?.env ?? {}
+})()
 
 function intDoEnv(nome: string, padrao: number): number {
   const v = Number(ANEXO_ENV[nome])
@@ -503,14 +508,14 @@ export const AtualizarStatusChamadoSchema = z.object({
   responsavel: z.string().optional(),
   // Matriz: ao mudar para COMUNICADO ("Aguardando escola"), registra a pergunta para a escola
   pergunta: z.string().min(1).max(5000).optional(),
-  perguntaAnexos: z.array(AnexoMensagemSchema).max(5).optional()
+  perguntaAnexos: z.array(AnexoMensagemSchema).max(ANEXO_MAX_POR_PEDIDO).optional()
 })
 
 export type AtualizarStatusChamado = z.infer<typeof AtualizarStatusChamadoSchema>
 
 export const ResponderChamadoSchema = z.object({
   texto: z.string().min(1).max(5000),
-  anexos: z.array(AnexoMensagemSchema).max(5).optional()
+  anexos: z.array(AnexoMensagemSchema).max(ANEXO_MAX_POR_PEDIDO).optional()
 })
 
 export type ResponderChamado = z.infer<typeof ResponderChamadoSchema>
@@ -523,7 +528,7 @@ export type ResponderChamado = z.infer<typeof ResponderChamadoSchema>
  */
 export const RegistrarAtividadeSchema = z.object({
   texto: z.string().trim().min(1, 'Descreva o que foi feito').max(5000),
-  anexos: z.array(AnexoMensagemSchema).max(5).optional()
+  anexos: z.array(AnexoMensagemSchema).max(ANEXO_MAX_POR_PEDIDO).optional()
 })
 
 export type RegistrarAtividade = z.infer<typeof RegistrarAtividadeSchema>
@@ -535,7 +540,7 @@ export const ConcluirChamadoSchema = z.object({
     .trim()
     .min(1, 'Registre o que foi feito para concluir o chamado')
     .max(5000),
-  anexos: z.array(AnexoMensagemSchema).max(5).optional()
+  anexos: z.array(AnexoMensagemSchema).max(ANEXO_MAX_POR_PEDIDO).optional()
 })
 
 export type ConcluirChamado = z.infer<typeof ConcluirChamadoSchema>
@@ -551,7 +556,7 @@ export const ConferirChamadoSchema = z
   .object({
     aprovado: z.boolean(),
     texto: z.string().trim().max(5000).optional(),
-    anexos: z.array(AnexoMensagemSchema).max(5).optional()
+    anexos: z.array(AnexoMensagemSchema).max(ANEXO_MAX_POR_PEDIDO).optional()
   })
   .superRefine((a, ctx) => {
     if (!a.aprovado && !a.texto) {
@@ -670,7 +675,8 @@ export type BatchDeleteChamados = z.infer<typeof BatchDeleteChamadosSchema>
 // TUTORIAIS
 // ============================================
 
-const TAMANHO_MAX_ANEXO = 5 * 1024 * 1024
+// O tamanho e a extensão dos anexos de tutorial são validados dentro de
+// TutorialAnexoInputSchema (mesmas travas de sempre — bloco no topo do arquivo).
 
 export const TutorialAnexoInputSchema = z
   .object({
