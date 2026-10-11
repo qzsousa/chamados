@@ -275,7 +275,152 @@ export const ChamadoSchema = z.object({
 
 export type Chamado = z.infer<typeof ChamadoSchema>
 
-export const CriarChamadoSchema = z.object({
+/* ============================================
+   TRAVAS DE ANEXO — FONTE ÚNICA
+   ============================================
+   O bucket `anexos` do Supabase é PÚBLICO e o `contentType` gravado vem do
+   cliente: sem esta trava, um `.html` ou `.svg` sobe e é servido como
+   `text/html` — ou seja, XSS guardado pela URL do chamado. Por isso a allowlist
+   de extensão E de MIME vive aqui, junto dos schemas que já eram o portão do
+   arquivo, e `validarAnexo` é a MESMA função usada pelo formulário público
+   (backend/src/routes/chamados.ts), que valida fora do zod.
+
+   Os limites são sobrescritíveis por variável de ambiente (ver
+   backend/src/config/env.ts) sem ninguém ter que editar código.
+*/
+const ANEXO_ENV: Record<string, string | undefined> =
+  typeof process !== 'undefined' && process.env ? (process.env as Record<string, string | undefined>) : {}
+
+function intDoEnv(nome: string, padrao: number): number {
+  const v = Number(ANEXO_ENV[nome])
+  return Number.isFinite(v) && v > 0 ? Math.floor(v) : padrao
+}
+
+/** Bytes decodificados por arquivo. Padrão: 5MB. */
+export const ANEXO_MAX_BYTES = intDoEnv('ANEXO_MAX_BYTES', 5 * 1024 * 1024)
+
+/** Quantidade de anexos por envio (mensagem, atividade, tutorial, abertura). */
+export const ANEXO_MAX_POR_PEDIDO = intDoEnv('ANEXO_MAX_POR_PEDIDO', 5)
+
+const EXTENSOES_PADRAO = [
+  // imagem
+  'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'heic',
+  // documento
+  'pdf', 'txt', 'csv', 'rtf',
+  // planilha/apresentação
+  'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods',
+  // mídia
+  'mp3', 'm4a', 'mp4', 'mov', 'webm',
+  // compactado
+  'zip'
+]
+
+/** Extensões liberadas, sem o ponto. Substituível por `ANEXO_EXTENSOES=jpg,png`. */
+export const ANEXO_EXTENSOES: readonly string[] = (ANEXO_ENV.ANEXO_EXTENSOES || EXTENSOES_PADRAO.join(','))
+  .split(',')
+  .map((e) => e.trim().toLowerCase().replace(/^\./, ''))
+  .filter(Boolean)
+
+/**
+ * MIME aceito por extensão. O `tipo` declarado pelo cliente só é aceito se
+ * bater com a extensão — senão `.png` declarado como `text/html` passaria.
+ */
+const MIME_POR_EXTENSAO: Record<string, readonly string[]> = {
+  jpg: ['image/jpeg', 'image/pjpeg'],
+  jpeg: ['image/jpeg', 'image/pjpeg'],
+  png: ['image/png'],
+  gif: ['image/gif'],
+  webp: ['image/webp'],
+  bmp: ['image/bmp', 'image/x-ms-bmp'],
+  heic: ['image/heic', 'image/heif'],
+  pdf: ['application/pdf', 'application/x-pdf'],
+  txt: ['text/plain'],
+  csv: ['text/csv', 'text/plain', 'application/csv'],
+  rtf: ['application/rtf', 'text/rtf'],
+  doc: ['application/msword'],
+  docx: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+  xls: ['application/vnd.ms-excel'],
+  xlsx: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+  ppt: ['application/vnd.ms-powerpoint'],
+  pptx: ['application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+  odt: ['application/vnd.oasis.opendocument.text'],
+  ods: ['application/vnd.oasis.opendocument.spreadsheet'],
+  mp3: ['audio/mpeg', 'audio/mp3'],
+  m4a: ['audio/mp4', 'audio/x-m4a'],
+  mp4: ['video/mp4'],
+  mov: ['video/quicktime'],
+  webm: ['video/webm', 'audio/webm'],
+  zip: ['application/zip', 'application/x-zip-compressed']
+}
+
+/** MIME genérico que todo navegador pode mandar e que não diz nada perigoso. */
+const MIME_NEUTRO = 'application/octet-stream'
+
+/**
+ * Limite do corpo JSON do express (`express.json`). 5 anexos de 5MB em base64
+ * dariam ~35MB e estourariam o limite: nesses casos o cliente envia em PATCH.
+ * Exportado para que index.ts e os testes usem o MESMO número — replicar '25mb'
+ * à mão em cada lugar foi exatamente o que gerou as cópias que esta task remove.
+ */
+export const LIMITE_CORPO_JSON = ANEXO_ENV.LIMITE_CORPO_JSON?.trim() || '25mb'
+
+/** base64 codifica 3 bytes em 4 caracteres — tamanho decodificado ~ length * 3/4. */
+export function bytesDoBase64(base64: string): number {
+  return (base64.length * 3) / 4
+}
+
+/** Extensão em minúsculas e sem o ponto ('' quando o nome não tem). */
+export function extensaoDe(nome: string): string {
+  const i = nome.lastIndexOf('.')
+  return i > 0 ? nome.slice(i + 1).toLowerCase() : ''
+}
+
+/** MIME seguro para gravar no Storage: derivado da EXTENSÃO, nunca do cliente. */
+export function mimeSeguroDe(nome: string, tipoDeclarado?: string | null): string {
+  const ext = extensaoDe(nome)
+  const aceitos = MIME_POR_EXTENSAO[ext]
+  if (!aceitos?.length) return MIME_NEUTRO
+  const declarado = (tipoDeclarado || '').trim().toLowerCase().split(';')[0].trim()
+  if (declarado && aceitos.includes(declarado)) return declarado
+  return aceitos[0]
+}
+
+/**
+ * Valida UM anexo e devolve a lista de problemas — vazia significa aceito.
+ * Cada problema nomeia o arquivo e a extensão recusada, para a escola entender
+ * o que trocar em vez de receber um "Dados inválidos" sem detalhe.
+ *
+ * Usada tanto pelos schemas (superRefine) quanto pela leitura tolerante do
+ * formulário público — é a MESMA trava, não duas que podem divergir.
+ */
+export function validarAnexo(nome: string, base64: string, tipo?: string | null): string[] {
+  const problemas: string[] = []
+  const ext = extensaoDe(nome)
+
+  if (!ext) {
+    problemas.push(`"${nome}" não tem extensão; envie um arquivo com extensão (ex.: foto.jpg)`)
+  } else if (!ANEXO_EXTENSOES.includes(ext)) {
+    problemas.push(
+      `"${nome}" tem extensão não permitida (.${ext}). Envie um destes: ${ANEXO_EXTENSOES.join(', ')}`
+    )
+  } else {
+    const declarado = (tipo || '').trim().toLowerCase().split(';')[0].trim()
+    const aceitos = MIME_POR_EXTENSAO[ext] || []
+    if (declarado && declarado !== MIME_NEUTRO && !aceitos.includes(declarado)) {
+      problemas.push(`"${nome}" (${ext}) foi declarado como ${declarado}, que não é um ${aceitos[0]}`)
+    }
+  }
+
+  if (bytesDoBase64(base64) > ANEXO_MAX_BYTES) {
+    const mb = Math.round(ANEXO_MAX_BYTES / (1024 * 1024))
+    problemas.push(`"${nome}" maior que ${mb}MB`)
+  }
+
+  return problemas
+}
+
+export const CriarChamadoSchema = z
+  .object({
   unidade: z.string().min(1),
   solicitante: z.string().min(1),
   funcao: z.string().optional(),
@@ -297,7 +442,26 @@ export const CriarChamadoSchema = z.object({
    * sem depender do texto livre de `tipo` (que quebra se a categoria for renomeada).
    */
   categoriaChave: z.string().optional()
-})
+  })
+  // `anexoBase64` é o caminho LEGADO (formulário antigo, um arquivo só), mas
+  // entra no mesmo bucket público dos demais — então passa pelas MESMAS travas.
+  // Sem este refine, um base64 de 24MB passava: o campo era `z.string().optional()`
+  // puro e o stitched da rota costurava o arquivo depois de toda a validação.
+  .superRefine((val, ctx) => {
+    if (!val.anexoBase64) return
+    const nome = (val.anexoNome || '').trim()
+    if (!nome) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['anexoNome'],
+        message: 'anexoBase64 exige anexoNome com o nome do arquivo'
+      })
+      return
+    }
+    validarAnexo(nome, val.anexoBase64, val.anexoTipo).forEach((message) => {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['anexoBase64'], message })
+    })
+  })
 
 export type CriarChamado = z.infer<typeof CriarChamadoSchema>
 
@@ -315,9 +479,9 @@ export const ConsultarChamadoPublicoSchema = z.object({
 
 export type ConsultarChamadoPublico = z.infer<typeof ConsultarChamadoPublicoSchema>
 
-const TAMANHO_MAX_ANEXO_MENSAGEM = 5 * 1024 * 1024
-
-// Anexo temporário de pergunta/resposta de chamado (expira 7 dias após o envio)
+// Anexo temporário de pergunta/resposta de chamado (expira 7 dias após o envio).
+// A allowlist de extensão/MIME e o limite de tamanho estão no bloco "TRAVAS DE
+// ANEXO" acima, compartilhados com o formulário público.
 export const AnexoMensagemSchema = z
   .object({
     nome: z.string().min(1).max(200),
@@ -325,10 +489,9 @@ export const AnexoMensagemSchema = z
     base64: z.string().min(1)
   })
   .superRefine((a, ctx) => {
-    // base64 codifica 3 bytes em 4 chars — tamanho decodificado ~ length * 3/4
-    if ((a.base64.length * 3) / 4 > TAMANHO_MAX_ANEXO_MENSAGEM) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Anexo maior que 5MB' })
-    }
+    validarAnexo(a.nome, a.base64, a.tipo).forEach((message) => {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message })
+    })
   })
 
 export type AnexoMensagem = z.infer<typeof AnexoMensagemSchema>
@@ -509,22 +672,19 @@ export type BatchDeleteChamados = z.infer<typeof BatchDeleteChamadosSchema>
 
 const TAMANHO_MAX_ANEXO = 5 * 1024 * 1024
 
-export const TutorialAnexoInputSchema = z.object({
-  nome: z.string().min(1).max(200),
-  tipo: z.string().optional(),
-  base64: z.string().min(1)
-})
+export const TutorialAnexoInputSchema = z
+  .object({
+    nome: z.string().min(1).max(200),
+    tipo: z.string().optional(),
+    base64: z.string().min(1)
+  })
+  .superRefine((a, ctx) => {
+    validarAnexo(a.nome, a.base64, a.tipo).forEach((message) => {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message })
+    })
+  })
 
 export type TutorialAnexoInput = z.infer<typeof TutorialAnexoInputSchema>
-
-function validarTamanhoAnexos(anexos: TutorialAnexoInput[] | undefined, campo: string, ctx: z.RefinementCtx) {
-  anexos?.forEach((a, i) => {
-    // base64 codifica 3 bytes em 4 chars — tamanho decodificado ~ length * 3/4
-    if ((a.base64.length * 3) / 4 > TAMANHO_MAX_ANEXO) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [campo, i], message: 'Anexo maior que 5MB' })
-    }
-  })
-}
 
 export const CriarTutorialSchema = z
   .object({
@@ -532,23 +692,20 @@ export const CriarTutorialSchema = z
     subtitulo: z.string().max(200).nullish().transform((v) => (v ? v : null)),
     conteudo: z.string().min(1).max(20000),
     categoriaId: z.string().min(1),
-    anexos: z.array(TutorialAnexoInputSchema).max(5).optional()
+    anexos: z.array(TutorialAnexoInputSchema).max(ANEXO_MAX_POR_PEDIDO).optional()
   })
-  .superRefine((val, ctx) => validarTamanhoAnexos(val.anexos, 'anexos', ctx))
 
 export type CriarTutorial = z.infer<typeof CriarTutorialSchema>
 
-export const AtualizarTutorialSchema = z
-  .object({
-    titulo: z.string().min(1).max(160).optional(),
-    // undefined = não altera; null/'' = limpa o subtítulo
-    subtitulo: z.string().max(200).nullish().transform((v) => (v === undefined ? undefined : v ? v : null)),
-    conteudo: z.string().min(1).max(20000).optional(),
-    categoriaId: z.string().min(1).optional(),
-    anexosNovos: z.array(TutorialAnexoInputSchema).max(5).optional(),
-    removerAnexoIds: z.array(z.string()).optional()
-  })
-  .superRefine((val, ctx) => validarTamanhoAnexos(val.anexosNovos, 'anexosNovos', ctx))
+export const AtualizarTutorialSchema = z.object({
+  titulo: z.string().min(1).max(160).optional(),
+  // undefined = não altera; null/'' = limpa o subtítulo
+  subtitulo: z.string().max(200).nullish().transform((v) => (v === undefined ? undefined : v ? v : null)),
+  conteudo: z.string().min(1).max(20000).optional(),
+  categoriaId: z.string().min(1).optional(),
+  anexosNovos: z.array(TutorialAnexoInputSchema).max(ANEXO_MAX_POR_PEDIDO).optional(),
+  removerAnexoIds: z.array(z.string()).optional()
+})
 
 export type AtualizarTutorial = z.infer<typeof AtualizarTutorialSchema>
 
