@@ -15,6 +15,7 @@ import { env } from './config/env'
 import { LIMITE_CORPO_JSON } from '@shared/api'
 import { prisma } from './config/prisma'
 import { authMiddleware, attachUserRecord } from './middleware/auth'
+import { exigirRotaPermitida } from './services/rotas'
 import { errorHandler } from './middleware/errorHandler'
 import { requestLogger } from './middleware/requestLogger'
 
@@ -242,8 +243,11 @@ app.get('/api/tutoriais/publico/:id', obterTutorialPublic)
 // Formulário de chamados configurável (público — semeado na primeira leitura)
 app.get('/api/formulario/publico', formularioPublicoHandler)
 
-app.use('/api/dashboard', dashboardRoutes)
-app.use('/api', authMiddleware, attachUserRecord)
+// /api/dashboard fica ACIMA da parede porque reaplica o próprio par de auth
+// dentro de dashboard.ts. A trava de rota entra junto, senão um usuário
+// restrito a /chamados leria os KPIs por aqui.
+app.use('/api/dashboard', authMiddleware, attachUserRecord, exigirRotaPermitida, dashboardRoutes)
+app.use('/api', authMiddleware, attachUserRecord, exigirRotaPermitida)
 app.use('/api/usuarios', usuarioRoutes)
 app.use('/api/chamados', chamadoRoutes)
 app.use('/api/escolas', escolaRoutes)

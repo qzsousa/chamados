@@ -7,6 +7,7 @@ import { passwordPolicy } from '../utils/tokens'
 import { criarCodigoPrimeiroAcesso } from '../services/primeiroAcesso'
 import { syncUsuarioParaSce } from '../services/sceSync'
 import { escoposInvalidos } from '../services/escopo'
+import { rotaConhecida } from '../services/rotas'
 import { ZodError } from 'zod'
 import { isZodError } from '../utils/zodError'
 
@@ -32,6 +33,7 @@ const selectUsuario = {
   status: true,
   primeiroLogin: true,
   escopoTipos: true,
+  rotasPermitidas: true,
   createdAt: true,
   updatedAt: true,
 } as const
@@ -79,6 +81,43 @@ async function validarEscopo(
   }
 
   return { ok: true, escopo }
+}
+
+/**
+ * Mesmo contrato do `escopoTipos`, para as ROTAS que o usuário pode alcançar:
+ * só o ADMIN define, e o valor precisa ser um domínio que a API conhece.
+ *
+ * Gravar um domínio inexistente traria o pior desfecho possível — o usuário
+ * ficaria proibido de tudo sem nenhum erro visível, porque `dominioDaRota`
+ * nunca casaria com o que ele gravou. Por isso a lista é validada aqui.
+ */
+function validarRotasPermitidas(
+  req: AuthenticatedRequest,
+  rotas: string[] | undefined,
+): { ok: true; rotas: string[] } | { ok: false; status: number; error: string; message: string } {
+  if (rotas === undefined) return { ok: true, rotas: [] }
+
+  const nivel = req.userRecord?.nivel || req.user?.nivel
+  if (nivel !== 'ADMIN') {
+    return {
+      ok: false,
+      status: 403,
+      error: 'FORBIDDEN',
+      message: 'Apenas o Administrador define as rotas permitidas do usuário.',
+    }
+  }
+
+  const invalidas = rotas.filter((r) => !rotaConhecida(r))
+  if (invalidas.length) {
+    return {
+      ok: false,
+      status: 400,
+      error: 'VALIDATION_ERROR',
+      message: `Rota desconhecida: ${invalidas.join(', ')}.`,
+    }
+  }
+
+  return { ok: true, rotas }
 }
 
 /** ADMIN ou GESTOR (gestor fica restrito à própria filial nas regras abaixo). */
@@ -185,6 +224,11 @@ router.post('/', authMiddleware, adminOuGestor, async (req: AuthenticatedRequest
       return res.status(escopo.status).json({ error: escopo.error, message: escopo.message })
     }
 
+    const rotas = validarRotasPermitidas(req, data.rotasPermitidas)
+    if (!rotas.ok) {
+      return res.status(rotas.status).json({ error: rotas.error, message: rotas.message })
+    }
+
     const existing = await prisma.usuario.findUnique({ where: { email: data.email.toLowerCase() } })
     if (existing) {
       return res.status(409).json({ error: 'VALIDATION_ERROR', message: 'Email já cadastrado' })
@@ -209,7 +253,8 @@ router.post('/', authMiddleware, adminOuGestor, async (req: AuthenticatedRequest
         filial: data.filial,
         senhaHash,
         primeiroLogin: true,
-        escopoTipos: escopo.escopo
+        escopoTipos: escopo.escopo,
+        rotasPermitidas: rotas.rotas
       },
       select: selectUsuario
     })
@@ -267,6 +312,7 @@ router.patch('/:id', authMiddleware, adminOuGestor, async (req: AuthenticatedReq
       data.nivel = undefined
       data.filial = undefined
       data.escopoTipos = undefined
+      data.rotasPermitidas = undefined
     }
 
     // `undefined` deixa a coluna como está; `[]` limpa o escopo (volta a ver
@@ -280,6 +326,16 @@ router.patch('/:id', authMiddleware, adminOuGestor, async (req: AuthenticatedReq
       escopo = validado.escopo
     }
 
+    // Mesma regra do escopo: `undefined` não mexe, `[]` volta ao acesso normal.
+    let rotas: string[] | undefined
+    if (data.rotasPermitidas !== undefined) {
+      const validado = validarRotasPermitidas(req, data.rotasPermitidas)
+      if (!validado.ok) {
+        return res.status(validado.status).json({ error: validado.error, message: validado.message })
+      }
+      rotas = validado.rotas
+    }
+
     const updated = await prisma.usuario.update({
       where: { id: req.params.id },
       data: {
@@ -287,7 +343,8 @@ router.patch('/:id', authMiddleware, adminOuGestor, async (req: AuthenticatedReq
         nivel: data.nivel,
         filial: data.filial,
         status: data.status,
-        escopoTipos: escopo
+        escopoTipos: escopo,
+        rotasPermitidas: rotas
       },
       select: selectUsuario
     })

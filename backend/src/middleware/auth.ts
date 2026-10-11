@@ -19,6 +19,12 @@ export interface AuthenticatedRequest extends Request {
      * comportamento de sempre. Ver `services/escopo.ts`.
      */
     escopoTipos: string[]
+    /**
+     * Rotas da API que este usuário pode alcançar (`["chamados", ...]`).
+     * Lista vazia = sem restrição — o comportamento de sempre, decidido só
+     * pelo `nivel`. Ver `services/rotas.ts`.
+     */
+    rotasPermitidas: string[]
   }
 }
 
@@ -64,7 +70,8 @@ export async function attachUserRecord(req: AuthenticatedRequest, res: Response,
         filial: true,
         status: true,
         primeiroLogin: true,
-        escopoTipos: true
+        escopoTipos: true,
+        rotasPermitidas: true
       }
     })
 

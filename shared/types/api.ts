@@ -91,6 +91,13 @@ export const UserSchema = z.object({
    * sempre). Preenchida, a trava de unidade é substituída pela trava de tipo.
    */
   escopoTipos: z.array(z.string()).default([]),
+  /**
+   * Rotas da API que este usuário pode alcançar: ["chamados", ...]. Lista
+   * vazia = SEM RESTRIÇÃO (comportamento de sempre, decidido só pelo `nivel`).
+   * Preenchida, tudo fora da lista responde 403 no servidor — esconder o item
+   * de menu não é segurança.
+   */
+  rotasPermitidas: z.array(z.string()).default([]),
   /** Nome composto do grupo ("E.E. A / E.E. B") — mesma quando a unidade está sozinha. */
   grupo: z.string().optional(),
   papelUnidade: PapelUnidadeSchema.nullable().optional(),
@@ -112,13 +119,43 @@ export const EscopoTipoSchema = z
   .max(120)
   .refine((v) => v.includes('::'), { message: 'Formato esperado: categoria::tipo' })
 
+/**
+ * Domínios de rota que um usuário restrito pode alcançar. A lista é fechada de
+ * propósito: o backend recusa qualquer valor fora dela no `POST`/`PATCH
+ * /usuarios`, para não gravar um domínio que a API não conhece e o usuário ficar
+ * proibido de tudo sem ninguém saber por quê.
+ *
+ * A chave é a mesma no router do portal, no menu e no guard de rota.
+ */
+export const ROTAS_USUARIO = [
+  'chamados',
+  'equipamentos',
+  'dashboard',
+  'usuarios',
+  'escolas',
+  'inventario',
+  'tutoriais',
+  'encaminhamentos',
+  'notificacoes',
+  'formulario',
+  'feedback'
+] as const
+
+export const RotaUsuarioSchema = z.enum(ROTAS_USUARIO)
+
+export const RotasPermitidasSchema = z.array(RotaUsuarioSchema).max(ROTAS_USUARIO.length)
+
+export type RotaUsuario = z.infer<typeof RotaUsuarioSchema>
+
 export const UserCreateSchema = z.object({
   email: z.string().email(),
   nome: z.string().min(1),
   nivel: NivelSchema,
   filial: z.string().min(1),
   /** Só o ADMIN pode mandar; o Gestor tem o campo descartado no backend. */
-  escopoTipos: z.array(EscopoTipoSchema).max(100).optional()
+  escopoTipos: z.array(EscopoTipoSchema).max(100).optional(),
+  /** Vazio = acesso normal, decidido só pelo nível. Só o ADMIN define. */
+  rotasPermitidas: RotasPermitidasSchema.optional()
 })
 
 export type UserCreate = z.infer<typeof UserCreateSchema>
@@ -133,7 +170,8 @@ export const UserUpdateSchema = z.object({
   nivel: NivelSchema.optional(),
   filial: z.string().min(1).optional(),
   escopoTipos: z.array(EscopoTipoSchema).max(100).optional(),
-  status: StatusUsuarioSchema.optional()
+  status: StatusUsuarioSchema.optional(),
+  rotasPermitidas: RotasPermitidasSchema.optional()
 })
 
 export type UserUpdate = z.infer<typeof UserUpdateSchema>
