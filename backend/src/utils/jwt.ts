@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken'
 import { env } from '../config/env'
+import { generateSecureToken } from './tokens'
 import type { User, Nivel } from '@shared/api'
 
 export interface AccessTokenPayload {
@@ -15,6 +16,19 @@ export interface AccessTokenPayload {
 
 export interface RefreshTokenPayload {
   sub: string
+  /**
+   * Nonce único por token.
+   *
+   * Sem ele, dois refresh tokens do MESMO usuário assinados no MESMO segundo são
+   * byte a byte idênticos: o payload JWT só tem `sub` e `type`, e o `iat` que a
+   * biblioteca acrescenta tem precisão de segundo. Como `RefreshToken.tokenHash`
+   * é único, o segundo insert estoura P2002 e a resposta vira 409.
+   *
+   * Na prática: quem clicasse duas vezes em "Entrar", ou deixasse o navegador
+   * preencher o formulário e mandasse Enter, recebia "tokenHash já existe" em vez
+   * de entrar. O `jti` randomiza a assinatura e o token nunca repete.
+   */
+  jti: string
   iat: number
   exp: number
   type: 'refresh'
@@ -38,7 +52,10 @@ export function signAccessToken(user: User): string {
 export function signRefreshToken(userId: string): string {
   const payload: Omit<RefreshTokenPayload, 'iat' | 'exp'> = {
     sub: userId,
-    type: 'refresh'
+    type: 'refresh',
+    // Ver a nota do `jti` na interface acima: é o que impede dois tokens
+    // idênticos — e o 409 — quando dois logins caem no mesmo segundo.
+    jti: generateSecureToken(16)
   }
 
   return jwt.sign(payload, env.JWT_REFRESH_SECRET, {
