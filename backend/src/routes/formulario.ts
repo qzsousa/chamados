@@ -59,7 +59,9 @@ type CategoriaSeed = {
   perguntas: PerguntaSeed[]
 }
 
-const SEED_FORMULARIO: CategoriaSeed[] = [
+// Exportado para o teste da pergunta de senha (formulario.senha.test.ts): ele
+// precisa do seed para conferir que a pergunta existe e está condicionada.
+export const SEED_FORMULARIO: CategoriaSeed[] = [
   {
     id: 'seed-cat-rede',
     chave: 'rede',
@@ -219,6 +221,24 @@ const SEED_FORMULARIO: CategoriaSeed[] = [
         tipo: 'TEXTO_LONGO',
         obrigatoria: true,
         ordem: 5,
+        dependeDePerguntaId: 'seed-perg-sist-1',
+        dependeDeOpcao: 'PortalNet'
+      },
+      {
+        // Mesmo id da migration 20261012100000_add_pergunta_esqueci_senha: um
+        // banco novo (count === 0) nasce com a pergunta pelo seed, e um banco
+        // que já existia a recebe pela migration. Nos dois casos o id é o
+        // mesmo, então a pergunta é a mesma.
+        //
+        // Não usa 'seed-perg-sist-6'/'-7' de propósito: esses dois existem
+        // aqui mas nunca foram semeados em produção, e reaproveitar o número
+        // faria a migration colidir com uma pergunta de outro assunto.
+        id: 'seed-perg-sist-senha',
+        rotulo: 'Esqueci minha senha',
+        ajuda: 'Escreva abaixo o que aconteceu. A Matriz vai verificar e entregar uma senha provisória para você usar na entrada — e você vai trocá-la assim que conseguir.',
+        tipo: 'TEXTO_LONGO',
+        obrigatoria: true,
+        ordem: 20,
         dependeDePerguntaId: 'seed-perg-sist-1',
         dependeDeOpcao: 'PortalNet'
       },
