@@ -30,6 +30,15 @@ model Usuario {
   // técnico restrito de abrir /equipamentos, /usuarios etc. chamando a API
   // direto, e não só escondendo o item de menu no portal.
   rotasPermitidas  String[] @default([])
+  // A senha atual foi gerada pela Matriz e precisa ser trocada no primeiro
+  // login. FALSE = senha definitiva, o caso de sempre.
+  //
+  // É coluna separada de `primeiroLogin` porque as duas perguntas são
+  // diferentes: "esta pessoa já definiu senha?" (primeiroLogin) e "esta senha
+  // é definitiva?" (esta). Enquanto coubessem na mesma coluna, não haveria como
+  // representar senha temporária para quem já usa o sistema — que é o caso da
+  // pessoa que esqueceu a senha.
+  senhaProvisoria  Boolean  @default(false)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
