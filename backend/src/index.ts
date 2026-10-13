@@ -246,7 +246,20 @@ app.get('/api/formulario/publico', formularioPublicoHandler)
 // /api/dashboard fica ACIMA da parede porque reaplica o próprio par de auth
 // dentro de dashboard.ts. A trava de rota entra junto, senão um usuário
 // restrito a /chamados leria os KPIs por aqui.
-app.use('/api/dashboard', authMiddleware, attachUserRecord, exigirRotaPermitida, dashboardRoutes)
+app.use('/api/dashboard', (req, res, next) => {
+  const caminho = (req.originalUrl || req.url || '').split('?')[0]
+  if (caminho === '/api/dashboard/matriz') {
+    // Rota p?blica: ignora qualquer token enviado (evita 401 por token expirado).
+    return next()
+  }
+  authMiddleware(req as any, res, (err?: any) => {
+    if (err) return next(err)
+    attachUserRecord(req as any, res, (err2?: any) => {
+      if (err2) return next(err2)
+      exigirRotaPermitida(req as any, res, next)
+    })
+  })
+}, dashboardRoutes)
 app.use('/api', authMiddleware, attachUserRecord, exigirRotaPermitida)
 app.use('/api/usuarios', usuarioRoutes)
 app.use('/api/chamados', chamadoRoutes)
