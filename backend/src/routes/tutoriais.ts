@@ -153,6 +153,218 @@ export async function obterTutorialPublic(req: Request, res: Response) {
   }
 }
 
+// ============================================
+// INTERAÇÕES (curtidas e comentários)
+// ============================================
+
+interface ComentarioInteracao {
+  id: string
+  autorNome: string
+  texto: string
+  parentId: string | null
+  createdAt: Date
+  updatedAt: Date
+  curtidasCount: number
+  curtidoPorMim: boolean
+  respostas: ComentarioInteracao[]
+}
+
+function montarArvoreComentarios(
+  todos: Array<{
+    id: string
+    autorNome: string
+    texto: string
+    parentId: string | null
+    createdAt: Date
+    updatedAt: Date
+    _count: { curtidas: number }
+    curtidas: Array<{ id: string }>
+  }>,
+): ComentarioInteracao[] {
+  const mapa = new Map<string, ComentarioInteracao>()
+  for (const c of todos) {
+    mapa.set(c.id, {
+      id: c.id,
+      autorNome: c.autorNome,
+      texto: c.texto,
+      parentId: c.parentId,
+      createdAt: c.createdAt,
+      updatedAt: c.updatedAt,
+      curtidasCount: c._count.curtidas,
+      curtidoPorMim: c.curtidas.length > 0,
+      respostas: []
+    })
+  }
+  const raiz: ComentarioInteracao[] = []
+  for (const c of todos) {
+    const node = mapa.get(c.id)!
+    if (c.parentId && mapa.has(c.parentId)) {
+      mapa.get(c.parentId)!.respostas.push(node)
+    } else {
+      raiz.push(node)
+    }
+  }
+  return raiz
+}
+
+// Curtir / descurtir um TUTORIAL (toggle).
+router.post('/:id/curtir', async (req: AuthenticatedRequest, res) => {
+  try {
+    const tutorialId = req.params.id
+    const usuarioId = req.userRecord!.id
+    const existente = await prisma.tutorialCurtida.findUnique({
+      where: { tutorialId_usuarioId: { tutorialId, usuarioId } }
+    })
+    let curtido = false
+    if (existente) {
+      await prisma.tutorialCurtida.delete({ where: { id: existente.id } })
+      curtido = false
+    } else {
+      await prisma.tutorialCurtida.create({ data: { tutorialId, usuarioId } })
+      curtido = true
+    }
+    const total = await prisma.tutorialCurtida.count({ where: { tutorialId } })
+    return res.json({ curtido, total })
+  } catch (err) {
+    if ((err as any)?.code === 'P2025' || (err as any)?.code === 'P2003') {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'Tutorial não encontrado.' })
+    }
+    throw err
+  }
+})
+
+// Contagem de curtidas do tutorial e se o usuário atual curtiu.
+router.get('/:id/curtidas', async (req: AuthenticatedRequest, res) => {
+  try {
+    const tutorialId = req.params.id
+    const usuarioId = req.userRecord!.id
+    const total = await prisma.tutorialCurtida.count({ where: { tutorialId } })
+    const existente = await prisma.tutorialCurtida.findUnique({
+      where: { tutorialId_usuarioId: { tutorialId, usuarioId } }
+    })
+    return res.json({ total, curtido: Boolean(existente) })
+  } catch (err) {
+    throw err
+  }
+})
+
+// Listar comentários (árvore) de um tutorial.
+router.get('/:id/comentarios', async (req: AuthenticatedRequest, res) => {
+  try {
+    const tutorialId = req.params.id
+    const usuarioId = req.userRecord!.id
+    const todos = await prisma.tutorialComentario.findMany({
+      where: { tutorialId },
+      orderBy: { createdAt: 'asc' },
+      include: {
+        _count: { select: { curtidas: true } },
+        curtidas: { where: { usuarioId }, select: { id: true } }
+      }
+    })
+    return res.json({ data: montarArvoreComentarios(todos as any) })
+  } catch (err) {
+    throw err
+  }
+})
+
+// Criar comentário (ou resposta, se parentId informado).
+router.post('/:id/comentarios', async (req: AuthenticatedRequest, res) => {
+  try {
+    const tutorialId = req.params.id
+    const usuarioId = req.userRecord!.id
+    const autorNome = req.userRecord!.nome
+    const texto = typeof req.body?.texto === 'string' ? req.body.texto.trim() : ''
+    const parentId = typeof req.body?.parentId === 'string' && req.body.parentId ? req.body.parentId : null
+
+    if (!texto || texto.length > 2000) {
+      return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Comentário inválido.' })
+    }
+
+    const tutorial = await prisma.tutorial.findUnique({ where: { id: tutorialId } })
+    if (!tutorial) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'Tutorial não encontrado.' })
+    }
+
+    if (parentId) {
+      const pai = await prisma.tutorialComentario.findUnique({ where: { id: parentId } })
+      if (!pai || pai.tutorialId !== tutorialId) {
+        return res.status(404).json({ error: 'NOT_FOUND', message: 'Comentário pai não encontrado.' })
+      }
+    }
+
+    const comentario = await prisma.tutorialComentario.create({
+      data: { tutorialId, usuarioId, autorNome, texto, parentId },
+      include: {
+        _count: { select: { curtidas: true } },
+        curtidas: { where: { usuarioId }, select: { id: true } }
+      }
+    })
+
+    return res.status(201).json({
+      id: comentario.id,
+      autorNome: comentario.autorNome,
+      texto: comentario.texto,
+      parentId: comentario.parentId,
+      createdAt: comentario.createdAt,
+      updatedAt: comentario.updatedAt,
+      curtidasCount: comentario._count.curtidas,
+      curtidoPorMim: comentario.curtidas.length > 0,
+      respostas: []
+    })
+  } catch (err) {
+    throw err
+  }
+})
+
+// Curtir / descurtir um COMENTÁRIO (toggle).
+router.post('/comentarios/:id/curtir', async (req: AuthenticatedRequest, res) => {
+  try {
+    const comentarioId = req.params.id
+    const usuarioId = req.userRecord!.id
+    const existente = await prisma.tutorialComentarioCurtida.findUnique({
+      where: { comentarioId_usuarioId: { comentarioId, usuarioId } }
+    })
+    let curtido = false
+    if (existente) {
+      await prisma.tutorialComentarioCurtida.delete({ where: { id: existente.id } })
+      curtido = false
+    } else {
+      await prisma.tutorialComentarioCurtida.create({ data: { comentarioId, usuarioId } })
+      curtido = true
+    }
+    const total = await prisma.tutorialComentarioCurtida.count({ where: { comentarioId } })
+    return res.json({ curtido, total })
+  } catch (err) {
+    if ((err as any)?.code === 'P2003') {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'Comentário não encontrado.' })
+    }
+    throw err
+  }
+})
+
+// Excluir um comentário (dono ou ADMIN).
+router.delete('/comentarios/:id', async (req: AuthenticatedRequest, res) => {
+  try {
+    const id = req.params.id
+    const existente = await prisma.tutorialComentario.findUnique({ where: { id } })
+    if (!existente) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'Comentário não encontrado.' })
+    }
+    const ehDono = existente.usuarioId === req.userRecord!.id
+    const ehAdmin = req.userRecord!.nivel === 'ADMIN'
+    if (!ehDono && !ehAdmin) {
+      return res.status(403).json({ error: 'FORBIDDEN', message: 'Sem permissão.' })
+    }
+    await prisma.tutorialComentario.delete({ where: { id } })
+    return res.status(204).send()
+  } catch (err) {
+    if ((err as any)?.code === 'P2025') {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'Comentário não encontrado.' })
+    }
+    throw err
+  }
+})
+
 router.get('/', async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page as string) || 1)
   const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 12))
