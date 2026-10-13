@@ -44,6 +44,10 @@ model Usuario {
 
   refreshTokens     RefreshToken[]
   codigosAcesso     CodigoPrimeiroAcesso[]
+  // Interações do usuário nos tutoriais (curtidas e comentários).
+  tutorialCurtidas              TutorialCurtida[]
+  tutorialComentarios           TutorialComentario[]
+  tutorialComentarioCurtidas    TutorialComentarioCurtida[]
 
   @@index([email])
   @@index([filial])
@@ -324,6 +328,8 @@ model Tutorial {
   updatedAt     DateTime          @updatedAt
 
   anexos        TutorialAnexo[]
+  comentarios   TutorialComentario[]
+  curtidas      TutorialCurtida[]
 
   @@index([categoriaId])
   @@index([createdAt])
@@ -336,6 +342,60 @@ model TutorialAnexo {
   nome       String
   tipo       String
   url        String
+}
+
+// Curtida (like) de um tutorial por um usuário.
+// Um usuário pode curtir um tutorial no máximo uma vez (unique composto).
+model TutorialCurtida {
+  id         String   @id @default(cuid())
+  tutorialId String
+  tutorial   Tutorial @relation(fields: [tutorialId], references: [id], onDelete: Cascade)
+  usuarioId  String
+  usuario    Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([tutorialId, usuarioId])
+  @@index([tutorialId])
+  @@index([usuarioId])
+}
+
+// Comentário de um tutorial. Pode ser de nível superior (parentId null)
+// ou uma resposta a outro comentário (parentId aponta para o comentário pai).
+// Vários comentários por tutorial, vários por autor permitidos.
+model TutorialComentario {
+  id         String   @id @default(cuid())
+  tutorialId String
+  tutorial   Tutorial  @relation(fields: [tutorialId], references: [id], onDelete: Cascade)
+  usuarioId  String?
+  usuario    Usuario?  @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+  autorNome  String    // snapshot do nome no momento do comentário (histórico)
+  texto      String
+  parentId   String?
+  parent     TutorialComentario?  @relation("TutorialComentarioRespostas", fields: [parentId], references: [id], onDelete: Cascade)
+  respostas  TutorialComentario[] @relation("TutorialComentarioRespostas")
+  curtidas   TutorialComentarioCurtida[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([tutorialId])
+  @@index([parentId])
+  @@index([usuarioId])
+  @@index([createdAt])
+}
+
+// Curtida (like) de um comentário por um usuário.
+// Um usuário pode curtir um comentário no máximo uma vez.
+model TutorialComentarioCurtida {
+  id           String   @id @default(cuid())
+  comentarioId String
+  comentario   TutorialComentario @relation(fields: [comentarioId], references: [id], onDelete: Cascade)
+  usuarioId    String
+  usuario      Usuario            @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  createdAt    DateTime           @default(now())
+
+  @@unique([comentarioId, usuarioId])
+  @@index([comentarioId])
+  @@index([usuarioId])
 }
 
 // Perguntas da matriz (status "Aguardando escola") e respostas da escola.
