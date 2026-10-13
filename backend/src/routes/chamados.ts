@@ -610,15 +610,24 @@ async function validarFormularioDaAbertura(
 ): Promise<{
   bloqueio: { status: number; corpo: unknown } | null
   aceitas: RespostaAceita[]
+  /** Nome ATUAL da categoria, quando ela existe. `null` nos casos sem validação. */
+  nomeDaCategoria: string | null
 }> {
-  const semValidacao = { bloqueio: null, aceitas: [] as RespostaAceita[] }
-  if (!categoriaChave || respostas.length === 0) return semValidacao
+  const semValidacao = { bloqueio: null, aceitas: [] as RespostaAceita[], nomeDaCategoria: null as string | null }
+  if (!categoriaChave) return semValidacao
 
   // Categoria inexistente/desativada não invalida nada: é o caso de qualquer
   // portal desatualizado e de todo o histórico, e sem as perguntas não há
   // condição possível de checar.
   const categoria = await carregarCategoriaFormulario(categoriaChave)
   if (!categoria) return semValidacao
+
+  // Só as RESPOSTAS valem validação. Sem elas (portal antigo, ou histórico), o
+  // chamado passa sem conferência — mas o nome da categoria ainda é o do
+  // servidor, e é ele que serve para derivar o `tipo` mais abaixo.
+  if (respostas.length === 0) {
+    return { bloqueio: null, aceitas: [], nomeDaCategoria: categoria.nome ?? null }
+  }
 
   const avaliacao = avaliarRespostasFormulario(categoria, respostas, quantidadeAnexos)
 
@@ -635,7 +644,8 @@ async function validarFormularioDaAbertura(
           details: { perguntaId: avaliacao.encerra.perguntaId, pergunta: avaliacao.encerra.rotulo }
         }
       },
-      aceitas: []
+      aceitas: [],
+      nomeDaCategoria: categoria.nome ?? null
     }
   }
 
@@ -649,7 +659,8 @@ async function validarFormularioDaAbertura(
           details: { respostas: avaliacao.faltando.map((f) => `${f.rotulo} (${f.perguntaId})`) }
         }
       },
-      aceitas: []
+      aceitas: [],
+      nomeDaCategoria: categoria.nome ?? null
     }
   }
 
@@ -665,11 +676,47 @@ async function validarFormularioDaAbertura(
           details: { anexos: ['Envie ao menos um arquivo junto com o chamado'] }
         }
       },
-      aceitas: []
+      aceitas: [],
+      nomeDaCategoria: categoria.nome ?? null
     }
   }
 
-  return { bloqueio: null, aceitas: avaliacao.respostas }
+  return { bloqueio: null, aceitas: avaliacao.respostas, nomeDaCategoria: categoria.nome ?? null }
+}
+
+/**
+ * O `tipo` do chamado, derivado no servidor.
+ *
+ * O formato é `"<Nome da categoria> - <primeira resposta>"`, e ele não é
+ * decoração: `clauseDaCategoria` reconhece a categoria de um chamado antigo
+ * pelo `startsWith` do nome, e foi por causa desse prefixo que 79 chamados de
+ * "Sistemas" ficaram fora do filtro quando a categoria se chamava "Sistema".
+ *
+ * Derivar aqui, e não no navegador, resolve três coisas de uma vez:
+ *
+ * 1. **O texto deixa de ser confiança do cliente.** Mandando `tipo` à vontade,
+ *    qualquer um batia o chamado de outra categoria ou escrevia o que quisesse na
+ *    coluna que a triagem lê.
+ * 2. **A primeira resposta é a canônica.** Vem de `validacao.aceitas`, que já
+ *    trocou a opção que o navegador mandou pelo rótulo que existe no formulário.
+ *    O portal compõe com o que ele tem em mãos, que é o texto antes da validação.
+ * 3. **O nome vem do servidor.** Se o ADMIN renomear a categoria, o próximo
+ *    chamado já nasce com o nome novo — sem migration para consertar histórico.
+ *
+ * Sem categoria reconhecida, o `tipo` do cliente é preservado: é o contrato do
+ * cliente antigo e de qualquer integração que não manda `categoriaChave`.
+ */
+const LIMITE_TIPO = 100
+
+function derivarTipo(
+  nomeDaCategoria: string | null,
+  aceitas: RespostaAceita[],
+  tipoDoCliente: string
+): string {
+  if (!nomeDaCategoria) return tipoDoCliente
+  const primeira = aceitas.find((r) => !!r.resposta.trim())?.resposta.trim()
+  const base = primeira ? `${nomeDaCategoria} - ${primeira}` : nomeDaCategoria
+  return base.length > LIMITE_TIPO ? base.slice(0, LIMITE_TIPO) : base
 }
 
 export async function criarChamadoPublic(req: Request, res: Response) {
@@ -723,6 +770,10 @@ export async function criarChamadoPublic(req: Request, res: Response) {
       return res.status(validacao.bloqueio.status).json(validacao.bloqueio.corpo)
     }
 
+    // O `tipo` é do servidor sempre que a categoria é reconhecida. O que o
+    // portal mandou só entra quando não há categoria — cliente antigo.
+    const tipo = derivarTipo(validacao.nomeDaCategoria, validacao.aceitas, data.tipo)
+
     const tecnicoSetor = getTecnicoSetor(data.unidade)
     const inventarioStatus = await getInventarioStatus(data.unidade)
 
@@ -742,14 +793,13 @@ export async function criarChamadoPublic(req: Request, res: Response) {
       /** Vem só do anexo de pergunta: qual pergunta do formulário o arquivo respondeu. */
       perguntaId?: string
       pergunta?: string
-      /** Subpasta do bucket onde o arquivo foi gravado. */
+      /** Subpasta do bucket onde o arquivo foi gravado. Derivável do `path`. */
       pasta?: string
     }> = []
     for (const a of anexosTotais) {
-      // O anexo de uma pergunta vai para a subpasta da pergunta: o modelo
-      // ChamadoAnexo não tem coluna para perguntaId (criá-la é migration, fora
-      // do escopo desta task), então o vínculo fica no path interno do bucket,
-      // que é de onde a remoção futura lê. A URL pública não muda.
+      // O anexo de uma pergunta vai para a subpasta da pergunta: mesmo que o
+      // vínculo também exista como coluna, a subpasta é o que a remoção futura
+      // lê do bucket, e a URL pública não muda.
       const pasta = a.perguntaId
         ? `${protocolo}/p-${a.perguntaId.replace(/[^\w-]/g, '')}`
         : protocolo
@@ -787,7 +837,7 @@ export async function criarChamadoPublic(req: Request, res: Response) {
             unidade: data.unidade,
             solicitante: data.solicitante,
             funcao: data.funcao,
-            tipo: data.tipo,
+            tipo,
             descricao: data.descricao,
             urgencia: data.urgencia,
             // `anexoUrl` continua sendo o PRIMEIRO arquivo: as telas antigas e o
@@ -801,7 +851,20 @@ export async function criarChamadoPublic(req: Request, res: Response) {
   // "formulário em branco".
   formularioRespostas: formularioRespostas ?? Prisma.DbNull,
             inventarioStatus: inventarioStatus as any,
-            anexos: { create: salvos },
+            // Só as colunas de verdade entram no create. `pasta` é derivável do
+            // `path` e não é campo do modelo: mandá-lo junto fazia o Prisma
+            // rejeitar a chamada inteira (`Unknown arg`), o que derrubava TODO
+            // chamado com anexo — os testes não pegavam porque o prisma é
+            // mockado e a validação do Prisma é em tempo de execução.
+            anexos: {
+              create: salvos.map(({ nome, tipo, url, path, perguntaId, pergunta }) => ({
+                nome,
+                tipo,
+                url,
+                path,
+                ...(perguntaId ? { perguntaId, pergunta: pergunta ?? null } : {})
+              }))
+            },
             historico: `Chamado criado em ${fmtHoraLocal(new Date())}`
           },
           include: { anexos: { select: { id: true, nome: true, tipo: true, url: true } } }

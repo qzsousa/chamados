@@ -138,6 +138,13 @@ model ChamadoAnexo {
   id        String   @id @default(cuid())
   chamadoId String
   chamado   Chamado  @relation(fields: [chamadoId], references: [id], onDelete: Cascade)
+  /// De qual pergunta do formulário o arquivo veio. Nulo no anexo geral e no
+  /// caminho legado: nem todo anexo responde a uma pergunta.
+  perguntaId String?
+  /// Cópia do rótulo da pergunta no momento da abertura. A pergunta pode ser
+  /// renomeada ou excluída no formulário depois; o chamado precisa continuar
+  /// dizendo de onde veio o arquivo.
+  pergunta   String?
   nome      String
   tipo      String?
   url       String
@@ -406,6 +413,14 @@ model FormularioPergunta {
   obrigatoria         Boolean             @default(true)
   ordem               Int                 @default(0)
   ativa               Boolean             @default(true)
+  /// Condições de exibição (OU): `[{ perguntaId, opcao }]`. Vazio/NULL = a
+  /// pergunta sempre aparece. Várias condições formam uma OU — aparece quando
+  /// QUALQUER uma for satisfeita. `opcao` vazia = qualquer resposta do pai.
+  ///
+  /// `dependeDePerguntaId`/`dependeDeOpcao` continuam em paralelo: o par legado
+  /// é o espelho da PRIMEIRA condição, preenchido de volta na escrita, para que
+  /// um portal antigo que só conhece os dois campos não quebre o formulário.
+  condicoes           Json?
   dependeDePerguntaId String?
   dependeDeOpcao      String?
   opcoes              Json?

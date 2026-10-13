@@ -393,4 +393,78 @@ describe('Travas de anexo do chamado público', () => {
       expect(semPergunta).not.toHaveProperty('perguntaId')
     })
   })
+
+  /**
+   * O que o Prisma realmente grava.
+   *
+   * A rota montava um objeto por anexo com `pasta` e mandava o objeto inteiro no
+   * `anexos.create`. `pasta` não é coluna de `ChamadoAnexo`, e o Prisma valida o
+   * payload em TEMPO DE EXECUÇÃO — com o prisma mockado o `Unknown arg` nunca
+   * acontecia e os 431 testes passavam. Em produção, qualquer chamado com anexo
+   * morria com PrismaClientValidationError, inclusive o anexo comum (a `pasta` é
+   * preenchida sempre).
+   *
+   * O guarda aqui é propositalmente raso: não interessa o formato do payload, só
+   * que nenhum campo de fora do modelo escape para dentro.
+   */
+  describe('payload enviado ao Prisma', () => {
+    const COLUNAS_DE_CHAMADO_ANEXO = ['id', 'nome', 'tipo', 'url', 'path', 'criadoEm', 'perguntaId', 'pergunta', 'chamadoId']
+
+    function anexosEnviadosAoPrisma(): any[] {
+      const arg = vi.mocked(prisma.chamado.create).mock.calls[0]?.[0] as any
+      return arg?.data?.anexos?.create ?? []
+    }
+
+    it('anexo comum não manda campo fora do modelo', async () => {
+      const res = await request(app).post('/api/chamados').send({
+        ...PAYLOAD_BASE,
+        anexos: [{ nome: 'foto.jpg', tipo: 'image/jpeg', base64: base64De(1024) }]
+      })
+
+      expect(res.status).toBe(201)
+      const enviados = anexosEnviadosAoPrisma()
+      expect(enviados).toHaveLength(1)
+      for (const campo of Object.keys(enviados[0])) {
+        expect(COLUNAS_DE_CHAMADO_ANEXO).toContain(campo)
+      }
+      // `pasta` é derivável do `path`: guardar as duas coisas é o que quebrava.
+      expect(enviados[0]).not.toHaveProperty('pasta')
+    })
+
+    it('anexo de pergunta grava o vínculo e segue sem campo fora do modelo', async () => {
+      const res = await request(app).post('/api/chamados').send({
+        ...PAYLOAD_BASE,
+        anexosPergunta: [
+          { perguntaId: 'p9', pergunta: 'Print da tela', nome: 'print.png', tipo: 'image/png', base64: base64De(1024) }
+        ]
+      })
+
+      expect(res.status).toBe(201)
+      const enviados = anexosEnviadosAoPrisma()
+      expect(enviados).toHaveLength(1)
+      for (const campo of Object.keys(enviados[0])) {
+        expect(COLUNAS_DE_CHAMADO_ANEXO).toContain(campo)
+      }
+      expect(enviados[0]).not.toHaveProperty('pasta')
+      expect(enviados[0].perguntaId).toBe('p9')
+      expect(enviados[0].pergunta).toBe('Print da tela')
+    })
+
+    it('caminho legado também não manda campo fora do modelo', async () => {
+      const res = await request(app).post('/api/chamados').send({
+        ...PAYLOAD_BASE,
+        anexoNome: 'foto.png',
+        anexoTipo: 'image/png',
+        anexoBase64: base64De(1024)
+      })
+
+      expect(res.status).toBe(201)
+      const enviados = anexosEnviadosAoPrisma()
+      expect(enviados).toHaveLength(1)
+      for (const campo of Object.keys(enviados[0])) {
+        expect(COLUNAS_DE_CHAMADO_ANEXO).toContain(campo)
+      }
+      expect(enviados[0]).not.toHaveProperty('pasta')
+    })
+  })
 })

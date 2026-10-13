@@ -1,4 +1,4 @@
-﻿import { z } from 'zod'
+import { z } from 'zod'
 
 // ============================================
 // ENUMS
@@ -809,23 +809,63 @@ export const FormularioOpcaoSchema = z.object({
 
 export type FormularioOpcao = z.infer<typeof FormularioOpcaoSchema>
 
+/**
+ * Uma condição de exibição: a pergunta aparece quando a resposta de
+ * `perguntaId` for `opcao`. `opcao` vazia significa "qualquer resposta do pai".
+ *
+ * Várias condições formam uma OU — a pergunta aparece quando QUALQUER uma for
+ * satisfeita. É o que permite "abrir esta pergunta se for Queda total OU
+ * Queda de Wi-Fi", coisa que o par legado não expressava.
+ */
+export const FormularioCondicaoSchema = z.object({
+  perguntaId: z.string().min(1, 'Condição sem pergunta de origem.'),
+  opcao: z.string().default('')
+})
+
+export type FormularioCondicao = z.infer<typeof FormularioCondicaoSchema>
+
+/**
+ * Tipos de resposta de uma pergunta do formulário público.
+ *
+ * `ESCOLA` e `ARQUIVO` não aceitam `opcoes`: a lista de escolas vem do catálogo
+ * (`/escolas/nomes`) e o anexo é um upload — não faz sentido configurar os dois
+ * como opções fixas. O portal já oferece os cinco no admin; se este enum não
+ * acompanhar, criar uma pergunta desses volta 400 e a tela mente que gravou.
+ */
+export const TIPOS_PERGUNTA_FORMULARIO = ['OPCOES', 'TEXTO', 'TEXTO_LONGO', 'ESCOLA', 'ARQUIVO'] as const
+
+export type TipoPerguntaFormulario = (typeof TIPOS_PERGUNTA_FORMULARIO)[number]
+
 function refinarFormularioPergunta(
   val: {
-    tipo?: 'OPCOES' | 'TEXTO' | 'TEXTO_LONGO'
+    tipo?: TipoPerguntaFormulario
     opcoes?: FormularioOpcao[]
     dependeDePerguntaId?: string | null
     dependeDeOpcao?: string | null
+    condicoes?: FormularioCondicao[]
   },
   ctx: z.RefinementCtx
 ) {
   if (val.tipo === 'OPCOES' && (!val.opcoes || val.opcoes.length === 0)) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['opcoes'], message: 'Pergunta do tipo OPCOES exige ao menos uma opção.' })
   }
-  if ((val.tipo === 'TEXTO' || val.tipo === 'TEXTO_LONGO') && val.opcoes && val.opcoes.length > 0) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['opcoes'], message: 'Pergunta de texto não aceita opções.' })
+  if (val.tipo && val.tipo !== 'OPCOES' && val.opcoes && val.opcoes.length > 0) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['opcoes'], message: 'Pergunta que não é de opções não aceita opções.' })
   }
   if (val.dependeDeOpcao != null && val.dependeDeOpcao !== '' && (val.dependeDePerguntaId == null || val.dependeDePerguntaId === '')) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['dependeDePerguntaId'], message: 'dependeDeOpcao exige dependeDePerguntaId.' })
+  }
+  // A mesma condição escrita duas vezes é a mesma condição: só confunde quem lê o
+  // formulário na tela. Comparado por par pergunta+opção, e não por posição.
+  if (val.condicoes) {
+    const vistas = new Set<string>()
+    for (const [i, c] of val.condicoes.entries()) {
+      const chave = `${c.perguntaId}::${c.opcao ?? ''}`
+      if (vistas.has(chave)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['condicoes', i], message: 'Condição repetida.' })
+      }
+      vistas.add(chave)
+    }
   }
 }
 
@@ -834,10 +874,11 @@ export const CriarFormularioPerguntaSchema = z
     categoriaId: z.string().min(1),
     rotulo: z.string().min(1).max(300),
     ajuda: z.string().max(500).optional(),
-    tipo: z.enum(['OPCOES', 'TEXTO', 'TEXTO_LONGO']),
+    tipo: z.enum(TIPOS_PERGUNTA_FORMULARIO),
     obrigatoria: z.boolean().default(true),
     ordem: z.number().int().default(0),
     ativa: z.boolean().default(true),
+    condicoes: z.array(FormularioCondicaoSchema).max(10).optional(),
     dependeDePerguntaId: z.string().nullish(),
     dependeDeOpcao: z.string().nullish(),
     opcoes: z.array(FormularioOpcaoSchema).optional()
@@ -851,10 +892,11 @@ export const AtualizarFormularioPerguntaSchema = z
     categoriaId: z.string().min(1).optional(),
     rotulo: z.string().min(1).max(300).optional(),
     ajuda: z.string().max(500).optional(),
-    tipo: z.enum(['OPCOES', 'TEXTO', 'TEXTO_LONGO']).optional(),
+    tipo: z.enum(TIPOS_PERGUNTA_FORMULARIO).optional(),
     obrigatoria: z.boolean().optional(),
     ordem: z.number().int().optional(),
     ativa: z.boolean().optional(),
+    condicoes: z.array(FormularioCondicaoSchema).max(10).optional(),
     dependeDePerguntaId: z.string().nullish(),
     dependeDeOpcao: z.string().nullish(),
     opcoes: z.array(FormularioOpcaoSchema).optional()

@@ -18,6 +18,7 @@ vi.mock('../config/prisma', () => ({
     },
     formularioPergunta: {
       findUnique: vi.fn(),
+      findMany: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
       delete: vi.fn()
@@ -348,6 +349,33 @@ describe('Formulário Routes', () => {
       expect(prisma.formularioPergunta.create).not.toHaveBeenCalled()
     })
 
+    /**
+     * O portal oferece CINCO tipos no admin (inclusive "Escola" e "Anexo"); o
+     * enum do contrato aceitava três. Criar uma pergunta de anexo voltava 400 e a
+     * tela mostrava sucesso — e sem pergunta de anexo o `anexosPergunta`, que o
+     * backend já implementava, nunca era usado por ninguém.
+     */
+    it.each(['ESCOLA', 'ARQUIVO'])('should accept %s, que o portal oferece no admin', async (tipo) => {
+      vi.mocked(prisma.formularioCategoria.findUnique).mockResolvedValue(categoriaMock as any)
+      vi.mocked(prisma.formularioPergunta.create).mockResolvedValue({ ...perguntaMock, tipo } as any)
+
+      const res = await request(app)
+        .post('/api/formulario/perguntas')
+        .send({ categoriaId: 'cat-1', rotulo: 'Anexo do erro', tipo })
+
+      expect(res.status).toBe(201)
+      expect(vi.mocked(prisma.formularioPergunta.create).mock.calls[0][0].data).toMatchObject({ tipo })
+    })
+
+    it('should return 400 for ARQUIVO with opcoes', async () => {
+      const res = await request(app)
+        .post('/api/formulario/perguntas')
+        .send({ categoriaId: 'cat-1', rotulo: 'Anexo', tipo: 'ARQUIVO', opcoes: [{ rotulo: 'x' }] })
+
+      expect(res.status).toBe(400)
+      expect(res.body.error).toBe('VALIDATION_ERROR')
+    })
+
     it('should create pergunta with valid dependency in same categoria', async () => {
       vi.mocked(prisma.formularioCategoria.findUnique).mockResolvedValue(categoriaMock as any)
       vi.mocked(prisma.formularioPergunta.findUnique).mockResolvedValue(perguntaMock as any)
@@ -416,6 +444,140 @@ describe('Formulário Routes', () => {
       const res = await request(app).delete('/api/formulario/perguntas/inexistente')
 
       expect(res.status).toBe(404)
+    })
+  })
+
+  /**
+   * `condicoes` no contrato do admin.
+   *
+   * O portal grava a lista inteira (semântica de OU) e o par legado é só o
+   * espelho da PRIMEIRA condição — é o que mantém funcionando um portal velho
+   * que só conhece os dois campos.
+   */
+  describe('condicoes', () => {
+    it('grava a lista inteira e espelha a primeira condição no par legado', async () => {
+      vi.mocked(prisma.formularioCategoria.findUnique).mockResolvedValue(categoriaMock as any)
+      vi.mocked(prisma.formularioPergunta.findMany).mockResolvedValue([
+        { id: 'pai', categoriaId: 'cat-1' }
+      ] as any)
+      vi.mocked(prisma.formularioPergunta.create).mockResolvedValue(perguntaMock as any)
+
+      const res = await request(app)
+        .post('/api/formulario/perguntas')
+        .send({
+          categoriaId: 'cat-1',
+          rotulo: 'A escola tem energia?',
+          tipo: 'OPCOES',
+          opcoes: [{ rotulo: 'Sim' }, { rotulo: 'Não' }],
+          condicoes: [
+            { perguntaId: 'pai', opcao: 'Queda total' },
+            { perguntaId: 'pai', opcao: 'Wi-Fi instável' }
+          ]
+        })
+
+      expect(res.status).toBe(201)
+      expect(vi.mocked(prisma.formularioPergunta.create).mock.calls[0][0].data).toMatchObject({
+        condicoes: [
+          { perguntaId: 'pai', opcao: 'Queda total' },
+          { perguntaId: 'pai', opcao: 'Wi-Fi instável' }
+        ],
+        dependeDePerguntaId: 'pai',
+        dependeDeOpcao: 'Queda total'
+      })
+    })
+
+    it('recusa condição apontando para pergunta de outra categoria', async () => {
+      vi.mocked(prisma.formularioCategoria.findUnique).mockResolvedValue(categoriaMock as any)
+      vi.mocked(prisma.formularioPergunta.findMany).mockResolvedValue([
+        { id: 'pai', categoriaId: 'cat-2' }
+      ] as any)
+
+      const res = await request(app)
+        .post('/api/formulario/perguntas')
+        .send({
+          categoriaId: 'cat-1',
+          rotulo: 'Filha',
+          tipo: 'TEXTO',
+          condicoes: [{ perguntaId: 'pai', opcao: 'Queda total' }]
+        })
+
+      expect(res.status).toBe(400)
+      expect(res.body.message).toContain('mesma categoria')
+      expect(prisma.formularioPergunta.create).not.toHaveBeenCalled()
+    })
+
+    it('recusa a mesma condição escrita duas vezes', async () => {
+      const res = await request(app)
+        .post('/api/formulario/perguntas')
+        .send({
+          categoriaId: 'cat-1',
+          rotulo: 'Filha',
+          tipo: 'TEXTO',
+          condicoes: [
+            { perguntaId: 'pai', opcao: 'Queda total' },
+            { perguntaId: 'pai', opcao: 'Queda total' }
+          ]
+        })
+
+      expect(res.status).toBe(400)
+      expect(JSON.stringify(res.body.details)).toContain('Condição repetida')
+    })
+
+    it('aceita "qualquer resposta" como opção vazia', async () => {
+      vi.mocked(prisma.formularioCategoria.findUnique).mockResolvedValue(categoriaMock as any)
+      vi.mocked(prisma.formularioPergunta.findMany).mockResolvedValue([
+        { id: 'pai', categoriaId: 'cat-1' }
+      ] as any)
+      vi.mocked(prisma.formularioPergunta.create).mockResolvedValue(perguntaMock as any)
+
+      const res = await request(app)
+        .post('/api/formulario/perguntas')
+        .send({
+          categoriaId: 'cat-1',
+          rotulo: 'Filha',
+          tipo: 'TEXTO',
+          condicoes: [{ perguntaId: 'pai', opcao: '' }]
+        })
+
+      expect(res.status).toBe(201)
+      // O legado representa "qualquer resposta" com `dependeDeOpcao` vazio.
+      expect(vi.mocked(prisma.formularioPergunta.create).mock.calls[0][0].data).toMatchObject({
+        dependeDePerguntaId: 'pai',
+        dependeDeOpcao: null
+      })
+    })
+
+    it('PATCH com lista vazia limpa a condição e o par legado', async () => {
+      vi.mocked(prisma.formularioPergunta.findUnique).mockResolvedValue(perguntaMock as any)
+      vi.mocked(prisma.formularioPergunta.update).mockResolvedValue(perguntaMock as any)
+
+      const res = await request(app)
+        .patch('/api/formulario/perguntas/perg-1')
+        .send({ condicoes: [] })
+
+      expect(res.status).toBe(200)
+      const data = vi.mocked(prisma.formularioPergunta.update).mock.calls[0][0].data as any
+      expect(data.condicoes).toEqual([])
+      // Sem condição não sobra par legado apontando para pai nenhum.
+      expect(data).not.toHaveProperty('dependeDePerguntaId')
+    })
+
+    it('PATCH valida a condição contra a categoria da PRÓPRIA pergunta, não a do corpo', async () => {
+      // O PATCH manda só as condições; a categoria veio do registro.
+      vi.mocked(prisma.formularioPergunta.findUnique).mockResolvedValue({
+        ...perguntaMock,
+        categoriaId: 'cat-9'
+      } as any)
+      vi.mocked(prisma.formularioPergunta.findMany).mockResolvedValue([
+        { id: 'pai', categoriaId: 'cat-9' }
+      ] as any)
+      vi.mocked(prisma.formularioPergunta.update).mockResolvedValue(perguntaMock as any)
+
+      const res = await request(app)
+        .patch('/api/formulario/perguntas/perg-1')
+        .send({ condicoes: [{ perguntaId: 'pai', opcao: '' }] })
+
+      expect(res.status).toBe(200)
     })
   })
 })

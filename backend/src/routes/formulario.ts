@@ -41,7 +41,7 @@ type PerguntaSeed = {
   id: string
   rotulo: string
   ajuda?: string
-  tipo: 'OPCOES' | 'TEXTO' | 'TEXTO_LONGO'
+  tipo: 'OPCOES' | 'TEXTO' | 'TEXTO_LONGO' | 'ESCOLA' | 'ARQUIVO'
   obrigatoria: boolean
   ordem: number
   dependeDePerguntaId?: string
@@ -448,12 +448,15 @@ export type RespostaAceita = {
 /** O que a categoria precisa expor para as condições serem avaliadas. */
 export type CategoriaAvaliavel = {
   chave: string
+  /** Nome de exibição. Vem junto porque o `tipo` do chamado é derivado dele. */
+  nome?: string | null
   perguntas: Array<{
     id: string
     rotulo: string
     tipo: string
     obrigatoria: boolean
     ativa?: boolean
+    condicoes?: unknown
     dependeDePerguntaId?: string | null
     dependeDeOpcao?: string | null
     opcoes?: unknown
@@ -513,6 +516,47 @@ function lerOpcoes(opcoes: unknown): FormularioOpcao[] {
  * outra pergunta condicional) com memoização e teto de profundidade — uma
  * dependência apontando para si mesma viraria recursão infinita.
  */
+/**
+ * Condições de exibição de uma pergunta, já normalizadas.
+ *
+ * `condicoes` é JSONB e pode ter vindo de três jeitos — ausente (pergunta que
+ * nunca foi condicionada), lista vazia (`[]` = "sem condição") ou lista de
+ * objetos. Devolve `null` quando não há NENHUMA condição, para o chamador cair
+ * no par legado; lista vazia é um caso diferente e significa "sempre exibir".
+ *
+ * Item inválido (sem `perguntaId` utilizável) é descartado em vez de derrubar a
+ * categoria inteira: uma linha de formulário com JSON corrompido não pode
+ * esconder todas as outras perguntas da escola.
+ */
+function condicoesDe(p: { condicoes?: unknown }): Array<{ perguntaId: string; opcao: string }> | null {
+  const bruto = p.condicoes
+  if (bruto === null || bruto === undefined) return null
+  if (!Array.isArray(bruto)) return null
+
+  const validas: Array<{ perguntaId: string; opcao: string }> = []
+  for (const item of bruto) {
+    if (!item || typeof item !== 'object') continue
+    const o = item as { perguntaId?: unknown; opcao?: unknown }
+    if (typeof o.perguntaId !== 'string' || !o.perguntaId.trim()) continue
+    validas.push({
+      perguntaId: o.perguntaId.trim(),
+      opcao: typeof o.opcao === 'string' ? o.opcao.trim() : ''
+    })
+  }
+  return validas
+}
+
+/**
+ * Quais perguntas aparecem para as respostas dadas.
+ *
+ * A visibilidade é resolvida em cadeia (uma condição pode apontar para outra
+ * pergunta condicional) com memoização e teto de profundidade — uma dependência
+ * apontando para si mesma viraria recursão infinita.
+ *
+ * Semântica de `condicoes`: OU. A pergunta aparece quando QUALQUER condição é
+ * satisfeita; `opcao` vazia significa "qualquer resposta do pai". Lista vazia é
+ * "sem condição". Sem a coluna, vale o par legado de uma condição só.
+ */
 function perguntasVisiveis(
   perguntas: CategoriaAvaliavel['perguntas'],
   respostasPorId: Map<string, string>
@@ -536,21 +580,39 @@ function perguntasVisiveis(
     const p = porId.get(id)
     if (!p || p.ativa === false) return guardar(false)
 
-    if (!p.dependeDePerguntaId) return guardar(true)
+    const multiplas = condicoesDe(p)
 
-    const pai = porId.get(p.dependeDePerguntaId)
-    // Condição apontando para pergunta de outra categoria (ou removida): a
-    // condição não pode ser satisfeita, então a pergunta não aparece.
-    if (!pai) return guardar(false)
+    // Nenhuma condição: aparece sempre.
+    if (multiplas && multiplas.length === 0) return guardar(true)
+
+    const condicoes: Array<{ perguntaId: string; opcao: string }> =
+      multiplas ??
+      (p.dependeDePerguntaId
+        ? [{ perguntaId: p.dependeDePerguntaId, opcao: (p.dependeDeOpcao ?? '').trim() }]
+        : [])
+
+    if (condicoes.length === 0) return guardar(true)
 
     emCurso.add(id)
     try {
-      const respondidaDoPai = respostasPorId.get(pai.id)
-      const paiRespondido = visivel(pai.id, profundidade + 1) && !!respondidaDoPai
-      // `dependeDeOpcao` = só aparece com ESTA resposta. Sem `dependeDeOpcao`
-      // (só `dependeDePerguntaId`) = aparece com qualquer resposta do pai.
-      const ok = paiRespondido && (!p.dependeDeOpcao || mesmoRotulo(respondidaDoPai!, p.dependeDeOpcao))
-      return guardar(ok)
+      for (const cond of condicoes) {
+        // Condição apontando para pergunta de outra categoria (ou removida): essa
+        // condição não pode ser satisfeita, mas as outras ainda podem.
+        const pai = porId.get(cond.perguntaId)
+        if (!pai) continue
+
+        const respondidaDoPai = respostasPorId.get(pai.id)
+        // O pai precisa ter APARECIDO e ter sido respondido: responder pergunta
+        // que estava escondida não abre filho nenhum.
+        if (!visivel(pai.id, profundidade + 1)) continue
+        if (!respondidaDoPai) continue
+
+        // `opcao` vazia = aparece com qualquer resposta do pai.
+        if (cond.opcao && !mesmoRotulo(respondidaDoPai, cond.opcao)) continue
+
+        return guardar(true)
+      }
+      return guardar(false)
     } finally {
       emCurso.delete(id)
     }
@@ -754,6 +816,51 @@ router.delete('/categorias/:id', requireRole('ADMIN'), async (req, res) => {
 // ADMIN — PERGUNTAS
 // ============================================
 
+/**
+ * Guarda as condições depois de checar que todas apontam para perguntas da MESMA
+ * categoria.
+ *
+ * Devolve `null` quando há condição apontando para fora — a mensagem de erro já
+ * está no 400 e o chamador só precisa saber que não deve gravar.
+ */
+async function validarCondicoes(
+  categoriaId: string,
+  condicoes: Array<{ perguntaId: string; opcao: string }> | undefined
+): Promise<boolean> {
+  if (!condicoes || condicoes.length === 0) return true
+
+  // Uma consulta só, mesmo com dez condições: o erro é o mesmo para qualquer uma
+  // delas e o nome da categoria é o mesmo.
+  const ids = [...new Set(condicoes.map((c) => c.perguntaId))]
+  const existentes = await prisma.formularioPergunta.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, categoriaId: true }
+  })
+  const dentroDaCategoria = new Set(
+    existentes.filter((p) => p.categoriaId === categoriaId).map((p) => p.id)
+  )
+  return condicoes.every((c) => dentroDaCategoria.has(c.perguntaId))
+}
+
+/**
+ * O par legado é o espelho da PRIMEIRA condição.
+ *
+ * Mantê-lo preenchido é o que permite a um portal antigo — que só conhece
+ * `dependeDePerguntaId`/`dependeDeOpcao` — continuar abrindo o mesmo formulário
+ * depois que alguém cadastrou a segunda condição. Sem isso, a pergunta passaria
+ * a aparecer sempre para quem só sabe ler o par.
+ */
+function espelhoDoLegado(condicoes: Array<{ perguntaId: string; opcao: string }> | undefined) {
+  if (!condicoes || condicoes.length === 0) return {}
+  const [primeira] = condicoes
+  return {
+    dependeDePerguntaId: primeira.perguntaId,
+    // Sem opção é "qualquer resposta do pai", que o legado representa com
+    // `dependeDeOpcao` vazio — e é assim que a migração converteu também.
+    dependeDeOpcao: primeira.opcao || null
+  }
+}
+
 router.post('/perguntas', requireRole('ADMIN'), async (req, res) => {
   try {
     const data = CriarFormularioPerguntaSchema.parse(req.body)
@@ -763,6 +870,11 @@ router.post('/perguntas', requireRole('ADMIN'), async (req, res) => {
       return res.status(404).json({ error: 'NOT_FOUND', message: 'Categoria não encontrada.' })
     }
 
+    const okCondicoes = await validarCondicoes(data.categoriaId, data.condicoes)
+    if (!okCondicoes) {
+      return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Toda pergunta de origem de uma condição deve pertencer à mesma categoria.' })
+    }
+
     if (data.dependeDePerguntaId) {
       const pai = await prisma.formularioPergunta.findUnique({ where: { id: data.dependeDePerguntaId } })
       if (!pai || pai.categoriaId !== data.categoriaId) {
@@ -770,7 +882,9 @@ router.post('/perguntas', requireRole('ADMIN'), async (req, res) => {
       }
     }
 
-    const pergunta = await prisma.formularioPergunta.create({ data })
+    const pergunta = await prisma.formularioPergunta.create({
+      data: { ...data, ...espelhoDoLegado(data.condicoes) }
+    })
     return res.status(201).json(pergunta)
   } catch (err) {
     if (isZodError(err)) {
@@ -783,9 +897,23 @@ router.post('/perguntas', requireRole('ADMIN'), async (req, res) => {
 router.patch('/perguntas/:id', requireRole('ADMIN'), async (req, res) => {
   try {
     const data = AtualizarFormularioPerguntaSchema.parse(req.body)
+
+    // A categoria da pergunta é a referência das condições — não a que veio no
+    // corpo, que pode nem estar presente num PATCH de só um campo.
+    const atual = await prisma.formularioPergunta.findUnique({ where: { id: req.params.id } })
+    if (!atual) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'Pergunta não encontrada.' })
+    }
+    const categoriaId = data.categoriaId ?? atual.categoriaId
+
+    const okCondicoes = await validarCondicoes(categoriaId, data.condicoes)
+    if (!okCondicoes) {
+      return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Toda pergunta de origem de uma condição deve pertencer à mesma categoria.' })
+    }
+
     const pergunta = await prisma.formularioPergunta.update({
       where: { id: req.params.id },
-      data
+      data: { ...data, ...espelhoDoLegado(data.condicoes) }
     })
     return res.json(pergunta)
   } catch (err) {

@@ -82,6 +82,7 @@ vi.mock('../middleware/auth', () => {
  */
 const REDE: CategoriaAvaliavel = {
   chave: 'rede',
+  nome: 'Rede',
   perguntas: [
     {
       id: 'p1',
@@ -249,6 +250,152 @@ it('descarta resposta de pergunta que não apareceu para esta escola', () => {
 })
 
 // ============================================
+// CONDIÇÕES MÚLTIPLAS (`condicoes`, semântica de OU)
+// ============================================
+
+describe('avaliarRespostasFormulario — condicoes com OU', () => {
+  /** Pai com três opções e um filho que abre em DUAS delas. */
+  const DUAS_OPCOES: CategoriaAvaliavel = {
+    chave: 'x',
+    perguntas: [
+      {
+        id: 'pai',
+        rotulo: 'Qual é o problema?',
+        tipo: 'OPCOES',
+        obrigatoria: true,
+        opcoes: [{ rotulo: 'Lentidão' }, { rotulo: 'Queda total' }, { rotulo: 'Wi-Fi instável' }]
+      },
+      {
+        id: 'filho',
+        rotulo: 'A escola está sem energia?',
+        tipo: 'OPCOES',
+        obrigatoria: true,
+        condicoes: [
+          { perguntaId: 'pai', opcao: 'Queda total' },
+          { perguntaId: 'pai', opcao: 'Wi-Fi instável' }
+        ],
+        opcoes: [{ rotulo: 'Sim' }, { rotulo: 'Não' }]
+      }
+    ]
+  }
+
+  it('abre o filho quando QUALQUER uma das condições é satisfeita (primeira)', () => {
+    const r = avaliarRespostasFormulario(DUAS_OPCOES, [{ perguntaId: 'pai', resposta: 'Queda total' }])
+    expect(r.faltando.map((f) => f.perguntaId)).toEqual(['filho'])
+  })
+
+  it('abre o filho quando a condição satisfeita é a segunda, não a primeira', () => {
+    const r = avaliarRespostasFormulario(DUAS_OPCOES, [{ perguntaId: 'pai', resposta: 'Wi-Fi instável' }])
+    expect(r.faltando.map((f) => f.perguntaId)).toEqual(['filho'])
+  })
+
+  it('mantém o filho fechado quando NENHUMA condição é satisfeita', () => {
+    const r = avaliarRespostasFormulario(DUAS_OPCOES, [{ perguntaId: 'pai', resposta: 'Lentidão' }])
+    expect(r.faltando).toEqual([])
+    // E a resposta mandada para o filho some, como em qualquer condição fechada.
+    expect(avaliarRespostasFormulario(DUAS_OPCOES, [
+      { perguntaId: 'pai', resposta: 'Lentidão' },
+      { perguntaId: 'filho', resposta: 'Sim' }
+    ]).respostas.map((x) => x.perguntaId)).toEqual(['pai'])
+  })
+
+  it('condição vazia significa "qualquer resposta do pai"', () => {
+    const categoria: CategoriaAvaliavel = {
+      chave: 'x',
+      perguntas: [
+        { id: 'pai', rotulo: 'Pai', tipo: 'TEXTO', obrigatoria: true },
+        { id: 'filho', rotulo: 'Filho', tipo: 'TEXTO', obrigatoria: true, condicoes: [{ perguntaId: 'pai', opcao: '' }] }
+      ]
+    }
+    expect(avaliarRespostasFormulario(categoria, [{ perguntaId: 'pai', resposta: 'qqq' }]).faltando).toEqual([
+      { perguntaId: 'filho', rotulo: 'Filho' }
+    ])
+  })
+
+  it('lista vazia é "sem condição": a pergunta sempre aparece', () => {
+    const categoria: CategoriaAvaliavel = {
+      chave: 'x',
+      perguntas: [
+        { id: 'sempre', rotulo: 'Sempre', tipo: 'TEXTO', obrigatoria: true, condicoes: [] }
+      ]
+    }
+    expect(avaliarRespostasFormulario(categoria, []).faltando).toEqual([{ perguntaId: 'sempre', rotulo: 'Sempre' }])
+  })
+
+  it('uma condição inválida não esconde a pergunta inteira', () => {
+    // `perguntaId` ausente num item: o item é descartado, a outra condição vale.
+    const categoria: CategoriaAvaliavel = {
+      chave: 'x',
+      perguntas: [
+        { id: 'pai', rotulo: 'Pai', tipo: 'TEXTO', obrigatoria: true },
+        {
+          id: 'filho',
+          rotulo: 'Filho',
+          tipo: 'TEXTO',
+          obrigatoria: true,
+          condicoes: [{ opcao: 'qualquer' }, { perguntaId: 'pai', opcao: '' }]
+        }
+      ]
+    }
+    expect(avaliarRespostasFormulario(categoria, [{ perguntaId: 'pai', resposta: 'x' }]).faltando).toEqual([
+      { perguntaId: 'filho', rotulo: 'Filho' }
+    ])
+  })
+
+  it('condicoes tem precedência sobre o par legado', () => {
+    // Os dois campos filled dizem uma coisa e `condicoes` diz outra. Quem manda é
+    // `condicoes`: o par é só o espelho da primeira condição, para cliente antigo.
+    const categoria: CategoriaAvaliavel = {
+      chave: 'x',
+      perguntas: [
+        { id: 'pai', rotulo: 'Pai', tipo: 'TEXTO', obrigatoria: true },
+        {
+          id: 'filho',
+          rotulo: 'Filho',
+          tipo: 'TEXTO',
+          obrigatoria: true,
+          condicoes: [{ perguntaId: 'inexistente', opcao: '' }],
+          dependeDePerguntaId: 'pai',
+          dependeDeOpcao: 'qualquer'
+        }
+      ]
+    }
+    // O legado abriria o filho; `condicoes` aponta para fora e não abre.
+    expect(avaliarRespostasFormulario(categoria, [{ perguntaId: 'pai', resposta: 'x' }]).faltando).toEqual([])
+  })
+
+  it('não entra em laço com condicoes circulares', () => {
+    const categoria: CategoriaAvaliavel = {
+      chave: 'x',
+      perguntas: [
+        { id: 'a', rotulo: 'A', tipo: 'TEXTO', obrigatoria: true, condicoes: [{ perguntaId: 'b', opcao: '' }] },
+        { id: 'b', rotulo: 'B', tipo: 'TEXTO', obrigatoria: true, condicoes: [{ perguntaId: 'a', opcao: '' }] }
+      ]
+    }
+    expect(avaliarRespostasFormulario(categoria, [{ perguntaId: 'a', resposta: 'x' }]).respostas).toEqual([])
+  })
+
+  it('condição apontando para outra categoria não abre, mas a outra condição ainda pode', () => {
+    const categoria: CategoriaAvaliavel = {
+      chave: 'x',
+      perguntas: [
+        { id: 'pai', rotulo: 'Pai', tipo: 'TEXTO', obrigatoria: true },
+        {
+          id: 'filho',
+          rotulo: 'Filho',
+          tipo: 'TEXTO',
+          obrigatoria: true,
+          condicoes: [{ perguntaId: 'sumiu', opcao: '' }, { perguntaId: 'pai', opcao: '' }]
+        }
+      ]
+    }
+    expect(avaliarRespostasFormulario(categoria, [{ perguntaId: 'pai', resposta: 'x' }]).faltando).toEqual([
+      { perguntaId: 'filho', rotulo: 'Filho' }
+    ])
+  })
+})
+
+// ============================================
 // ABERTURA DO CHAMADO COM O FORMULÁRIO
 // ============================================
 
@@ -391,9 +538,12 @@ describe('POST /chamados com o formulário dinâmico', () => {
       .send({ ...PAYLOAD_BASE, categoriaChave: 'rede' })
 
     expect(res.status).toBe(201)
-    expect(prisma.formularioCategoria.findFirst).not.toHaveBeenCalled()
     const data = vi.mocked(prisma.chamado.create).mock.calls[0][0].data as any
+    // Sem respostas não há o que avaliar: nada de 400 por pergunta obrigatória.
     expect(data.formularioRespostas).toBe(Prisma.DbNull)
+    // A categoria É lida, porque o `tipo` é derivado do nome dela. O que não
+    // roda é a avaliação — `formularioRespostas` NULL é a prova.
+    expect(prisma.formularioCategoria.findFirst).toHaveBeenCalledTimes(1)
   })
 
   it('NÃO valida condições quando a categoria não existe mais', async () => {
@@ -410,6 +560,135 @@ describe('POST /chamados com o formulário dinâmico', () => {
     expect(res.status).toBe(201)
     const data = vi.mocked(prisma.chamado.create).mock.calls[0][0].data as any
     expect(data.formularioRespostas).toBe(Prisma.DbNull)
+  })
+
+  /**
+   * O `tipo` é do servidor.
+   *
+   * O formato `"<Nome> - <primeira resposta>"` não é enfeite: `clauseDaCategoria`
+   * reconhece a categoria do chamado antigo pelo `startsWith` do nome. Foi um
+   * prefixo desatualizado ("Sistema" quando a categoria virou "Sistemas") que
+   * deixou 79 chamados fora do filtro — e a causa raiz era o texto vir do
+   * navegador.
+   */
+  describe('tipo derivado no servidor', () => {
+    function tipoGravado(): string {
+      return (vi.mocked(prisma.chamado.create).mock.calls[0][0].data as any).tipo
+    }
+
+    it('monta "<categoria> - <primeira resposta>" a partir do que foi validado', async () => {
+      vi.mocked(prisma.formularioCategoria.findFirst).mockResolvedValue(REDE as any)
+
+      const res = await request(app)
+        .post('/api/chamados')
+        .send({
+          ...PAYLOAD_BASE,
+          // O cliente manda um texto mentiroso: quem manda é o servidor.
+          tipo: 'Categoria inventada pelo navegador',
+          categoriaChave: 'rede',
+          respostas: [{ perguntaId: 'p1', resposta: 'Lentidão' }]
+        })
+
+      expect(res.status).toBe(201)
+      expect(tipoGravado()).toBe('Rede - Lentidão')
+    })
+
+    it('ignora o que o navegador mandou como tipo, mesmo com categoriaChave', async () => {
+      vi.mocked(prisma.formularioCategoria.findFirst).mockResolvedValue(REDE as any)
+
+      const res = await request(app)
+        .post('/api/chamados')
+        .send({
+          ...PAYLOAD_BASE,
+          tipo: 'Equipamento - Monitor queimado',
+          categoriaChave: 'rede',
+          respostas: [{ perguntaId: 'p1', resposta: 'Lentidão' }]
+        })
+
+      expect(res.status).toBe(201)
+      // Bater o chamado de outra categoria pelo texto é exatamente o que a
+      // derivação impede.
+      expect(tipoGravado()).not.toContain('Equipamento')
+      expect(tipoGravado()).toBe('Rede - Lentidão')
+    })
+
+    it('usa o rótulo canônico da opção, não o texto que o navegador mandou', async () => {
+      vi.mocked(prisma.formularioCategoria.findFirst).mockResolvedValue(REDE as any)
+
+      await request(app)
+        .post('/api/chamados')
+        .send({
+          ...PAYLOAD_BASE,
+          categoriaChave: 'rede',
+          respostas: [{ perguntaId: 'p1', resposta: '  lentidão  ' }]
+        })
+
+      // O `startsWith` do nome da categoria é o que casa; e o rótulo gravado é o
+      // que existe no formulário, não o que veio com espaço sobrando.
+      expect(tipoGravado()).toBe('Rede - Lentidão')
+    })
+
+    it('sem resposta aceita, o tipo é só o nome da categoria', async () => {
+      const semPerguntas: CategoriaAvaliavel = {
+        chave: 'sistemas',
+        nome: 'Sistemas',
+        perguntas: []
+      }
+      vi.mocked(prisma.formularioCategoria.findFirst).mockResolvedValue(semPerguntas as any)
+
+      await request(app)
+        .post('/api/chamados')
+        .send({ ...PAYLOAD_BASE, categoriaChave: 'sistemas' })
+
+      expect(tipoGravado()).toBe('Sistemas')
+    })
+
+    it('preserva o tipo do cliente quando não há categoriaChave (cliente antigo)', async () => {
+      const res = await request(app)
+        .post('/api/chamados')
+        .send({ ...PAYLOAD_BASE, tipo: 'Rede - Lentidão' })
+
+      expect(res.status).toBe(201)
+      expect(prisma.formularioCategoria.findFirst).not.toHaveBeenCalled()
+      expect(tipoGravado()).toBe('Rede - Lentidão')
+    })
+
+    it('preserva o tipo do cliente quando a categoria não existe mais', async () => {
+      vi.mocked(prisma.formularioCategoria.findFirst).mockResolvedValue(null as any)
+
+      await request(app)
+        .post('/api/chamados')
+        .send({ ...PAYLOAD_BASE, categoriaChave: 'categoria-apagada', tipo: 'Texto do cliente' })
+
+      expect(tipoGravado()).toBe('Texto do cliente')
+    })
+
+    it('corta em 100 caracteres, que é o tamanho da coluna', async () => {
+      const nomeLongo = 'Categoria com nome bastante comprido para estourar o limite do banco'
+      vi.mocked(prisma.formularioCategoria.findFirst).mockResolvedValue({
+        chave: 'rede',
+        nome: nomeLongo,
+        perguntas: [
+          {
+            id: 'p1',
+            rotulo: 'Qual o problema?',
+            tipo: 'TEXTO',
+            obrigatoria: false,
+            ativa: true
+          }
+        ]
+      } as any)
+
+      await request(app)
+        .post('/api/chamados')
+        .send({
+          ...PAYLOAD_BASE,
+          categoriaChave: 'rede',
+          respostas: [{ perguntaId: 'p1', resposta: 'r'.repeat(200) }]
+        })
+
+      expect(tipoGravado().length).toBe(100)
+    })
   })
 
   it('aceita o anexo único do formulário antigo (anexoBase64 no topo)', async () => {
