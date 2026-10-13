@@ -25,6 +25,12 @@ export interface AuthenticatedRequest extends Request {
      * pelo `nivel`. Ver `services/rotas.ts`.
      */
     rotasPermitidas: string[]
+    /**
+     * A senha atual foi gerada pela Matriz e precisa ser trocada. Coluna
+     * separada de `primeiroLogin` justamente por isso: "nunca definiu senha" e
+     * "esta senha é provisória" são perguntas diferentes.
+     */
+    senhaProvisoria: boolean
   }
 }
 
@@ -71,7 +77,8 @@ export async function attachUserRecord(req: AuthenticatedRequest, res: Response,
         status: true,
         primeiroLogin: true,
         escopoTipos: true,
-        rotasPermitidas: true
+        rotasPermitidas: true,
+        senhaProvisoria: true
       }
     })
 

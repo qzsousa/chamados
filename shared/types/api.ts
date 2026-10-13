@@ -98,6 +98,15 @@ export const UserSchema = z.object({
    * de menu não é segurança.
    */
   rotasPermitidas: z.array(z.string()).default([]),
+  /**
+   * A senha atual foi gerada pela Matriz e precisa ser trocada no primeiro
+   * login. `false` = senha definitiva, o caso de sempre.
+   *
+   * Distinto de `primeiroLogin`: aquele diz "esta pessoa NUNCA definiu senha"
+   * (e o login passa pelo código de 6 dígitos); este diz "esta senha ATUAL não
+   * é definitiva". Quem entra com senha provisória precisa trocar logo após.
+   */
+  senhaProvisoria: z.boolean().default(false),
   /** Nome composto do grupo ("E.E. A / E.E. B") — mesma quando a unidade está sozinha. */
   grupo: z.string().optional(),
   papelUnidade: PapelUnidadeSchema.nullable().optional(),

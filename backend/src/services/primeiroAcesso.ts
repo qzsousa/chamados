@@ -61,6 +61,17 @@ export type ResultadoGerar =
   | { podeGerar: true; motivo: 'GERADO'; codigo: string; nome: string }
   | { podeGerar: false; motivo: 'NAO_CADASTRADO' | 'INATIVO' | 'JA_TEM_SENHA' }
 
+/**
+ * Resultado da senha provisória, com a mesma forma discriminada do código.
+ *
+ * `SENHA_INVALIDA` não deveria acontecer — `generateTemp` já respeita a
+ * política — mas está na union porque um dia a política pode mudar e o
+ * chamador precisa de um motivo para mostrar, não um `undefined` silencioso.
+ */
+export type ResultadoGerarSenha =
+  | { podeGerar: true; motivo: 'GERADA'; senha: string; nome: string }
+  | { podeGerar: false; motivo: 'NAO_CADASTRADO' | 'INATIVO' | 'SENHA_INVALIDA' }
+
 /** Gera 6 dígitos com `randomInt` (rejeição de módulo, previsível se usado Math.random). */
 export function gerarCodigo(): string {
   return String(randomInt(0, 1_000_000)).padStart(6, '0')
@@ -113,6 +124,52 @@ export async function gerarCodigoPrimeiroAcesso(email: string): Promise<Resultad
   const codigo = await criarCodigoPrimeiroAcesso(usuario.id)
 
   return { podeGerar: true, motivo: 'GERADO', codigo, nome: usuario.nome as string }
+}
+
+/**
+ * ADMIN gera uma senha provisória para quem já tem senha e esqueceu.
+ *
+ * É o caso que `gerarCodigoPrimeiroAcesso` recusa com `JA_TEM_SENHA` — e o
+ * recuso estava certo ali: o código de primeiro acesso é oráculo de "esta conta
+ * já tem senha definitiva". Aqui a intenção é justamente essa, e quem pede é o
+ * ADMIN autenticado, que pode (e precisa) ver esse estado.
+ *
+ * A senha gerada respeita `passwordPolicy.validate`, para a Matriz nunca
+ * entregar uma senha que a própria política recusa no momento da troca.
+ */
+export async function gerarSenhaProvisoria(email: string): Promise<ResultadoGerarSenha> {
+  const alvo = email.trim().toLowerCase()
+
+  const usuario = await prisma.usuario.findUnique({
+    where: { email: alvo },
+    select: { id: true, nome: true, status: true },
+  })
+
+  if (!usuario) return { podeGerar: false, motivo: 'NAO_CADASTRADO' }
+  if (usuario.status !== 'ATIVO') return { podeGerar: false, motivo: 'INATIVO' }
+
+  // Rejeitar senha que a política não aceitaria é imprimir para a Matriz uma
+  // senha temporária que a pessoa não conseguirá trocar.
+  const senha = passwordPolicy.generateTemp()
+  const politica = passwordPolicy.validate(senha)
+  if (!politica.valid) {
+    return { podeGerar: false, motivo: 'SENHA_INVALIDA' }
+  }
+
+  const senhaHash = await bcrypt.hash(senha, BCRYPT_COST)
+
+  await prisma.usuario.update({
+    where: { id: usuario.id },
+    // `primeiroLogin: false` de propósito: a pessoa JÁ tem senha, e mexer
+    // nisso a jogaria no fluxo do código de 6 dígitos. O que força a troca é
+    // `senhaProvisoria`.
+    data: { senhaHash, senhaProvisoria: true, primeiroLogin: false },
+  })
+
+  // A senha acabou de mudar: nenhuma sessão aberta com a senha antiga vale.
+  await prisma.refreshToken.deleteMany({ where: { usuarioId: usuario.id } })
+
+  return { podeGerar: true, motivo: 'GERADA', senha, nome: usuario.nome as string }
 }
 
 /**
@@ -264,7 +321,9 @@ export async function definirSenhaPrimeiroAcesso(
 
   await prisma.usuario.update({
     where: { id: usuarioId },
-    data: { senhaHash, primeiroLogin: false },
+    // `senhaProvisoria: false` junto: sem isso a pessoa troca a senha e cai de
+    // novo na tela de troca, em laco.
+    data: { senhaHash, primeiroLogin: false, senhaProvisoria: false },
   })
 
   await prisma.refreshToken.deleteMany({ where: { usuarioId } })

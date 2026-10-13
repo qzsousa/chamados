@@ -18,6 +18,7 @@ import { isZodError } from '../utils/zodError'
 import { grupoDaUnidade, papelDaUnidade } from '../services/normalization'
 import {
   gerarCodigoPrimeiroAcesso,
+  gerarSenhaProvisoria,
   confirmarCodigo,
   validarToken,
   marcarTokenUsado,
@@ -80,6 +81,8 @@ const CAMPOS_PUBLICAVEIS = [
    * oferecer atalho para algo que vai dar 403.
    */
   'escopoTipos',
+  'senhaProvisoria',
+  'rotasPermitidas',
   'createdAt',
   'updatedAt',
 ] as const
@@ -93,7 +96,7 @@ function publicarUsuario(user: Record<string, unknown>) {
   return comUnidade(seguro as { filial: string })
 }
 
-function buildLoginResponse(user: { id: string; email: string; nome: string; nivel: string; filial: string; primeiroLogin: boolean }) {
+function buildLoginResponse(user: { id: string; email: string; nome: string; nivel: string; filial: string; primeiroLogin: boolean; senhaProvisoria: boolean }) {
   const accessToken = signAccessToken(user as any)
   const refreshToken = signRefreshToken(user.id)
   const refreshTokenHash = hashToken(refreshToken)
@@ -118,6 +121,8 @@ router.post('/login', async (req, res) => {
         status: true,
         primeiroLogin: true,
         escopoTipos: true,
+        rotasPermitidas: true,
+        senhaProvisoria: true,
         senhaHash: true,
       },
     })
@@ -147,7 +152,11 @@ router.post('/login', async (req, res) => {
       accessToken,
       refreshToken,
       user: userResponse,
-      primeiroLogin: user.primeiroLogin
+      primeiroLogin: user.primeiroLogin,
+      // Sinal separado: "nunca definiu senha" (primeiroLogin) e "a senha atual
+      // precisa ser trocada" (senhaProvisoria) são coisas diferentes. O portal
+      // força a troca quando qualquer um dos dois for verdadeiro.
+      senhaProvisoria: user.senhaProvisoria
     })
   } catch (err) {
     if (isZodError(err)) {
@@ -189,7 +198,7 @@ router.post('/refresh', async (req, res) => {
 
     const user = await prisma.usuario.findUnique({
       where: { id: payload.sub },
-      select: { id: true, email: true, nome: true, nivel: true, filial: true, primeiroLogin: true, status: true, escopoTipos: true }
+      select: { id: true, email: true, nome: true, nivel: true, filial: true, primeiroLogin: true, senhaProvisoria: true, status: true, escopoTipos: true, rotasPermitidas: true }
     })
 
     if (!user || user.status !== 'ATIVO') {
@@ -249,7 +258,7 @@ router.get('/me', authMiddleware, async (req: AuthenticatedRequest, res) => {
 
     const user = await prisma.usuario.findUnique({
       where: { id: req.user.sub },
-      select: { id: true, email: true, nome: true, nivel: true, filial: true, status: true, primeiroLogin: true, escopoTipos: true, createdAt: true, updatedAt: true }
+      select: { id: true, email: true, nome: true, nivel: true, filial: true, status: true, primeiroLogin: true, senhaProvisoria: true, escopoTipos: true, rotasPermitidas: true, createdAt: true, updatedAt: true }
     })
 
     if (!user) {
@@ -275,7 +284,13 @@ router.post('/change-password', authMiddleware, async (req: AuthenticatedRequest
       return res.status(404).json({ error: 'NOT_FOUND', message: 'Usuário não encontrado' })
     }
 
-    if (!user.primeiroLogin) {
+    // A senha atual só é conferida quando a pessoa TEM uma senha definitiva para
+// conferir. Nos dois casos abaixo não tem — e conferir mesmo assim trancaria
+// quem acabou de receber a senha da Matriz, que não é a senha antiga:
+//  - primeiroLogin: nunca definiu senha (fluxo do código);
+//  - senhaProvisoria: a senha atual foi gerada pela Matriz e precisa ser
+//    trocada. É este o segundo caso que a coluna nova veio resolver.
+if (!user.primeiroLogin && !user.senhaProvisoria) {
       const valid = await bcrypt.compare(senhaAtual, user.senhaHash)
       if (!valid) {
         return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Senha atual incorreta' })
@@ -293,7 +308,10 @@ router.post('/change-password', authMiddleware, async (req: AuthenticatedRequest
       where: { id: user.id },
       data: {
         senhaHash: novaSenhaHash,
-        primeiroLogin: false
+        primeiroLogin: false,
+        // Limpa a marca de provisória: a senha que a Matriz entregou acabou de
+        // ser trocada. Sem isto a pessoa entra e é jogada de volta na troca.
+        senhaProvisoria: false
       }
     })
 
@@ -333,6 +351,48 @@ router.post('/admin/gerar-codigo-primeiro-acesso', authMiddleware, attachUserRec
       codigo: resultado.codigo,
       nome: resultado.nome,
       expiraEm: new Date(Date.now() + CODIGO_TTL_MS).toISOString(),
+    })
+  } catch (err) {
+    if (isZodError(err)) {
+      return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: err.flatten().fieldErrors })
+    }
+    throw err
+  }
+})
+
+// ============================================
+// SENHA PROVISÓRIA — quem já tem senha e esqueceu
+// ============================================
+//
+// Rota separada de propósito. `gerar-codigo-primeiro-acesso` recusa quem já
+// tem senha com `JA_TEM_SENHA`, e está certo: emitir um código de primeiro
+// acesso para ela seria um oráculo de "esta conta já tem senha definitiva".
+// Aqui a pergunta é outra — a Matriz quer RESETAR a senha de alguém — e essa
+// resposta também é operacional, não enumeração anônima.
+//
+// A senha volta no corpo da resposta porque a Matriz precisa repassar à pessoa.
+// Por isso a rota é ADMIN-only e nunca entra em log.
+
+router.post('/admin/gerar-senha-provisoria', authMiddleware, attachUserRecord, requireRole('ADMIN'), async (req: AuthenticatedRequest, res) => {
+  try {
+    const { email } = GerarCodigoPrimeiroAcessoSchema.parse(req.body)
+
+    const resultado = await gerarSenhaProvisoria(email)
+
+    if (!resultado.podeGerar) {
+      const mensagens = {
+        NAO_CADASTRADO: 'Usuário não encontrado',
+        INATIVO: 'Usuário inativo — reative antes de gerar a senha provisória',
+        SENHA_INVALIDA: 'Não foi possível gerar uma senha válida. Tente novamente.',
+      } as const
+      return res.status(400).json({ error: 'SENHA_NAO_GERAVEL', message: mensagens[resultado.motivo] })
+    }
+
+    return res.json({
+      senha: resultado.senha,
+      nome: resultado.nome,
+      // O usuário precisa trocar no primeiro login; o portal força isso.
+      trocaObrigatoria: true,
     })
   } catch (err) {
     if (isZodError(err)) {
@@ -455,6 +515,7 @@ router.post('/primeiro-acesso/definir-senha', async (req, res) => {
         filial: true,
         status: true,
         primeiroLogin: true,
+        senhaProvisoria: true,
       },
     })
     if (!user || user.status !== 'ATIVO') {
