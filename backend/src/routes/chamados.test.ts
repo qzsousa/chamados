@@ -328,8 +328,10 @@ describe('Chamados Routes', () => {
       // Sem `OR` de unidade: a trava de escola não vale para quem tem escopo.
       expect(where.OR).toBeUndefined()
       expect(where.AND).toEqual([
-        { OR: [{ tipo: { equals: 'Sistemas - PortalNet', mode: 'insensitive' } }, { tipo: { startsWith: 'Sistemas - PortalNet - ', mode: 'insensitive' } }] },
-        { OR: [{ tipo: { equals: 'Sistemas - SEI', mode: 'insensitive' } }, { tipo: { startsWith: 'Sistemas - SEI - ', mode: 'insensitive' } }] },
+        { OR: [
+          { OR: [{ tipo: { equals: 'Sistemas - PortalNet', mode: 'insensitive' } }, { tipo: { startsWith: 'Sistemas - PortalNet - ', mode: 'insensitive' } }] },
+          { OR: [{ tipo: { equals: 'Sistemas - SEI', mode: 'insensitive' } }, { tipo: { startsWith: 'Sistemas - SEI - ', mode: 'insensitive' } }] },
+        ] },
       ])
     })
 
@@ -350,14 +352,16 @@ describe('Chamados Routes', () => {
       expect(where.OR).toBeDefined()
     })
 
-    it('ADMIN com escopo não é filtrado (nivel ADMIN passa inteiro)', async () => {
+    it('ADMIN com escopo é filtrado — a configuração precisa valer', async () => {
       Object.assign(usuario, { nivel: 'ADMIN' })
       comEscopo('sistemas::SEI')
 
       const where = await whereDaListagem()
 
       expect(where.OR).toBeUndefined()
-      expect(where.AND).toBeUndefined()
+      expect(where.AND).toEqual([
+        { OR: [ { OR: [{ tipo: { equals: 'Sistemas - SEI', mode: 'insensitive' } }, { tipo: { startsWith: 'Sistemas - SEI - ', mode: 'insensitive' } }] } ] },
+      ])
     })
 
     it('detalhe: chamado dentro do escopo abre, fora do escopo é 403', async () => {

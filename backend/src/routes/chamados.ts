@@ -403,8 +403,9 @@ async function tecnicoAtende(
   chamado: { unidade: string; responsavel: string | null; tipo?: string | null; categoriaChave?: string | null },
   user: AuthenticatedRequest['userRecord'],
 ): Promise<boolean> {
-  if (!user || user.nivel !== 'TECNICO') return false
+  if (!user) return false
   if (temEscopo(user)) return casaComEscopo(chamado, user)
+  if (user.nivel !== 'TECNICO') return false
   if (chamado.responsavel && chamado.responsavel === user.nome) return true
   return usuarioAtendeUnidade(user.filial, chamado.unidade)
 }
@@ -932,24 +933,30 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res) => {
 
     const where: any = { ...filtroExcluido }
 
-    if (req.userRecord && req.userRecord.nivel !== 'ADMIN') {
+    if (req.userRecord) {
+      // Escopo preenchido vale para QUALQUER nível, inclusive ADMIN: a trava foi
+      // configurada de propósito e precisa valer. Sem escopo, cada nível segue a
+      // regra de sempre e o ADMIN continua vendo tudo.
       if (temEscopo(req.userRecord)) {
         // Usuário com escopo de tipos: a unidade DEIXA de valer (ele atende
-        // todas as escolas) e o que limita é o tipo. Vai em `AND` e não em `OR`
-        // porque o `OR` do técnico abaixo é o das unidades — um sobrescreveria
-        // o outro.
-        where.AND = [
-          ...(where.AND || []),
-          ...(await clauseDeEscopo(req.userRecord.escopoTipos)),
-        ]
-      } else if (req.userRecord.nivel === 'TECNICO') {
-        // Técnico: chamados que ele atende (lista de unidades) OU que são dele
-        where.OR = [
-          ...filtroUnidadesDoUsuario(req.userRecord.filial).OR,
-          { responsavel: req.userRecord.nome }
-        ]
-      } else if (req.userRecord.nivel === 'GESTOR' || req.userRecord.nivel === 'VISUALIZADOR') {
-        Object.assign(where, filtroUnidadeTolerante(req.userRecord.filial))
+        // todas as escolas) e o que limita é o tipo. A restrição já vem montada
+        // (com o OR dentro) e entra num único elemento do AND, para combinar com
+        // os demais filtros sem sobrescrever nenhum — as opções são alternativas,
+        // não condições cumulativas.
+        const restricao = await clauseDeEscopo(req.userRecord.escopoTipos)
+        if (restricao) {
+          where.AND = [...(where.AND || []), restricao]
+        }
+      } else if (req.userRecord.nivel !== 'ADMIN') {
+        if (req.userRecord.nivel === 'TECNICO') {
+          // Técnico: chamados que ele atende (lista de unidades) OU que são dele
+          where.OR = [
+            ...filtroUnidadesDoUsuario(req.userRecord.filial).OR,
+            { responsavel: req.userRecord.nome }
+          ]
+        } else if (req.userRecord.nivel === 'GESTOR' || req.userRecord.nivel === 'VISUALIZADOR') {
+          Object.assign(where, filtroUnidadeTolerante(req.userRecord.filial))
+        }
       }
     }
 
@@ -1158,10 +1165,13 @@ router.get('/:id', authMiddleware, async (req: AuthenticatedRequest, res) => {
       return res.status(404).json({ error: 'NOT_FOUND', message: 'Chamado não encontrado' })
     }
 
-    if (req.userRecord && req.userRecord.nivel !== 'ADMIN') {
-      const canAccess =
-        (await tecnicoAtende(chamado, req.userRecord)) ||
-        (req.userRecord.nivel === 'GESTOR' || req.userRecord.nivel === 'VISUALIZADOR') && unidadeCasa(chamado.unidade, req.userRecord.filial)
+    if (req.userRecord) {
+      const canAccess = temEscopo(req.userRecord)
+        ? (await casaComEscopo(chamado, req.userRecord))
+        : req.userRecord.nivel === 'ADMIN'
+          ? true
+          : (await tecnicoAtende(chamado, req.userRecord)) ||
+            (req.userRecord.nivel === 'GESTOR' || req.userRecord.nivel === 'VISUALIZADOR') && unidadeCasa(chamado.unidade, req.userRecord.filial)
 
       if (!canAccess) {
         return res.status(403).json({ error: 'FORBIDDEN', message: 'Sem acesso a este chamado' })
@@ -1183,10 +1193,13 @@ router.patch('/:id/status', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GES
       return res.status(404).json({ error: 'NOT_FOUND', message: 'Chamado não encontrado' })
     }
 
-    if (req.userRecord && req.userRecord.nivel !== 'ADMIN') {
-      const canUpdate =
-        (await tecnicoAtende(chamado, req.userRecord)) ||
-        ['GESTOR','VISUALIZADOR'].includes(req.userRecord.nivel) && unidadeCasa(chamado.unidade, req.userRecord.filial)
+    if (req.userRecord) {
+      const canUpdate = temEscopo(req.userRecord)
+        ? (await casaComEscopo(chamado, req.userRecord))
+        : req.userRecord.nivel === 'ADMIN'
+          ? true
+          : (await tecnicoAtende(chamado, req.userRecord)) ||
+            ['GESTOR','VISUALIZADOR'].includes(req.userRecord.nivel) && unidadeCasa(chamado.unidade, req.userRecord.filial)
 
       if (!canUpdate) {
         return res.status(403).json({ error: 'FORBIDDEN', message: 'Sem permissão para alterar este chamado' })

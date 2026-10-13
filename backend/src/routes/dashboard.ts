@@ -58,12 +58,13 @@ const router = Router()
 async function filtroVisibilidade(
   user: { filial?: string; nivel?: string; escopoTipos?: string[] | null } | undefined,
 ): Promise<Record<string, unknown> | null> {
-  if (!user || !user.filial || user.nivel === 'ADMIN') return null
+  if (!user) return null
 
   if (temEscopo({ filial: user.filial, escopoTipos: user.escopoTipos })) {
-    const AND = await clauseDeEscopo(user.escopoTipos || [])
-    return AND.length ? { AND } : null
+    return await clauseDeEscopo(user.escopoTipos || [])
   }
+
+  if (!user.filial || user.nivel === 'ADMIN') return null
 
   if (user.nivel === 'TECNICO') {
     // Técnico atende VÁRIAS unidades (filial separada por vírgula): um

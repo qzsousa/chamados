@@ -183,25 +183,29 @@ export async function escoposInvalidos(escopo: string[]): Promise<string[]> {
  * pergunta é de TEXTO) têm `tipo` igual ao nome da categoria — daí a
  * alternativa por igualdade.
  */
-export async function clauseDeEscopo(escopo: string[]): Promise<Prisma.ChamadoWhereInput[]> {
+export async function clauseDeEscopo(escopo: string[]): Promise<Prisma.ChamadoWhereInput | null> {
   const tipos = escopo.map(quebrarEscopo).filter((t): t is TipoEscopo => t !== null)
-  if (!tipos.length) return []
+  if (!tipos.length) return null
   const nomes = await nomesDasCategorias(tipos.map((t) => t.chave))
 
-  const clausulas: (Prisma.ChamadoWhereInput | null)[] = tipos.map((t) => {
+  const alternativas: Prisma.ChamadoWhereInput[] = []
+  for (const t of tipos) {
     const nome = nomes.get(t.chave)
-    if (!nome) return null // categoria desconhecida: não há com o que casar
+    if (!nome) continue // categoria desconhecida: não há com o que casar
     const prefixo = prefixoDoTipo(nome, t.rotulo)
-    if (!prefixo) return null
-    return {
+    if (!prefixo) continue
+    alternativas.push({
       OR: [
         { tipo: { equals: prefixo, mode: 'insensitive' as const } },
         { tipo: { startsWith: `${prefixo} - `, mode: 'insensitive' as const } },
       ],
-    }
-  })
+    })
+  }
 
-  return clausulas.filter((c): c is Prisma.ChamadoWhereInput => c !== null)
+  if (!alternativas.length) return null
+  // As opções do escopo são ALTERNATIVAS entre si: quem tem "SEI" e "PortalNet"
+  // atende os dois, não exige que o chamado seja os dois ao mesmo tempo.
+  return { OR: alternativas }
 }
 
 /**

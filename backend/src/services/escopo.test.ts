@@ -111,38 +111,45 @@ describe('prefixoDoTipo', () => {
 })
 
 describe('clauseDeEscopo', () => {
-  it('escopo vazio não gera cláusula', async () => {
-    expect(await clauseDeEscopo([])).toEqual([])
+  it('escopo vazio não gera restrição', async () => {
+    expect(await clauseDeEscopo([])).toBeNull()
   })
 
   it('gera igualdade + " - " à frente, nunca startsWith solto', async () => {
-    const [clause] = await clauseDeEscopo(['sistemas::SEI'])
-    expect(clause).toEqual({
+    expect(await clauseDeEscopo(['sistemas::SEI'])).toEqual({
       OR: [
-        { tipo: { equals: 'Sistemas - SEI', mode: 'insensitive' } },
-        { tipo: { startsWith: 'Sistemas - SEI - ', mode: 'insensitive' } },
+        {
+          OR: [
+            { tipo: { equals: 'Sistemas - SEI', mode: 'insensitive' } },
+            { tipo: { startsWith: 'Sistemas - SEI - ', mode: 'insensitive' } },
+          ],
+        },
       ],
     })
   })
 
-  it('uma cláusula por tipo (as cláusulas entram em AND entre si)', async () => {
-    const clauses = await clauseDeEscopo(['sistemas::PortalNet', 'sistemas::SEI'])
-    expect(clauses).toHaveLength(2)
+  it('as opções do escopo são alternativas entre si, nunca cumulativas', async () => {
+    const restricao = await clauseDeEscopo(['sistemas::PortalNet', 'sistemas::SEI'])
+    expect(restricao).not.toBeNull()
+    expect(Object.keys(restricao as object)).toEqual(['OR'])
+    expect((restricao as any).OR).toHaveLength(2)
   })
 
   it('categoria inteira casa pelo nome, com ou sem sufixo', async () => {
-    const [clause] = await clauseDeEscopo(['email::'])
-    expect(clause).toEqual({
+    expect(await clauseDeEscopo(['email::'])).toEqual({
       OR: [
-        { tipo: { equals: 'E-mail institucional', mode: 'insensitive' } },
-        { tipo: { startsWith: 'E-mail institucional - ', mode: 'insensitive' } },
+        {
+          OR: [
+            { tipo: { equals: 'E-mail institucional', mode: 'insensitive' } },
+            { tipo: { startsWith: 'E-mail institucional - ', mode: 'insensitive' } },
+          ],
+        },
       ],
     })
   })
 
-  it('categoria inexistente não vira cláusula que não casa nada', async () => {
-    // Uma cláusula impossível zeraria a lista inteira do usuário silenciosamente.
-    expect(await clauseDeEscopo(['inexistente::X'])).toEqual([])
+  it('categoria inexistente não gera restrição', async () => {
+    expect(await clauseDeEscopo(['inexistente::X'])).toBeNull()
   })
 })
 
