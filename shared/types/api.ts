@@ -1,4 +1,4 @@
-import { z } from 'zod'
+﻿import { z } from 'zod'
 
 // ============================================
 // ENUMS
@@ -213,7 +213,20 @@ export const LoginResponseSchema = z.object({
 export type LoginResponse = z.infer<typeof LoginResponseSchema>
 
 export const ChangePasswordSchema = z.object({
-  senhaAtual: z.string().min(1),
+  /**
+   * Aceita vazio de propósito.
+   *
+   * Quem nunca definiu senha e quem recebeu senha provisória da Matriz não têm
+   * senha antiga para digitar. Com `min(1)` o corpo era recusado ANTES do
+   * handler, e essas duas pessoas ficavam trancadas sem conseguir trocar a senha
+   * que receberam — inclusive a senha provisória que a Matriz acabou de gerar.
+   *
+   * A segurança não está neste campo, está no handler: ele só exige a senha
+   * atual quando o usuário tem senha definitiva (primeiroLogin e
+   * senhaProvisoria falsos). Quem manda vazio fora desses dois casos recebe
+   * 401 "Senha atual incorreta".
+   */
+  senhaAtual: z.string().default(''),
   novaSenha: z.string().min(8).max(128)
 })
 
