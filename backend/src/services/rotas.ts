@@ -75,6 +75,15 @@ export function podeAcessarRota(
 ): boolean {
   if (!temRestricaoDeRota(user)) return true
   if (rotaLivre(path)) return true
+  // Os cartões de KPI do /chamados vêm de /api/dashboard/stats — a tela que o
+  // usuário PODE ver depende dela, mesmo sem ter a rota "dashboard" liberada.
+  // Tratar esse endpoint como parte do domínio "chamados" evita KPI em branco
+  // (… ) para usuários restritos sem abrir o resto do painel.
+  const caminhoLimpo = path.split('?')[0]
+  if (caminhoLimpo === '/api/dashboard/stats' || caminhoLimpo.startsWith('/api/dashboard/stats/')) {
+    const permitidas = user?.rotasPermitidas ?? []
+    return permitidas.includes('chamados') || permitidas.includes('dashboard')
+  }
   const dominio = dominioDaRota(path)
   if (!dominio) return false // rota desconhecida e usuário restrito: fechado por padrão
   return (user?.rotasPermitidas ?? []).includes(dominio)
