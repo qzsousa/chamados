@@ -70,6 +70,7 @@ const perguntaMock = {
   obrigatoria: true,
   ordem: 1,
   ativa: true,
+  condicoes: null,
   dependeDePerguntaId: null,
   dependeDeOpcao: null,
   opcoes: [{ rotulo: 'Lentidão' }],
@@ -118,6 +119,7 @@ describe('Formulário Routes', () => {
             create: expect.arrayContaining([
               expect.objectContaining({
                 id: 'seed-perg-rede-2',
+                condicoes: [{ perguntaId: 'seed-perg-rede-1', opcao: 'Queda total de internet' }],
                 dependeDePerguntaId: 'seed-perg-rede-1',
                 dependeDeOpcao: 'Queda total de internet'
               })
@@ -344,7 +346,7 @@ describe('Formulário Routes', () => {
         })
 
       expect(res.status).toBe(400)
-      expect(res.body.message).toBe('A pergunta da qual depende deve pertencer à mesma categoria.')
+      expect(res.body.message).toBe('Toda pergunta de uma condição deve pertencer à mesma categoria.')
       expect(prisma.formularioPergunta.create).not.toHaveBeenCalled()
     })
 
@@ -377,6 +379,180 @@ describe('Formulário Routes', () => {
     })
   })
 
+  describe('POST /perguntas — tipos ESCOLA/ARQUIVO e condicoes[]', () => {
+    /** Pergunta de origem válida: mesma categoria, OPCOES, com as duas opções. */
+    const paiValido = () =>
+      vi.mocked(prisma.formularioPergunta.findUnique).mockResolvedValue({
+        ...perguntaMock,
+        opcoes: [{ rotulo: 'Lentidão' }, { rotulo: 'Queda total de internet' }]
+      } as any)
+
+    beforeEach(() => {
+      vi.mocked(prisma.formularioCategoria.findUnique).mockResolvedValue(categoriaMock as any)
+      vi.mocked(prisma.formularioPergunta.create).mockResolvedValue({ ...perguntaMock, id: 'perg-2' } as any)
+    })
+
+    it('aceita ESCOLA, cujas opções vêm do catálogo de escolas', async () => {
+      const res = await request(app)
+        .post('/api/formulario/perguntas')
+        .send({ categoriaId: 'cat-1', rotulo: 'Qual escola?', tipo: 'ESCOLA' })
+
+      expect(res.status).toBe(201)
+      expect(prisma.formularioPergunta.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ tipo: 'ESCOLA' })
+      }))
+    })
+
+    it('aceita ARQUIVO, cuja resposta é o upload', async () => {
+      const res = await request(app)
+        .post('/api/formulario/perguntas')
+        .send({ categoriaId: 'cat-1', rotulo: 'Print do erro', tipo: 'ARQUIVO' })
+
+      expect(res.status).toBe(201)
+      expect(prisma.formularioPergunta.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ tipo: 'ARQUIVO' })
+      }))
+    })
+
+    it('recusa ESCOLA com opções (a lista não é configurável)', async () => {
+      const res = await request(app)
+        .post('/api/formulario/perguntas')
+        .send({ categoriaId: 'cat-1', rotulo: 'Qual escola?', tipo: 'ESCOLA', opcoes: [{ rotulo: 'E.E. X' }] })
+
+      expect(res.status).toBe(400)
+      expect(res.body.error).toBe('VALIDATION_ERROR')
+      expect(prisma.formularioPergunta.create).not.toHaveBeenCalled()
+    })
+
+    it('recusa ARQUIVO com opções', async () => {
+      const res = await request(app)
+        .post('/api/formulario/perguntas')
+        .send({ categoriaId: 'cat-1', rotulo: 'Print do erro', tipo: 'ARQUIVO', opcoes: [{ rotulo: 'x' }] })
+
+      expect(res.status).toBe(400)
+      expect(res.body.error).toBe('VALIDATION_ERROR')
+      expect(prisma.formularioPergunta.create).not.toHaveBeenCalled()
+    })
+
+    it('grava várias condições em OU e deixa o par legado vazio', async () => {
+      paiValido()
+
+      const res = await request(app)
+        .post('/api/formulario/perguntas')
+        .send({
+          categoriaId: 'cat-1',
+          rotulo: 'Detalhe',
+          tipo: 'TEXTO_LONGO',
+          condicoes: [
+            { perguntaId: 'perg-1', opcao: 'Lentidão' },
+            { perguntaId: 'perg-1', opcao: 'Queda total de internet' }
+          ]
+        })
+
+      expect(res.status).toBe(201)
+      expect(prisma.formularioPergunta.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({
+          condicoes: [
+            { perguntaId: 'perg-1', opcao: 'Lentidão' },
+            { perguntaId: 'perg-1', opcao: 'Queda total de internet' }
+          ],
+          // 2 condições: nenhuma representa o par legado sozinha.
+          dependeDePerguntaId: null,
+          dependeDeOpcao: null
+        })
+      }))
+    })
+
+    it('com uma condição só espelha no par legado (frontend antigo continua lendo)', async () => {
+      paiValido()
+
+      const res = await request(app)
+        .post('/api/formulario/perguntas')
+        .send({
+          categoriaId: 'cat-1',
+          rotulo: 'Detalhe',
+          tipo: 'TEXTO_LONGO',
+          condicoes: [{ perguntaId: 'perg-1', opcao: 'Lentidão' }]
+        })
+
+      expect(res.status).toBe(201)
+      expect(prisma.formularioPergunta.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({
+          condicoes: [{ perguntaId: 'perg-1', opcao: 'Lentidão' }],
+          dependeDePerguntaId: 'perg-1',
+          dependeDeOpcao: 'Lentidão'
+        })
+      }))
+    })
+
+    it('recusa a mesma condição escrita duas vezes', async () => {
+      const res = await request(app)
+        .post('/api/formulario/perguntas')
+        .send({
+          categoriaId: 'cat-1',
+          rotulo: 'Detalhe',
+          tipo: 'TEXTO',
+          condicoes: [
+            { perguntaId: 'perg-1', opcao: 'Lentidão' },
+            { perguntaId: 'perg-1', opcao: 'Lentidão' }
+          ]
+        })
+
+      expect(res.status).toBe(400)
+      expect(res.body.error).toBe('VALIDATION_ERROR')
+      expect(prisma.formularioPergunta.create).not.toHaveBeenCalled()
+    })
+
+    it('recusa mais de 10 condições', async () => {
+      const res = await request(app)
+        .post('/api/formulario/perguntas')
+        .send({
+          categoriaId: 'cat-1',
+          rotulo: 'Detalhe',
+          tipo: 'TEXTO',
+          condicoes: Array.from({ length: 11 }, () => ({ perguntaId: 'perg-1', opcao: 'Lentidão' }))
+        })
+
+      expect(res.status).toBe(400)
+      expect(res.body.error).toBe('VALIDATION_ERROR')
+      expect(prisma.formularioPergunta.create).not.toHaveBeenCalled()
+    })
+
+    it('recusa condição cuja pergunta de origem não é OPCOES', async () => {
+      vi.mocked(prisma.formularioPergunta.findUnique).mockResolvedValue({ ...perguntaMock, tipo: 'TEXTO' } as any)
+
+      const res = await request(app)
+        .post('/api/formulario/perguntas')
+        .send({
+          categoriaId: 'cat-1',
+          rotulo: 'Detalhe',
+          tipo: 'TEXTO',
+          condicoes: [{ perguntaId: 'perg-1', opcao: 'Lentidão' }]
+        })
+
+      expect(res.status).toBe(400)
+      expect(res.body.message).toContain('não tem opções')
+      expect(prisma.formularioPergunta.create).not.toHaveBeenCalled()
+    })
+
+    it('recusa condição com opção que não existe mais na origem', async () => {
+      paiValido()
+
+      const res = await request(app)
+        .post('/api/formulario/perguntas')
+        .send({
+          categoriaId: 'cat-1',
+          rotulo: 'Detalhe',
+          tipo: 'TEXTO',
+          condicoes: [{ perguntaId: 'perg-1', opcao: 'Opção excluída' }]
+        })
+
+      expect(res.status).toBe(400)
+      expect(res.body.message).toBe('A opção "Opção excluída" não existe mais em "Qual é o problema de rede?".')
+      expect(prisma.formularioPergunta.create).not.toHaveBeenCalled()
+    })
+  })
+
   describe('PATCH /perguntas/:id', () => {
     it('should update pergunta', async () => {
       vi.mocked(prisma.formularioPergunta.update).mockResolvedValue({ ...perguntaMock, ativa: false } as any)
@@ -398,6 +574,84 @@ describe('Formulário Routes', () => {
 
       expect(res.status).toBe(404)
       expect(res.body.error).toBe('NOT_FOUND')
+    })
+  })
+
+  describe('PATCH /perguntas/:id — condicoes[]', () => {
+    it('resolve a categoria da própria pergunta quando o PATCH não a envia', async () => {
+      // 1a chamada: categoria gravada na pergunta. 2a: validação da condição.
+      vi.mocked(prisma.formularioPergunta.findUnique)
+        .mockResolvedValueOnce({ categoriaId: 'cat-1' } as any)
+        .mockResolvedValueOnce({ ...perguntaMock, opcoes: [{ rotulo: 'Lentidão' }] } as any)
+      vi.mocked(prisma.formularioPergunta.update).mockResolvedValue({
+        ...perguntaMock,
+        condicoes: [{ perguntaId: 'perg-1', opcao: 'Lentidão' }]
+      } as any)
+
+      const res = await request(app)
+        .patch('/api/formulario/perguntas/perg-2')
+        .send({ condicoes: [{ perguntaId: 'perg-1', opcao: 'Lentidão' }] })
+
+      expect(res.status).toBe(200)
+      expect(prisma.formularioPergunta.update).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({
+          condicoes: [{ perguntaId: 'perg-1', opcao: 'Lentidão' }],
+          dependeDePerguntaId: 'perg-1',
+          dependeDeOpcao: 'Lentidão'
+        })
+      }))
+    })
+
+    it('valida a condição contra a categoria gravada e recusa origem de outra categoria', async () => {
+      vi.mocked(prisma.formularioPergunta.findUnique)
+        .mockResolvedValueOnce({ categoriaId: 'cat-1' } as any)
+        .mockResolvedValueOnce({ ...perguntaMock, id: 'perg-outra', categoriaId: 'cat-2' } as any)
+
+      const res = await request(app)
+        .patch('/api/formulario/perguntas/perg-2')
+        .send({ condicoes: [{ perguntaId: 'perg-outra', opcao: 'Lentidão' }] })
+
+      expect(res.status).toBe(400)
+      expect(res.body.message).toBe('Toda pergunta de uma condição deve pertencer à mesma categoria.')
+      expect(prisma.formularioPergunta.update).not.toHaveBeenCalled()
+    })
+
+    it('devolve 404 quando a pergunta não existe e a categoria não veio no corpo', async () => {
+      vi.mocked(prisma.formularioPergunta.findUnique).mockResolvedValue(null)
+
+      const res = await request(app)
+        .patch('/api/formulario/perguntas/inexistente')
+        .send({ condicoes: [{ perguntaId: 'perg-1', opcao: 'Lentidão' }] })
+
+      expect(res.status).toBe(404)
+      expect(res.body.message).toBe('Pergunta não encontrada.')
+      expect(prisma.formularioPergunta.update).not.toHaveBeenCalled()
+    })
+
+    it('sem condicoes no corpo não mexe no espelho legado', async () => {
+      vi.mocked(prisma.formularioPergunta.update).mockResolvedValue({ ...perguntaMock, ordem: 3 } as any)
+
+      const res = await request(app)
+        .patch('/api/formulario/perguntas/perg-1')
+        .send({ categoriaId: 'cat-1', ordem: 3 })
+
+      expect(res.status).toBe(200)
+      const data = vi.mocked(prisma.formularioPergunta.update).mock.calls[0]?.[0] as any
+      expect(data).not.toHaveProperty('dependeDePerguntaId')
+      expect(data).not.toHaveProperty('dependeDeOpcao')
+    })
+
+    it('condicoes vazias limpam o espelho legado', async () => {
+      vi.mocked(prisma.formularioPergunta.update).mockResolvedValue({ ...perguntaMock, condicoes: null } as any)
+
+      const res = await request(app)
+        .patch('/api/formulario/perguntas/perg-2')
+        .send({ categoriaId: 'cat-1', condicoes: [] })
+
+      expect(res.status).toBe(200)
+      expect(prisma.formularioPergunta.update).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ condicoes: [], dependeDePerguntaId: null, dependeDeOpcao: null })
+      }))
     })
   })
 

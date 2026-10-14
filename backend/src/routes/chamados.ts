@@ -164,7 +164,7 @@ async function salvarAnexosDePerguntas(
   protocolo: string,
   anexos: Array<{ perguntaId: string; pergunta?: string; nome: string; tipo?: string; base64: string }> | undefined
 ) {
-  const salvos: Array<{ perguntaId: string; pergunta?: string; nome: string; tipo?: string; url: string }> = []
+  const salvos: Array<{ perguntaId: string; pergunta: string | null; nome: string; tipo: string | null; url: string }> = []
   for (const a of anexos ?? []) {
     const salvo = await salvarAnexo(a.base64, a.nome, a.tipo || '', `abertura/${protocolo}`)
     if (!salvo) continue
