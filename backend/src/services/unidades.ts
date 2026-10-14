@@ -10,6 +10,22 @@
  * os filtros de Prisma e as comparações em memória usam as mesmas funções.
  */
 
+/**
+ * Separador entre as unidades do técnico em `Usuario.filial`.
+ *
+ * A vírgula NÃO serve: três escolas oficiais têm vírgula no NOME
+ * ("E.E. BRENO ROSSI, MAESTRO", "E.E. FERNANDO MAURO P. ROCHA, DEPUTADO",
+ * "E.E. GERALDINO DOS SANTOS, DEPUTADO / JOSUÉ DE CASTRO"). Quebrando por ela,
+ * "E.E. FERNANDO MAURO P. ROCHA, DEPUTADO" virava dois tokens — e o token solto
+ * "DEPUTADO" casava também com a escola do técnico vizinho, que terminava em
+ * ", DEPUTADO". No SCE o efeito era o oposto: o casamento é por igualdade, então
+ * nenhuma das três achava o próprio parque.
+ *
+ * A vírgula continua sendo aceita porque já está gravada em vários usuários:
+ * quem tem "|" usa "|" e quem tem "," continua com "," — a lista nunca é misturada.
+ */
+export const SEPARADOR_UNIDADES = '|'
+
 /** Normaliza nome de unidade para comparação (sem acento, sem "E.E.", sem honorífico). */
 export function normalizarUnidade(valor: string | null | undefined): string {
   let n = String(valor || '')
@@ -26,10 +42,10 @@ export function normalizarUnidade(valor: string | null | undefined): string {
 
 /** Lista de unidades do usuário (filial única vira lista de um item). */
 export function unidadesDoUsuario(filial: string | null | undefined): string[] {
-  return String(filial || '')
-    .split(',')
-    .map((u) => u.trim())
-    .filter((u) => u.length > 0)
+  const bruto = String(filial || '')
+  // "|" manda: com ele presente a vírgula é parte do nome da escola, não separador.
+  const partes = bruto.includes(SEPARADOR_UNIDADES) ? bruto.split(SEPARADOR_UNIDADES) : bruto.split(',')
+  return partes.map((u) => u.trim()).filter((u) => u.length > 0)
 }
 
 /**

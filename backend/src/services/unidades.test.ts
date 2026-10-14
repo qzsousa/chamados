@@ -24,6 +24,46 @@ describe('unidades do usuário', () => {
   })
 })
 
+describe('separador de unidades do técnico', () => {
+  it('aceita "|" como separador', () => {
+    expect(unidadesDoUsuario('E.E. BELIZE | E.E. JARDIM IGUATEMI')).toEqual([
+      'E.E. BELIZE',
+      'E.E. JARDIM IGUATEMI',
+    ])
+  })
+
+  it('"|" manda: com ele presente a vírgula é do nome da escola, não separador', () => {
+    expect(unidadesDoUsuario('E.E. BRENO ROSSI, MAESTRO | E.E. VILA BELA')).toEqual([
+      'E.E. BRENO ROSSI, MAESTRO',
+      'E.E. VILA BELA',
+    ])
+  })
+
+  // A vírgula é parte do NOME de três escolas oficiais. Quebrando por ela, o
+  // honorífico virava um token solto que casava com a escola do colega.
+  it('escola com vírgula no nome não vira dois tokens na lista nova', () => {
+    expect(unidadesDoUsuario('E.E. FERNANDO MAURO P. ROCHA, DEPUTADO | E.E. BERNARDIM RIBEIRO')).toEqual([
+      'E.E. FERNANDO MAURO P. ROCHA, DEPUTADO',
+      'E.E. BERNARDIM RIBEIRO',
+    ])
+  })
+
+  it('técnico não enxerga a escola do colega por causa do honorífico solto', () => {
+    const valdeir = 'E.E. FERNANDO MAURO P. ROCHA, DEPUTADO | E.E. BERNARDIM RIBEIRO'
+    expect(usuarioAtendeUnidade(valdeir, 'E.E. FERNANDO MAURO P. ROCHA, DEPUTADO')).toBe(true)
+    expect(usuarioAtendeUnidade(valdeir, 'E.E. GERALDINO DOS SANTOS, DEPUTADO / JOSUÉ DE CASTRO')).toBe(false)
+  })
+
+  it('filtro do Prisma gera um contains por escola, sem fragmento solto', () => {
+    const filtro = filtroUnidadesDoUsuario('E.E. BRENO ROSSI, MAESTRO | E.E. VILA BELA')
+    expect(filtro.OR).toHaveLength(2)
+    const chaves = filtro.OR.map((c: any) => c.unidade.contains)
+    expect(chaves).toContain('BRENO ROSSI')
+    expect(chaves).toContain('VILA BELA')
+    expect(chaves).not.toContain('MAESTRO')
+  })
+})
+
 describe('normalizarUnidade', () => {
   it('tira acento, "E.E." e honorífico', () => {
     expect(normalizarUnidade('E.E. Antônio Carlos Brasileiro de Almeida Jobim')).toBe('ANTONIO CARLOS BRASILEIRO DE ALMEIDA JOBIM')

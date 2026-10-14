@@ -70,7 +70,7 @@ const LISTA_ESCOLAS_TECNICOS = [
   { escola: "E.E. INDIANA ZUYCHER S. DE JESUS", tecnico: "GUILHERME" },
   { escola: "E.E. ISAAC SCHRAIBER", tecnico: "CHARLES" },
   { escola: "E.E. JARDIM DOM ANGÉLICO", tecnico: "CHARLES" },
-  { escola: "E.E. JARDIM IGUATEMI", tecnico: "VALDEIR" },
+  { escola: "E.E. JARDIM IGUATEMI", tecnico: "GUILHERME" },
   { escola: "E.E. JARDIM LIMOEIRO III", tecnico: "JOÃO" },
   { escola: "E.E. JARDIM PEDRA BRANCA / PATRÍCIA GALVÃO - PAGU", tecnico: "VALDEIR" },
   { escola: "E.E. JARDIM WILMA FLOR", tecnico: "VALDEIR" },

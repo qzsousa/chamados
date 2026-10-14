@@ -65,6 +65,15 @@ const CORRECOES: Array<{ de: string; para: string; nota: string }> = [
   // Sem trocar o usuário junto, os 3 ficariam sem acesso.
   { de: 'Indiana Zuycher Simoes De Jesus Profa', para: 'E.E. INDIANA ZUYCHER S. DE JESUS', nota: '19 equipamentos (3 usuários)' },
 
+  // Carmelinda: idem, equipamento migrado no SCE (sce/unidades-migrar-grafia.js).
+  // A master abreviaria o nome do meio ("Carmelinda M. Pereira") e o SCE grava
+  // por extenso — "MARQUES PEREIRA" != "M PEREIRA" no casamento estrito, então a
+  // escola aparecia sem parque no /unidades. Confirmação: a master antiga traz
+  // "E.E. CARMELINDA MARQUES PEREIRA PROFESSORA" por extenso, e o mapa de
+  // e-mails liga 'E.E. CARMELINDA M. PEREIRA' ao e909166a@educacao.sp.gov.br,
+  // que é o Gestor cadastrado nesta grafia.
+  { de: 'Carmelinda Marques Pereira Profa', para: 'E.E. CARMELINDA M. PEREIRA / LIMA BARRETO', nota: '1 equipamento (3 usuários)' },
+
   // Grafias que já casam hoje (a coluna de equipamento do SCE ainda usa a
   // grafia antiga). Trocar é cosmético: o acesso não muda.
   { de: 'Luiz Vaz De Camoes', para: 'E.E. LUIZ VAZ DE CAMÕES', nota: '200 equipamentos' },

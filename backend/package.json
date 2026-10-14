@@ -15,6 +15,8 @@
     "inventario:sync": "tsx migrate-inventario-only.ts",
     "sce:reconcile": "tsx reconcile-sce.ts",
     "filial:padronizar": "tsx padronizar-filial.ts",
+    "tecnicos:escolas": "tsx definir-escolas-tecnicos.ts",
+    "tecnicos:reatribuir": "tsx reatribuir-escola-tecnico.ts",
     "email:backfill": "tsx backfill-chamado-email.ts",
     "test": "vitest run",
     "test:watch": "vitest",
