@@ -376,6 +376,30 @@ function filtroUnidadeTolerante(filial: string) {
   }
 }
 
+/**
+ * Unidades de todos os usuários cujo nome casa com o informado, num único
+ * `filial` no formato de `Usuario.filial` (vírgula separa).
+ *
+ * Sem diferenciar caixa porque o select do filtro manda o nome como está no
+ * cadastro e o histórico gravou "JOÃO" onde a conta se chama "João". Traz
+ * TODOS os que casam em vez do primeiro: nome repetido no setor é comum e
+ * perder a fila de um deles por causa disso seria pior do que listar a união.
+ *
+ * Nome que não casa com ninguém devolve string vazia, e `filtroUnidadesDoUsuario`
+ * transforma isso em lista vazia — filtro por técnico inexistente não traz nada,
+ * que é a resposta honesta.
+ */
+async function filiaisDeUsuarios(nome: string): Promise<string> {
+  const usuarios = await prisma.usuario.findMany({
+    where: { nome: { equals: nome.trim(), mode: 'insensitive' } },
+    select: { filial: true },
+  })
+  return usuarios
+    .map((u) => u.filial || '')
+    .filter(Boolean)
+    .join(', ')
+}
+
 function getTecnicoSetor(unidade: string): string {
   const mapa = getMapaTecnicos()
   const chave = normalizarNomeEscola(unidade)
@@ -990,7 +1014,13 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res) => {
     if (filtros.status) where.status = filtros.status
     if (filtros.urgencia) where.urgencia = { contains: filtros.urgencia, mode: 'insensitive' }
     if (filtros.tecnico) where.tecnicoSetor = filtros.tecnico
-    if (filtros.responsavel) where.responsavel = { contains: filtros.responsavel, mode: 'insensitive' }
+    if (filtros.responsavel) {
+      // O técnico escolhido no filtro é quem ATENDE as escolas, não quem ficou
+      // com o chamado. A fila que interessa é a das escolas dele — e o chamado
+      // recém-aberto está nela justamente por ainda NÃO ter responsável, que é o
+      // que o filtro antigo (por `responsavel`) nunca trazia.
+      where.AND = [...(where.AND || []), filtroUnidadesDoUsuario(await filiaisDeUsuarios(filtros.responsavel))]
+    }
     if (filtros.inventario) where.inventarioStatus = filtros.inventario
     if (filtros.dataDe || filtros.dataAte) {
       where.timestamp = {}
@@ -1033,13 +1063,9 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res) => {
  * saiu da equipe. Na prática o select encheu de ruído: o mesmo técnico em
  * caixa diferente virava duas opções ("Hebert"/"HERBERT", "Joao"/"JOÃO"),
  * nomes órfãos de conta removida seguiam listados para sempre ("SEINTEC") e
- * as contas de teste dos cenários entravam junto. Como o filtro casa por
- * `contains` sem diferenciar acento, nenhuma dessas opções extras encontrava
- * chamado que a opção do cadastro já não trouxesse — só poluição.
- *
- * Consequência aceita: chamado antigo cujo `responsavel` não bate com o nome
- * do cadastro (ex.: "JOÃO" gravado, cadastro "Joao") deixa de ser alcançável
- * pelo filtro.
+ * as contas de teste dos cenários entravam junto. Como o filtro já não casa por
+ * `responsavel` (e sim pelas escolas do técnico, via `Usuario.filial`), nenhuma
+ * dessas opções extras teria a que casual achar chamado — só poluição.
  *
  * Fica ANTES de `/:id` para não ser capturada pela rota de chamado por id.
  */

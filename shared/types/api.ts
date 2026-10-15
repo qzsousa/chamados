@@ -669,7 +669,11 @@ export const FiltrosChamadoSchema = z.object({
   status: StatusChamadoSchema.optional(),
   urgencia: z.string().optional(),
   tecnico: z.string().optional(),
-  /** Nome do técnico responsável (parcial e sem diferenciar maiúsculas). */
+  /**
+   * Nome do técnico ATENDENTE (sem diferenciar maiúsculas). Traz os chamados
+   * das escolas listadas em `Usuario.filial` dele — não os que ele é
+   * responsável, que no chamado recém-aberto ainda nem existe.
+   */
   responsavel: z.string().optional(),
   inventario: InventarioStatusSchema.optional(),
   dataDe: z.string().date().optional(),
