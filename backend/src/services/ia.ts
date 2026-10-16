@@ -59,11 +59,18 @@ export const ChatIASchema = z.object({
 
 export type ChatIAPayload = z.infer<typeof ChatIASchema>
 
-/** Modelo de cada provedor. Variavel de ambiente por provedor. */
+/**
+ * Modelo de cada provedor. Variavel de ambiente por provedor.
+ *
+ * O padrao da NVIDIA nao e mais o GLM 5.3 flash: na API hospedada ele responde
+ * VAZIO depois de ~100 s de raciocinio (o `chat_template_kwargs.thinking`
+ * abaixo e parametro de container local e nao desliga o raciocinio la). O
+ * Nemotron 3 Super responde a mesma tool em ~5 s.
+ */
 function modeloDe(p: ProvedorIA, body?: ChatIAPayload): string {
   if (p === 'nvidia' && body?.modelo) return body.modelo
-  if (p === 'nvidia') return process.env.IA_MODELO_NVIDIA || 'z-ai/glm-5.3-flash'
-  if (p === 'gemini') return process.env.IA_MODELO_GEMINI || 'gemini-1.5-flash'
+  if (p === 'nvidia') return process.env.IA_MODELO_NVIDIA || 'nvidia/nemotron-3-super-120b-a12b'
+  if (p === 'gemini') return process.env.IA_MODELO_GEMINI || 'gemini-3-flash-preview'
   return process.env.IA_MODELO_GROQ || 'openai/gpt-oss-20b'
 }
 
@@ -190,6 +197,24 @@ function limparEscolha(resposta: any) {
 }
 
 /**
+ * Resposta sem texto util NAO e sucesso.
+ *
+ * Modelo de raciocinio que estoura o `max_tokens` pensando devolve HTTP 200,
+ * `finish_reason: length` e `content: ""` — sem `tool_calls` tambem. Se isso
+ * contasse como resposta, o `consultarIA` parava no primeiro provedor e o
+ * navegador recebia um balão vazio depois de um minuto de espera, sem chance
+ * de cair para Gemini/Groq. Aqui vira falha do provedor, que e o que e.
+ */
+function respostaUtil(resposta: any): boolean {
+  const escolha = resposta?.choices?.[0]
+  if (!escolha) return false
+  const mensagem = escolha.message
+  if (!mensagem) return false
+  if (Array.isArray(mensagem.tool_calls) && mensagem.tool_calls.length) return true
+  return typeof mensagem.content === 'string' && mensagem.content.trim().length > 0
+}
+
+/**
  * Tenta os provedores em ordem e devolve a primeira resposta boa.
  *
  * Levanta erro so quando TODOS falharam: no chat do portal um provedor cair
@@ -207,6 +232,10 @@ export async function consultarIA(body: ChatIAPayload): Promise<{ provedor: Prov
     }
     try {
       const resposta = await chamarProvedor(p, chave, body)
+      if (!respostaUtil(resposta)) {
+        falhas.push(`${p}: ${modeloDe(p, body)} devolveu resposta vazia`)
+        continue
+      }
       return { provedor: p, resposta: limparEscolha(resposta) }
     } catch (e) {
       const motivo = e instanceof ErroProvedor ? `${e.status} ${e.message}`.slice(0, 300) : String(e)
