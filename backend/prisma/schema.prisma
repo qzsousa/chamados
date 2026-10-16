@@ -64,6 +64,7 @@ model Escola {
   updatedAt        DateTime @updatedAt
 
   inventario       Inventario?
+  dvrs             DvrHost[]
 
   @@index([tecnico])
 }
@@ -488,4 +489,73 @@ model FormularioPergunta {
   updatedAt           DateTime            @updatedAt
 
   @@index([categoriaId, ordem])
+}
+
+// =============================================================================
+// Monitoramento de DVRs — importação do relatório do pingInfoView (ver
+// backend/src/services/pingInfoView.ts). O serviço de ping (monitor/) deixou de
+// ser a fonte; o retrato vem do .txt importado pela matriz.
+// =============================================================================
+
+model DvrHost {
+  ip          String        @id
+  /// VIDEO-DVR1 / VIDEO-DVR2 / VIDEO-DVR3.
+  hostname    String
+  /// ADM ou PED.
+  tipo        String
+  /// Nome da escola como veio do manifesto do pingInfoView; pode divergir do
+  /// cadastro oficial em Escola, por isso a ligação é opcional.
+  escolaNome  String?
+  escolaId    String?
+  escola      Escola?       @relation(fields: [escolaId], references: [id], onDelete: SetNull)
+  /// Posição do DVR no manifesto (1..432).
+  ordem       Int?
+  criadoEm    DateTime      @default(now())
+  atualizadoEm DateTime     @updatedAt
+
+  amostras    DvrAmostra[]
+
+  @@index([escolaId])
+  @@index([escolaNome])
+  @@index([tipo])
+}
+
+model DvrImportacao {
+  id               String          @id @default(cuid())
+  arquivo          String
+  importadoEm      DateTime        @default(now())
+  importadoPor     String?
+  total            Int
+  online           Int
+  offline          Int
+  desconhecido     Int                @default(0)
+  /// IPs do relatório que não corresponderam a nenhum DvrHost (endereço errado).
+  naoCorrespondidos String[]
+  /// Instante de observação do relatório (originado do campo Last Succeed/Failed On).
+  observadoEm      DateTime?
+  criadoEm         DateTime         @default(now())
+
+  amostras         DvrAmostra[]
+
+  @@index([importadoEm])
+}
+
+model DvrAmostra {
+  id            String         @id @default(cuid())
+  ip            String
+  // KEEPS relation to DvrHost even when the DVR is removed (Cascade handles it).
+  importacaoId  String
+  status        String
+  latenciaMs    Float?
+  ttl           Int?
+  ordem         Int?
+  criadoEm      DateTime       @default(now())
+
+  dvr           DvrHost        @relation(fields: [ip], references: [ip], onDelete: Cascade)
+  importacao    DvrImportacao  @relation(fields: [importacaoId], references: [id], onDelete: Cascade)
+
+  @@index([ip])
+  @@index([importacaoId])
+  @@index([importacaoId, ip])
+  @@unique([ip, importacaoId])
 }

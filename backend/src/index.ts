@@ -30,6 +30,7 @@ import escolaRoutes from './routes/escolas'
 import encaminhamentoRoutes from './routes/encaminhamentos'
 import equipamentoRoutes from './routes/equipamentos'
 import inventarioRoutes from './routes/inventario'
+import dvrRoutes from './routes/dvr'
 import dashboardRoutes from './routes/dashboard'
 import { LISTA_ESCOLAS_EMAILS } from './services/normalization'
 import { syncInventario } from './services/migration'
@@ -266,6 +267,7 @@ app.use('/api/chamados', chamadoRoutes)
 app.use('/api/escolas', escolaRoutes)
 app.use('/api/equipamentos', equipamentoRoutes)
 app.use('/api/inventario', inventarioRoutes)
+app.use('/api/dvr', dvrRoutes)
 app.use('/api/feedback', feedbackRoutes)
 app.use('/api/notificacoes', notificacaoRoutes)
 app.use('/api/tutoriais', tutorialRoutes)

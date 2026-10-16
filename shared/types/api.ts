@@ -143,6 +143,7 @@ export const ROTAS_USUARIO = [
   'usuarios',
   'escolas',
   'inventario',
+  'dvr',
   'tutoriais',
   'encaminhamentos',
   'notificacoes',
