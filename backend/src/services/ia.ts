@@ -54,12 +54,14 @@ export const ChatIASchema = z.object({
   temperature: z.number().min(0).max(2).optional(),
   max_tokens: z.number().int().min(64).max(32000).optional(),
   provedores: z.array(z.enum(provedoresIA)).max(3).optional(),
+  modelo: z.string().max(200).optional(),
 })
 
 export type ChatIAPayload = z.infer<typeof ChatIASchema>
 
 /** Modelo de cada provedor. Variavel de ambiente por provedor. */
-function modeloDe(p: ProvedorIA): string {
+function modeloDe(p: ProvedorIA, body?: ChatIAPayload): string {
+  if (p === 'nvidia' && body?.modelo) return body.modelo
   if (p === 'nvidia') return process.env.IA_MODELO_NVIDIA || 'z-ai/glm-5.3-flash'
   if (p === 'gemini') return process.env.IA_MODELO_GEMINI || 'gemini-1.5-flash'
   return process.env.IA_MODELO_GROQ || 'openai/gpt-oss-20b'
@@ -137,7 +139,7 @@ function deGemini(resposta: unknown): unknown {
 }
 
 async function chamarProvedor(p: ProvedorIA, chave: string, body: ChatIAPayload): Promise<unknown> {
-  const modelo = modeloDe(p)
+  const modelo = modeloDe(p, body)
 
   if (p === 'gemini') {
     const r = await fetch(baseDe(p), {
@@ -213,6 +215,19 @@ export async function consultarIA(body: ChatIAPayload): Promise<{ provedor: Prov
   }
 
   throw new Error(`Nenhum provedor respondeu. ${falhas.join(' | ')}`)
+}
+
+/** Lista os modelos disponiveis na API NIM (NVIDIA). */
+export async function listarModelosNvidia(): Promise<string[]> {
+  const chave = process.env.IA_API_KEY_NVIDIA
+  if (!chave) throw new Error('IA_API_KEY_NVIDIA não configurada')
+  const r = await fetch('https://integrate.api.nvidia.com/v1/models', {
+    headers: { Authorization: `Bearer ${chave}` },
+  })
+  if (!r.ok) throw new Error(`NIM models: ${r.status} ${await r.text()}`.slice(0, 200))
+  const json = (await r.json()) as { data?: Array<{ id?: string }> }
+  const ids = (json?.data ?? []).map((m) => m?.id).filter((id): id is string => Boolean(id))
+  return Array.from(new Set(ids)).sort()
 }
 
 /** Reexportado para a rota montar a resposta de erro sem vazar a chave. */

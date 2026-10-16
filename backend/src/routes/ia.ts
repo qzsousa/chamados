@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { isZodError } from '../utils/zodError'
 import { authMiddleware, attachUserRecord, requireRole, AuthenticatedRequest } from '../middleware/auth'
-import { ChatIASchema, consultarIA } from '../services/ia'
+import { ChatIASchema, consultarIA, listarModelosNvidia } from '../services/ia'
 
 const router = Router()
 
@@ -25,6 +25,21 @@ router.post(
     const body = ChatIASchema.parse(req.body)
     const { provedor, resposta } = await consultarIA(body)
     return res.json({ provedor, ...(resposta as object) })
+  },
+)
+
+router.get(
+  '/modelos',
+  authMiddleware,
+  attachUserRecord,
+  requireRole('ADMIN'),
+  async (_req, res) => {
+    try {
+      const modelos = await listarModelosNvidia()
+      return res.json({ modelos })
+    } catch (e: any) {
+      return res.status(502).json({ error: 'MODELS_FETCH_FAILED', message: String(e?.message || e) })
+    }
   },
 )
 
