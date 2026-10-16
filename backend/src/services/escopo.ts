@@ -33,6 +33,12 @@
  * (listagem, indicadores) e a comparação em memória (rota de detalhe, aceite)
  * usam as MESMAS funções, senão um chamado apareceria na lista e daria 403 ao
  * clicar nele.
+ *
+ * A EXCEÇÃO À REGRA DA LISTA VAZIA
+ *
+ * "Lista vazia = sem restrição" vale para VER chamado. Para RECEBER, não:
+ * nas categorias de `CATEGORIAS_COM_LIBERACAO` (Sistemas e E-mail) a lista
+ * vazia significa "não está liberado para esse assunto". Ver `podeReceberChamado`.
  */
 import type { Prisma } from '@prisma/client'
 import { prisma } from '../config/prisma'
@@ -243,6 +249,10 @@ export async function prefixosDoUsuario(user: UsuarioComEscopo | null | undefine
  * `true` quando o usuário NÃO tem escopo — quem decide aí é a unidade. É
  * por isso que a mesma função serve para "o técnico pode ver este chamado?" e
  * para "este técnico pode ser destino deste encaminhamento?".
+ *
+ * NÃO usar para decidir DESTINO: lá a ausência de escopo deixa de significar
+ * "atende tudo" nas categorias de `CATEGORIAS_COM_LIBERACAO`, e quem sabe
+ * disso é `podeReceberChamado`.
  */
 export async function casaComEscopo(
   chamado: { tipo?: string | null; categoriaChave?: string | null },
@@ -251,6 +261,115 @@ export async function casaComEscopo(
   const prefixos = await prefixosDoUsuario(user)
   if (!prefixos.length) return true
   return casaComPrefixos(chamado.tipo, prefixos)
+}
+
+/**
+ * Categorias que SÓ são encaminhadas a quem as liberou no perfil.
+ *
+ * Sistemas e E-mail são as de fila curta e trabalho especializado: o volume é
+ * pequeno e o atendimento é de quem conhece o assunto. Para o resto a regra de
+ * sempre continua valendo — lista vazia é sem restrição e quem decide é a
+ * unidade —, mas nelas a lista vazia passa a significar "não atende".
+ *
+ * Sem essa ressalva, qualquer volante que atendesse a escola recebia chamado
+ * de sistema junto com o de rede. A escala da equipe tentava impedir isso, mas
+ * vivia só na tela do portal: o encaminhamento — automático ou manual — não
+ * olhava o perfil, e era por lá que o chamado entrava.
+ *
+ * São as chaves de `FormularioCategoria.chave`. `e-mail` entra para cobrir a
+ * grafia com hífen de quem cadastrou a categoria assim.
+ */
+export const CATEGORIAS_COM_LIBERACAO = ['sistemas', 'email', 'e-mail']
+
+/**
+ * Maiúscula e sem acento: a chave sai de um slug, mas o cadastro da categoria
+ * é manual e as duas grafias existem no formulário.
+ */
+function normChave(valor: string | null | undefined): string {
+  return String(valor || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toUpperCase()
+}
+
+const LIBERACAO_NORM = new Set(CATEGORIAS_COM_LIBERACAO.map(normChave))
+
+/** Esta categoria só chega a quem a marcou no perfil? */
+export function categoriaExigeLiberacao(chave: string | null | undefined): boolean {
+  return LIBERACAO_NORM.has(normChave(chave))
+}
+
+/**
+ * Chave da categoria do chamado.
+ *
+ * A chave é gravada na criação, mas só nos chamados abertos depois que o
+ * formulário passou a ter chave — nos anteriores vem `null`. Nesses a
+ * categoria é descoberta pelo nome com que o `tipo` começa, que é a mesma
+ * aposta de `casaComRegra` no encaminhamento: o `tipo` é `<categoria> - <1ª
+ * resposta>`, e o " - " evita que "Equip. - Sistema" caia em Sistemas.
+ *
+ * A consulta só acontece no caminho dos chamados antigos, que param de
+ * gravar a chave a cada dia.
+ */
+export async function chaveDaCategoria(chamado: {
+  tipo?: string | null
+  categoriaChave?: string | null
+}): Promise<string> {
+  const chave = String(chamado.categoriaChave || '').trim()
+  if (chave) return chave
+
+  const tipo = normTipo(chamado.tipo)
+  if (!tipo) return ''
+  const categorias = await prisma.formularioCategoria.findMany({
+    select: { chave: true, nome: true },
+  })
+  return (
+    categorias.find((c) => {
+      const nome = normTipo(c.nome)
+      return !!nome && (tipo === nome || tipo.startsWith(`${nome} - `))
+    })?.chave ?? ''
+  )
+}
+
+/** Este chamado está numa categoria que exige liberação no perfil do técnico? */
+export async function exigeLiberacao(chamado: {
+  tipo?: string | null
+  categoriaChave?: string | null
+}): Promise<boolean> {
+  return categoriaExigeLiberacao(await chaveDaCategoria(chamado))
+}
+
+/** O usuário liberou ESTA categoria no perfil (qualquer um dos tipos dela)? */
+export function liberouCategoria(
+  user: UsuarioComEscopo | null | undefined,
+  chave: string | null | undefined,
+): boolean {
+  const alvo = normChave(chave)
+  if (!alvo) return false
+  return tiposDoUsuario(user).some((t) => normChave(t.chave) === alvo)
+}
+
+/**
+ * Este técnico pode receber este chamado?
+ *
+ * `casaComEscopo` pergunta "o tipo está no escopo da pessoa?" e responde `true`
+ * para quem não tem escopo. Aqui entra a ressalva das categorias com
+ * liberação: nelas a ausência de escopo é "não atende esta categoria", e não
+ * "atende tudo". É a diferença entre quem atende a escola e quem foi
+ * habilitado naquele assunto — e só a segunda entra na fila.
+ *
+ * `liberadaJaResolvida` evita resolver a categoria duas vezes: quem chama
+ * para muitos candidatos resolve uma vez e repassa o resultado.
+ */
+export async function podeReceberChamado(
+  chamado: { tipo?: string | null; categoriaChave?: string | null },
+  user: UsuarioComEscopo | null | undefined,
+  liberadaJaResolvida?: boolean,
+): Promise<boolean> {
+  const liberada = liberadaJaResolvida ?? (await exigeLiberacao(chamado))
+  if (liberada && !temEscopo(user)) return false
+  return casaComEscopo(chamado, user)
 }
 
 /**
@@ -266,16 +385,20 @@ export async function filtrarPorEscopo<T>(
   candidatos: T[],
   usuarioDe: (c: T) => UsuarioComEscopo | null | undefined,
 ): Promise<T[]> {
+  const liberada = await exigeLiberacao(chamado)
   const chaves = new Set<string>()
   for (const c of candidatos) {
     for (const t of tiposDoUsuario(usuarioDe(c))) chaves.add(t.chave)
   }
-  if (!chaves.size) return candidatos
+  // Ninguém com escopo: o filtro só tem o que dizer se a categoria exigir
+  // liberação, e aí a resposta é "ninguém" — a lista de quem não atendeu não
+  // libera ninguém. Sem liberação, sai como está, como sempre.
+  if (!chaves.size) return liberada ? [] : candidatos
 
   const nomes = await nomesDasCategorias([...chaves])
   return candidatos.filter((c) => {
     const tipos = tiposDoUsuario(usuarioDe(c))
-    if (!tipos.length) return true // sem escopo: nunca é barrado
+    if (!tipos.length) return !liberada
     const prefixos = tipos
       .map((t) => {
         const nome = nomes.get(t.chave)

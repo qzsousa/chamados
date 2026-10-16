@@ -17,7 +17,7 @@ import { prisma } from '../config/prisma'
 import { normalizarNomeEscola } from './normalization'
 import { notificarUsuario } from './notificacoes'
 import { normalizarUnidade, unidadesDoUsuario, usuarioAtendeUnidade } from './unidades'
-import { casaComEscopo } from './escopo'
+import { exigeLiberacao, podeReceberChamado } from './escopo'
 
 export type ModoEncaminhamento = 'UNIDADE' | 'TECNICO'
 
@@ -125,17 +125,27 @@ async function abertosPorTecnico(nomes: string[]): Promise<Map<string, number>> 
  * unidade: é o motivo de existirem contas assim (alguém de fora do setor que
  * só faz sistemas não pode ficar na fila atrás do volante que faz tudo).
  *
- * Sem nenhum usuário com escopo, a ordenação é exatamente a de sempre.
+ * CATEGORIAS COM LIBERAÇÃO (Sistemas e E-mail): nestas a fila não é a da
+ * unidade. Quem não tem a categoria marcada no perfil fica de fora mesmo
+ * atendendo a escola — é o perfil que diz quem entende do assunto. Sem isso o
+ * chamado de sistemas caía em qualquer volante, e a escala da equipe (que
+ * vivia só na tela do portal) não impedia nada.
+ *
+ * Sem nenhum usuário com escopo, a ordenação é a de sempre — nas categorias
+ * comuns, porque é lá que a lista da unidade decide.
  */
 export async function tecnicosDaUnidade(
   unidade: string,
-  chamado?: ChamadoParaEncaminhar | null,
+  chamado?: Pick<ChamadoParaEncaminhar, 'tipo' | 'categoriaChave'> | null,
 ): Promise<TecnicoDestino[]> {
   const candidatos = await prisma.usuario.findMany({
     where: { nivel: 'TECNICO', status: 'ATIVO' },
     select: { id: true, nome: true, email: true, filial: true, createdAt: true, escopoTipos: true },
     orderBy: { createdAt: 'asc' },
   })
+
+  // Mesma resposta para todos os candidatos: resolver uma vez e repassar.
+  const liberada = chamado ? await exigeLiberacao(chamado) : false
 
   const alvo = normalizarUnidade(unidade)
   type Candidato = (typeof candidatos)[number] & {
@@ -149,11 +159,20 @@ export async function tecnicosDaUnidade(
   for (const c of candidatos) {
     const escopoTipos = c.escopoTipos ?? []
     if (escopoTipos.length) {
-      base.push({ ...c, escopoTipos, casa: chamado ? await casaComEscopo(chamado, c) : false, exata: false, porEscopo: true })
+      base.push({ ...c, escopoTipos, casa: chamado ? await podeReceberChamado(chamado, c, liberada) : false, exata: false, porEscopo: true })
       continue
     }
     const exata = unidadesDoUsuario(c.filial).some((u) => normalizarUnidade(u) === alvo)
-    base.push({ ...c, escopoTipos, exata, casa: exata || usuarioAtendeUnidade(c.filial, unidade), porEscopo: false })
+    const porUnidade = exata || usuarioAtendeUnidade(c.filial, unidade)
+    base.push({
+      ...c,
+      escopoTipos,
+      exata,
+      // Categoria com liberação: sem escopo marcado, atender a unidade não
+      // habilita ninguém naquele assunto.
+      casa: liberada ? false : porUnidade,
+      porEscopo: false,
+    })
   }
 
   const elegiveis = base.filter((c) => c.casa)
@@ -184,6 +203,10 @@ export async function tecnicosDaUnidade(
  * encaminhamento é recusado. Configurar a regra é escolha do ADMIN, mas
  * "aceitar tudo sem conferir" entregaria chamado de rede para quem só atende
  * sistemas — exatamente o que a restrição existe para evitar.
+ *
+ * Vale a mesma ressalva das categorias com liberação (Sistemas e E-mail):
+ * apontar a regra para alguém que não tem a categoria marcada no perfil é
+ * recusado, mesmo com a conta ativa e no nível certo.
  */
 async function tecnicoFixo(
   tecnicoId: string,
@@ -194,7 +217,7 @@ async function tecnicoFixo(
     select: { id: true, nome: true, email: true, filial: true, escopoTipos: true },
   })
   if (!u) return null
-  if (chamado && !(await casaComEscopo(chamado, u))) return null
+  if (chamado && !(await podeReceberChamado(chamado, u))) return null
   return { id: u.id, nome: u.nome, email: u.email, filial: u.filial, abertos: 0 }
 }
 
@@ -238,10 +261,16 @@ export async function encaminharChamado(
   const origem = opcoes.origem ?? 'Automático'
 
   if (!tecnico) {
+    // O motivo vai para o histórico e é lido pelo ADMIN que vai configurar a
+    // regra: "não há ninguém" e "ninguém está liberado para este assunto" pedem
+    // correções diferentes (cadastrar técnico x marcar a categoria no perfil).
+    const liberada = await exigeLiberacao(chamado)
     const motivo =
       opcoes.modo === 'TECNICO' && opcoes.tecnicoId
         ? 'O técnico fixo da regra não atende este tipo de chamado.'
-        : 'Nenhum técnico ativo atendendo esta unidade está cadastrado.'
+        : liberada
+          ? 'Nenhum técnico está liberado para este tipo de chamado no perfil.'
+          : 'Nenhum técnico ativo atendendo esta unidade está cadastrado.'
     const entrada = `[${fmtHoraLocal(new Date())}] Sem técnico para encaminhamento: ${motivo}`
     const atualizado = await prisma.chamado.update({
       where: { id: chamado.id },

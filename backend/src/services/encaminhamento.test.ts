@@ -215,12 +215,71 @@ describe('tecnicosDaUnidade — escopo de tipos', () => {
     expect(r.motivo).toContain('tipo')
   })
 
-  it('modo TECNICO: técnico sem escopo continua aceito sempre', async () => {
+  it('modo TECNICO: técnico sem escopo é recusado em categoria com liberação', async () => {
     vi.mocked(prisma.usuario.findFirst).mockResolvedValue({ ...TECNICO, escopoTipos: [] } as any)
 
     const r = await encaminharChamado(SISTEMAS as any, { modo: 'TECNICO', tecnicoId: 'tec-1' })
 
+    expect(r.ok).toBe(false)
+    expect(r.motivo).toContain('tipo')
+  })
+
+  it('modo TECNICO: técnico sem escopo continua aceito em chamado de equipamento', async () => {
+    vi.mocked(prisma.usuario.findFirst).mockResolvedValue({ ...TECNICO, escopoTipos: [] } as any)
+
+    const r = await encaminharChamado(CHAMADO as any, { modo: 'TECNICO', tecnicoId: 'tec-1' })
+
     expect(r.ok).toBe(true)
+  })
+
+  /**
+   * A regra que faltava: em Sistemas/E-mail a fila é a de quem liberou a
+   * categoria, e o técnico da unidade some dela se não tiver a categoria marcada.
+   */
+  describe('categorias com liberação', () => {
+    /** Técnico da unidade, sem escopo: atende a escola, não o assunto. */
+    const DA_UNIDADE = { ...TECNICO, id: 'tec-unidade', nome: 'Da Unidade', filial: 'E.E. VILA BELA', escopoTipos: [] }
+
+    it('técnico da unidade sem escopo NÃO entra na fila de sistemas', async () => {
+      vi.mocked(prisma.usuario.findMany).mockResolvedValue([DA_UNIDADE, DE_SISTEMAS] as any)
+
+      const lista = await tecnicosDaUnidade('E.E. VILA BELA', SISTEMAS as any)
+
+      expect(lista.map((t) => t.nome)).toEqual(['Da Sistemas'])
+    })
+
+    it('ninguém liberado: a fila fica vazia e o motivo diz que é o perfil', async () => {
+      vi.mocked(prisma.usuario.findMany).mockResolvedValue([DA_UNIDADE] as any)
+
+      const lista = await tecnicosDaUnidade('E.E. VILA BELA', SISTEMAS as any)
+      expect(lista).toEqual([])
+
+      // O motivo vai para o histórico e é lido por quem vai corrigir: "cadastre
+      // um técnico" e "libere a categoria no perfil" são consertos diferentes.
+      const r = await encaminharChamado(SISTEMAS as any, { modo: 'UNIDADE' })
+      expect(r.ok).toBe(false)
+      expect(r.motivo).toContain('liberado')
+    })
+
+    it('chamado de equipamento continua indo para o técnico da unidade sem escopo', async () => {
+      vi.mocked(prisma.usuario.findMany).mockResolvedValue([DA_UNIDADE] as any)
+
+      const lista = await tecnicosDaUnidade('E.E. VILA BELA', {
+        ...SISTEMAS,
+        tipo: 'Equipamento - Formatação',
+        categoriaChave: 'equipamento',
+      } as any)
+
+      expect(lista.map((t) => t.nome)).toEqual(['Da Unidade'])
+    })
+
+    it('chamado antigo, sem categoriaChave: a categoria sai do tipo', async () => {
+      vi.mocked(prisma.usuario.findMany).mockResolvedValue([DA_UNIDADE, DE_SISTEMAS] as any)
+
+      const lista = await tecnicosDaUnidade('E.E. VILA BELA', { ...SISTEMAS, categoriaChave: null } as any)
+
+      expect(lista.map((t) => t.nome)).toEqual(['Da Sistemas'])
+    })
   })
 })
 

@@ -11,7 +11,7 @@ import { notificarChamadoStatusAlterado, notificarChamadoCriado } from '../servi
 import { notificarAdmins, notificarUnidade, notificarTecnicoResponsavel } from '../services/notificacoes'
 import { encaminharChamado, encaminharPorRegras, tecnicosDaUnidade, destinoWhere } from '../services/encaminhamento'
 import { filtroUnidadesDoUsuario, usuarioAtendeUnidade } from '../services/unidades'
-import { casaComEscopo, clauseDeEscopo, temEscopo } from '../services/escopo'
+import { casaComEscopo, categoriaExigeLiberacao, clauseDeEscopo, liberouCategoria, temEscopo } from '../services/escopo'
 import { salvarAnexo, salvarAnexoComPath } from '../services/anexos'
 import {
   avaliarRespostasFormulario,
@@ -1100,15 +1100,32 @@ router.get('/filtros/tecnicos', authMiddleware, async (_req: AuthenticatedReques
  * Destinos ativos para o seletor de encaminhamento do modal de detalhes:
  * ADMIN e TECNICO (ver `NIVEIS_DESTINO`). Fica ANTES de `/:id` para não ser
  * capturada pela rota de chamado por id.
+ *
+ * `?categoriaChave=` limita a lista aos técnicos liberados para aquela
+ * categoria. Nas categorias com liberação (Sistemas e E-mail) é o perfil que
+ * decide quem entra, e oferecer no select quem vai ser recusado no POST só
+ * gera encaminhamento que volta como 422. Sem o parâmetro devolve a lista
+ * inteira — é o que a tela de Regras de Encaminhamento usa para escolher o
+ * técnico fixo de qualquer categoria.
  */
-router.get('/encaminhar/tecnicos', authMiddleware, requireRole('ADMIN', 'TECNICO'), async (_req: AuthenticatedRequest, res) => {
+router.get('/encaminhar/tecnicos', authMiddleware, requireRole('ADMIN', 'TECNICO'), async (req: AuthenticatedRequest, res) => {
   try {
-    const tecnicos = await prisma.usuario.findMany({
+    const chave = typeof req.query.categoriaChave === 'string' ? req.query.categoriaChave.trim() : ''
+
+    const usuarios = await prisma.usuario.findMany({
       where: destinoWhere,
-      select: { id: true, nome: true, email: true, filial: true },
+      select: { id: true, nome: true, email: true, filial: true, escopoTipos: true },
       orderBy: { nome: 'asc' },
     })
-    return res.json({ data: tecnicos })
+
+    // A categoria só muda a lista quando exige liberação. `escopoTipos` não sai
+    // na resposta: é dado de configuração do perfil, não do chamado.
+    const elegiveis = categoriaExigeLiberacao(chave)
+      ? usuarios.filter((u) => liberouCategoria(u, chave))
+      : usuarios
+
+    const data = elegiveis.map(({ id, nome, email, filial }) => ({ id, nome, email, filial }))
+    return res.json({ data })
   } catch (err) {
     throw err
   }
@@ -1117,11 +1134,18 @@ router.get('/encaminhar/tecnicos', authMiddleware, requireRole('ADMIN', 'TECNICO
 /** Técnicos que atendem a unidade do chamado (sugestão do "Técnico da unidade"). */
 router.get('/encaminhar/tecnicos/:id', authMiddleware, requireRole('ADMIN', 'TECNICO'), async (req: AuthenticatedRequest, res) => {
   try {
-    const chamado = await prisma.chamado.findUnique({ where: { id: req.params.id }, select: { unidade: true } })
+    // `tipo` e `categoriaChave` vêm junto porque a fila é filtrada pelo perfil do
+    // técnico. Sem eles, um técnico de sistemas — que não atende a escola —
+    // nunca aparecia na sugestão, e o técnico da unidade aparecia mesmo em
+    // chamado de Sistemas, que ele não pode receber.
+    const chamado = await prisma.chamado.findUnique({
+      where: { id: req.params.id },
+      select: { unidade: true, tipo: true, categoriaChave: true },
+    })
     if (!chamado) {
       return res.status(404).json({ error: 'NOT_FOUND', message: 'Chamado não encontrado' })
     }
-    const tecnicos = await tecnicosDaUnidade(chamado.unidade)
+    const tecnicos = await tecnicosDaUnidade(chamado.unidade, chamado)
     return res.json({ data: tecnicos })
   } catch (err) {
     throw err

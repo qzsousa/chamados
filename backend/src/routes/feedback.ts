@@ -28,9 +28,10 @@ export async function criarFeedbackPublic(req: import('express').Request, res: i
   }
 }
 
-// Leitura da fila de elogios/sugestões: matriz (ADMIN e TECNICO). O papel
-// GESTOR/VISUALIZADOR da escola não entra — não é a quem a caixa responde.
-router.get('/', authMiddleware, attachUserRecord, requireRole('ADMIN', 'TECNICO'), async (req: AuthenticatedRequest, res) => {
+// Leitura da fila de elogios/sugestões: só o ADMIN. O papel TECNICO saiu junto
+// com a tela — o técnico atende chamado e vai à escola, não responde a caixa de
+// elogios. GESTOR/VISUALIZADOR nunca entrou: não é a quem a caixa responde.
+router.get('/', authMiddleware, attachUserRecord, requireRole('ADMIN'), async (req: AuthenticatedRequest, res) => {
   const page = Math.max(1, parseInt(req.query.page as string) || 1)
   const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 20))
   const tipo = req.query.tipo as string | undefined
@@ -45,7 +46,7 @@ router.get('/', authMiddleware, attachUserRecord, requireRole('ADMIN', 'TECNICO'
   return res.json({ data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } })
 })
 
-router.get('/stats', authMiddleware, attachUserRecord, requireRole('ADMIN', 'TECNICO'), async (_req, res) => {
+router.get('/stats', authMiddleware, attachUserRecord, requireRole('ADMIN'), async (_req, res) => {
   const [avaliacoes, elogios, sugestoes] = await Promise.all([
     resumoAvaliacoes(),
     prisma.feedback.count({ where: { tipo: 'ELOGIO' } }),
@@ -66,7 +67,7 @@ router.get('/stats', authMiddleware, attachUserRecord, requireRole('ADMIN', 'TEC
  * Filtros: `nota` (1..5) e `somenteComentarios` (ignora as notas sem texto).
  * Avaliação de chamado excluído (soft delete) não entra na lista.
  */
-router.get('/avaliacoes', authMiddleware, attachUserRecord, requireRole('ADMIN', 'TECNICO'), async (req: AuthenticatedRequest, res) => {
+router.get('/avaliacoes', authMiddleware, attachUserRecord, requireRole('ADMIN'), async (req: AuthenticatedRequest, res) => {
   const page = Math.max(1, parseInt(req.query.page as string) || 1)
   const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 20))
   const nota = parseInt(req.query.nota as string)
