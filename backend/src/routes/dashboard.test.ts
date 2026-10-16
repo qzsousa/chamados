@@ -10,7 +10,8 @@ vi.mock('../config/prisma', () => ({
   prisma: {
     chamado: {
       findMany: vi.fn(),
-      count: vi.fn()
+      count: vi.fn(),
+      groupBy: vi.fn()
     },
     avaliacao: {
       groupBy: vi.fn()
@@ -61,16 +62,28 @@ describe('Dashboard Routes', () => {
     app = createApp()
     vi.clearAllMocks()
     vi.mocked(prisma.avaliacao.groupBy).mockResolvedValue([])
+    vi.mocked(prisma.chamado.groupBy).mockResolvedValue([] as any)
   })
 
   describe('GET /matriz', () => {
     it('should return dashboard matriz data without auth', async () => {
-      const chamados = [
-        { id: '1', status: 'ABERTO', urgencia: 'Alta - Urgente', tecnicoResolucao: null, unidade: 'E.E. TESTE', timestamp: new Date(), ultimaAtualizacao: new Date(), historico: null, tipo: 'Hardware' },
-        { id: '2', status: 'RESOLVIDO', urgencia: 'Normal', tecnicoResolucao: 'Técnico 1', unidade: 'E.E. TESTE 2', timestamp: new Date(), ultimaAtualizacao: new Date(), historico: null, tipo: 'Software' }
+const chamados = [
+        { id: '1', status: 'ABERTO', urgencia: 'Alta - Urgente', responsavel: null, unidade: 'E.E. TESTE', timestamp: new Date(), ultimaAtualizacao: new Date(), historico: null, tipo: 'Hardware' },
+        { id: '2', status: 'RESOLVIDO', urgencia: 'Normal', responsavel: 'T\u00e9cnico 1', unidade: 'E.E. TESTE 2', timestamp: new Date(), ultimaAtualizacao: new Date(), historico: null, tipo: 'Software' }
       ]
       vi.mocked(prisma.chamado.findMany).mockResolvedValue(chamados)
-      vi.mocked(prisma.chamado.count).mockResolvedValue(2)
+      vi.mocked(prisma.chamado.count)
+        .mockResolvedValueOnce(2)
+        .mockResolvedValueOnce(1)
+        .mockResolvedValueOnce(0)
+        .mockResolvedValueOnce(0)
+        .mockResolvedValueOnce(0)
+        .mockResolvedValueOnce(1)
+        .mockResolvedValueOnce(1)
+      vi.mocked(prisma.chamado.groupBy)
+        .mockResolvedValueOnce([{ status: 'ABERTO', _count: { _all: 1 } }, { status: 'RESOLVIDO', _count: { _all: 1 } }] as any)
+        .mockResolvedValueOnce([{ urgencia: 'Alta - Urgente', _count: { _all: 1 } }, { urgencia: 'Normal', _count: { _all: 1 } }] as any)
+        .mockResolvedValueOnce([{ responsavel: 'T\u00e9cnico 1', _count: { _all: 1 } }] as any)
 
       const res = await request(app).get('/api/dashboard/matriz')
 
@@ -196,7 +209,14 @@ describe('Dashboard Routes', () => {
         { id: '3', status: 'AGUARDANDO_CONFERENCIA', urgencia: 'Normal', tecnicoResolucao: 'T1', unidade: 'E.E. T', timestamp: new Date(), ultimaAtualizacao: new Date(), historico: null, tipo: 'Hardware' }
       ]
       vi.mocked(prisma.chamado.findMany).mockResolvedValue(chamados)
-      vi.mocked(prisma.chamado.count).mockResolvedValue(3)
+      vi.mocked(prisma.chamado.count)
+        .mockResolvedValueOnce(3)
+        .mockResolvedValueOnce(2)
+        .mockResolvedValueOnce(0)
+        .mockResolvedValueOnce(0)
+        .mockResolvedValueOnce(1)
+        .mockResolvedValueOnce(0)
+        .mockResolvedValueOnce(0)
 
       const res = await request(app).get('/api/dashboard/matriz')
 
