@@ -28,6 +28,7 @@ import tutorialRoutes, { obterTutorialPublic } from './routes/tutoriais'
 import formularioRoutes, { formularioPublicoHandler } from './routes/formulario'
 import escolaRoutes from './routes/escolas'
 import encaminhamentoRoutes from './routes/encaminhamentos'
+import iaRoutes from './routes/ia'
 import equipamentoRoutes from './routes/equipamentos'
 import inventarioRoutes from './routes/inventario'
 import dvrRoutes from './routes/dvr'
@@ -273,6 +274,7 @@ app.use('/api/notificacoes', notificacaoRoutes)
 app.use('/api/tutoriais', tutorialRoutes)
 app.use('/api/formulario', formularioRoutes)
 app.use('/api/encaminhamentos', encaminhamentoRoutes)
+app.use('/api/ia', iaRoutes)
 
 if (env.SENTRY_DSN) {
   app.use(Sentry.expressErrorHandler())

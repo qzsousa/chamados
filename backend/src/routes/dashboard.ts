@@ -86,18 +86,28 @@ async function getDashboardData(filtroFilial?: string, filtroNivel?: string, esc
   })
   if (visibilidade) Object.assign(where, visibilidade)
 
-  const [chamados, totalCount] = await Promise.all([
+  const [
+    chamados,
+    total,
+    abertos,
+    andamento,
+    comunicado,
+    aguardandoConferencia,
+    resolvidos,
+    altaPrioridade,
+  ] = await Promise.all([
     prisma.chamado.findMany({
       where,
       orderBy: { timestamp: 'desc' },
-      // A matriz é uma visão de trabalho, não um relatório: sem teto, o
-      // endpoint carrega a tabela inteira em memória e devolve para o
-      // navegador. O total real vem do count() logo abaixo, então o limite não
-      // mente sobre o tamanho do backlog. O teste "should limit chamados a
-      // 100" já exigia isso desde que foi escrito.
       take: LIMITE_MATRIZ,
     }),
-    prisma.chamado.count({ where })
+    prisma.chamado.count({ where }),
+    prisma.chamado.count({ where: { ...where, status: { in: ['ABERTO', 'ENCAMINHADO'] } } }),
+    prisma.chamado.count({ where: { ...where, status: 'ANDAMENTO' } }),
+    prisma.chamado.count({ where: { ...where, status: 'COMUNICADO' } }),
+    prisma.chamado.count({ where: { ...where, status: 'AGUARDANDO_CONFERENCIA' } }),
+    prisma.chamado.count({ where: { ...where, status: 'RESOLVIDO' } }),
+    prisma.chamado.count({ where: { ...where, urgencia: { startsWith: 'Alta' }, status: { not: 'RESOLVIDO' } } }),
   ])
 
   const mapaTecnicos = getMapaTecnicos()
@@ -114,15 +124,14 @@ async function getDashboardData(filtroFilial?: string, filtroNivel?: string, esc
   })
 
   const kpis = {
-    total: totalCount,
-    // ENCAMINHADO entra em "abertos": é chamado novo na fila do técnico, não
-    // serviço em curso.
-    abertos: enriched.filter(c => c.status === 'ABERTO' || c.status === 'ENCAMINHADO').length,
-    andamento: enriched.filter(c => c.status === 'ANDAMENTO').length,
-    comunicado: enriched.filter(c => c.status === 'COMUNICADO').length,
-    aguardandoConferencia: enriched.filter(c => c.status === 'AGUARDANDO_CONFERENCIA').length,
-    resolvidos: enriched.filter(c => c.status === 'RESOLVIDO').length,
-    altaPrioridade: enriched.filter(c => c.urgencia.startsWith('Alta') && c.status !== 'RESOLVIDO').length
+    // total: count real, não depende da lista limitada a LIMITE_MATRIZ.
+    total,
+    abertos,
+    andamento,
+    comunicado,
+    aguardandoConferencia,
+    resolvidos,
+    altaPrioridade,
   }
 
   return { chamados: enriched, kpis, mapaInventario }
@@ -137,17 +146,42 @@ router.get('/matriz', async (_req, res) => {
       resumoAvaliacoes()
     ])
 
-    const porStatus: Record<string, number> = {}
-    const porUrgencia: Record<string, number> = {}
-    const resolvidosPorTecnico: Record<string, number> = {}
+    const wherePublico: any = { excluido: false }
 
-    chamados.forEach(c => {
-      porStatus[c.status] = (porStatus[c.status] || 0) + 1
-      const urg = c.urgencia.split(' ')[0]
-      porUrgencia[urg] = (porUrgencia[urg] || 0) + 1
-      if (c.status === 'RESOLVIDO' && c.tecnicoResolucao) {
-        resolvidosPorTecnico[c.tecnicoResolucao] = (resolvidosPorTecnico[c.tecnicoResolucao] || 0) + 1
-      }
+    const [porStatusRaw, porUrgenciaRaw, resolvidosRaw] = await Promise.all([
+      prisma.chamado.groupBy({
+        by: ['status'],
+        where: wherePublico,
+        _count: { _all: true },
+      }),
+      prisma.chamado.groupBy({
+        by: ['urgencia'],
+        where: wherePublico,
+        _count: { _all: true },
+      }),
+      prisma.chamado.groupBy({
+        by: ['responsavel'],
+        where: { ...wherePublico, status: 'RESOLVIDO' },
+        _count: { _all: true },
+      }),
+    ])
+
+    const porStatus: Record<string, number> = {}
+    porStatusRaw.forEach((r) => {
+      porStatus[r.status] = (porStatus[r.status] || 0) + r._count._all
+    })
+
+    const porUrgencia: Record<string, number> = {}
+    porUrgenciaRaw.forEach((r) => {
+      const urg = String(r.urgencia || '').split(' ')[0]
+      porUrgencia[urg] = (porUrgencia[urg] || 0) + r._count._all
+    })
+
+    const resolvidosPorTecnico: Record<string, number> = {}
+    resolvidosRaw.forEach((r) => {
+      const tecnico = String(r.responsavel || '').trim()
+      if (!tecnico) return
+      resolvidosPorTecnico[tecnico] = (resolvidosPorTecnico[tecnico] || 0) + r._count._all
     })
 
     return res.json({

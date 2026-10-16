@@ -269,10 +269,69 @@ describe('Chamados Routes', () => {
       }
     })
 
-    it('responsavel filtra pelo nome, sem acento e sem diferenciar maiúsculas', async () => {
-      const where = await whereDaListagem('responsavel=joao')
+    it('responsavel traz as escolas do técnico, não os chamados que ele é responsável', async () => {
+      vi.mocked(prisma.usuario.findMany).mockResolvedValue([
+        { filial: 'E.E. HUMBERTO BAPTISTELLI, E.E. JARDIM LIMOEIRO III' } as any,
+      ])
 
-      expect(where.responsavel).toEqual({ contains: 'joao', mode: 'insensitive' })
+      const where = await whereDaListagem('responsavel=João')
+
+      expect(where.AND).toEqual([
+        {
+          OR: [
+            { unidade: { contains: 'HUMBERTO BAPTISTELLI', mode: 'insensitive' } },
+            { unidade: { contains: 'JARDIM LIMOEIRO III', mode: 'insensitive' } },
+          ],
+        },
+      ])
+      expect(where).not.toHaveProperty('responsavel')
+    })
+
+    /**
+     * O select manda o nome como está no cadastro, e o histórico gravou
+     * "JOÃO". Sem `insensitive` aqui, o filtro da tela esbarra no próprio nome
+     * do técnico escolhido.
+     */
+    it('responsavel acha o técnico sem diferenciar maiúsculas', async () => {
+      vi.mocked(prisma.usuario.findMany).mockResolvedValue([{ filial: 'E.E. TESTE' } as any])
+
+      await whereDaListagem('responsavel=João')
+
+      expect(prisma.usuario.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { nome: { equals: 'João', mode: 'insensitive' } },
+        })
+      )
+    })
+
+    /** Duas contas com o mesmo nome não podem ficar de fora metade da fila. */
+    it('responsavel soma as escolas de todos os usuários do mesmo nome', async () => {
+      vi.mocked(prisma.usuario.findMany).mockResolvedValue([
+        { filial: 'E.E. ALCIDES BOSCOLO' } as any,
+        { filial: 'E.E. JARDIM LIMOEIRO III' } as any,
+      ])
+
+      const where = await whereDaListagem('responsavel=João')
+
+      expect(where.AND[0].OR).toHaveLength(2)
+    })
+
+    it('responsavel de técnico sem escola cadastrada não traz chamado nenhum', async () => {
+      vi.mocked(prisma.usuario.findMany).mockResolvedValue([{ filial: '' } as any])
+
+      const where = await whereDaListagem('responsavel=João')
+
+      expect(where.AND).toEqual([{ OR: [{ unidade: { equals: '__sem_unidades__' } }] }])
+    })
+
+    /** O `where.OR` do nível TECNICO precisa sobreviver ao filtro do técnico. */
+    it('responsavel não sobrescreve o OR do técnico', async () => {
+      vi.mocked(prisma.usuario.findMany).mockResolvedValue([{ filial: 'E.E. TESTE' } as any])
+
+      const where = await whereDaListagem('responsavel=João')
+
+      expect(where.OR).toBeDefined()
+      expect(where.AND).toHaveLength(1)
     })
 
     it('categoria (texto do tipo) e categoriaChave convivem como filtros distintos', async () => {
@@ -286,8 +345,8 @@ describe('Chamados Routes', () => {
       const where = await whereDaListagem('')
 
       expect(where).not.toHaveProperty('categoriaChave')
-      expect(where).not.toHaveProperty('responsavel')
       expect(where).not.toHaveProperty('AND')
+      expect(prisma.usuario.findMany).not.toHaveBeenCalled()
     })
   })
 

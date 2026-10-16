@@ -90,7 +90,7 @@ beforeEach(() => {
 
 describe('GET /chamados/encaminhar/tecnicos', () => {
   it('lista os técnicos ativos para o seletor', async () => {
-    vi.mocked(prisma.usuario.findMany).mockResolvedValue([{ id: 'tec-1', nome: 'Carlos', email: 'c@sp.gov.br', filial: 'E.E. BELIZE' }] as any)
+    vi.mocked(prisma.usuario.findMany).mockResolvedValue([{ id: 'tec-1', nome: 'Carlos', email: 'c@sp.gov.br', filial: 'E.E. BELIZE', escopoTipos: [] }] as any)
     const res = await request(createApp()).get('/api/chamados/encaminhar/tecnicos')
     expect(res.status).toBe(200)
     expect(res.body.data).toHaveLength(1)
@@ -104,15 +104,60 @@ describe('GET /chamados/encaminhar/tecnicos', () => {
       status: 'ATIVO',
     })
   })
+
+  it('não expõe escopoTipos: é configuração do perfil, não dado do chamado', async () => {
+    vi.mocked(prisma.usuario.findMany).mockResolvedValue([
+      { id: 'tec-1', nome: 'Carlos', email: 'c@sp.gov.br', filial: 'E.E. BELIZE', escopoTipos: ['sistemas::PortalNet'] },
+    ] as any)
+    const res = await request(createApp()).get('/api/chamados/encaminhar/tecnicos')
+    expect(res.body.data[0]).toEqual({ id: 'tec-1', nome: 'Carlos', email: 'c@sp.gov.br', filial: 'E.E. BELIZE' })
+  })
+
+  it('com categoriaChave de liberação, só entra quem marcou no perfil', async () => {
+    vi.mocked(prisma.usuario.findMany).mockResolvedValue([
+      { id: 'tec-1', nome: 'Da Sistemas', email: 'a@sp.gov.br', filial: 'URE', escopoTipos: ['sistemas::PortalNet'] },
+      { id: 'tec-2', nome: 'Da Rede', email: 'b@sp.gov.br', filial: 'URE', escopoTipos: [] },
+    ] as any)
+
+    const res = await request(createApp()).get('/api/chamados/encaminhar/tecnicos?categoriaChave=sistemas')
+
+    expect(res.body.data.map((t: any) => t.nome)).toEqual(['Da Sistemas'])
+  })
+
+  it('categoriaChave de categoria comum não filtra a lista', async () => {
+    vi.mocked(prisma.usuario.findMany).mockResolvedValue([
+      { id: 'tec-1', nome: 'Da Sistemas', email: 'a@sp.gov.br', filial: 'URE', escopoTipos: ['sistemas::PortalNet'] },
+      { id: 'tec-2', nome: 'Da Rede', email: 'b@sp.gov.br', filial: 'URE', escopoTipos: [] },
+    ] as any)
+
+    const res = await request(createApp()).get('/api/chamados/encaminhar/tecnicos?categoriaChave=equipamento')
+
+    expect(res.body.data).toHaveLength(2)
+  })
 })
 
 describe('GET /chamados/encaminhar/tecnicos/:id', () => {
   it('sugere os técnicos da unidade do chamado', async () => {
-    vi.mocked(prisma.chamado.findUnique).mockResolvedValue({ unidade: 'E.E. BELIZE' } as any)
+    vi.mocked(prisma.chamado.findUnique).mockResolvedValue({ unidade: 'E.E. BELIZE', tipo: 'Equipamento - Formatação', categoriaChave: 'equipamento' } as any)
     vi.mocked(tecnicosDaUnidade).mockResolvedValue([TECNICO])
     const res = await request(createApp()).get('/api/chamados/encaminhar/tecnicos/chamado-1')
     expect(res.status).toBe(200)
     expect(res.body.data[0].nome).toBe('Carlos Souza')
+  })
+
+  /**
+   * Sem `tipo`/`categoriaChave` a fila é montada sem saber o assunto, e quem
+   * atende por escopo fica sempre de fora — o oposto do que se quer num
+   * chamado de Sistemas.
+   */
+  it('manda o chamado para a fila, para o escopo conseguir ser avaliado', async () => {
+    vi.mocked(prisma.chamado.findUnique).mockResolvedValue({ unidade: 'E.E. BELIZE', tipo: 'Sistemas - PortalNet', categoriaChave: 'sistemas' } as any)
+    vi.mocked(tecnicosDaUnidade).mockResolvedValue([])
+    await request(createApp()).get('/api/chamados/encaminhar/tecnicos/chamado-1')
+    expect(tecnicosDaUnidade).toHaveBeenCalledWith(
+      'E.E. BELIZE',
+      expect.objectContaining({ tipo: 'Sistemas - PortalNet', categoriaChave: 'sistemas' }),
+    )
   })
 
   it('404 para chamado inexistente', async () => {
@@ -213,7 +258,7 @@ describe('Regras de encaminhamento (ADMIN)', () => {
   })
 
   it('aceita ADMIN como técnico fixo, com o mesmo filtro da lista', async () => {
-    vi.mocked(prisma.usuario.findFirst).mockResolvedValue({ nome: 'Jessica Alves' } as any)
+    vi.mocked(prisma.usuario.findFirst).mockResolvedValue({ nome: 'Jessica Alves', escopoTipos: ['sistemas::PortalNet'] } as any)
     vi.mocked(prisma.encaminhamentoRegra.upsert).mockResolvedValue({ id: 'r1', categoriaChave: 'sistemas' } as any)
     const res = await request(createApp())
       .put('/api/encaminhamentos')
@@ -224,5 +269,29 @@ describe('Regras de encaminhamento (ADMIN)', () => {
       nivel: { in: ['ADMIN', 'TECNICO'] },
       status: 'ATIVO',
     })
+  })
+
+  /**
+   * Regra apontada para quem não atende o assunto nunca dispara: o
+   * encaminhamento é recusado lá na hora de aplicar, longe de quem configurou.
+   * Recusar aqui é o que devolve a mensagem certa para a tela.
+   */
+  it('recusa técnico fixo sem a categoria liberada no perfil', async () => {
+    vi.mocked(prisma.usuario.findFirst).mockResolvedValue({ nome: 'Valdeir', escopoTipos: ['rede::Lentidão'] } as any)
+    const res = await request(createApp())
+      .put('/api/encaminhamentos')
+      .send({ categoriaChave: 'sistemas', modo: 'TECNICO', tecnicoId: TEC_ID, ativa: true })
+    expect(res.status).toBe(400)
+    expect(res.body.message).toContain('liberada')
+    expect(prisma.encaminhamentoRegra.upsert).not.toHaveBeenCalled()
+  })
+
+  it('categoria comum não exige liberação: técnico sem escopo segue válido', async () => {
+    vi.mocked(prisma.usuario.findFirst).mockResolvedValue({ nome: 'Valdeir', escopoTipos: [] } as any)
+    vi.mocked(prisma.encaminhamentoRegra.upsert).mockResolvedValue({ id: 'r1', categoriaChave: 'equipamento' } as any)
+    const res = await request(createApp())
+      .put('/api/encaminhamentos')
+      .send({ categoriaChave: 'equipamento', modo: 'TECNICO', tecnicoId: TEC_ID, ativa: true })
+    expect(res.status).toBe(200)
   })
 })

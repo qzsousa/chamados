@@ -12,6 +12,7 @@ import { prisma } from '../config/prisma'
 import { authMiddleware, AuthenticatedRequest, requireRole } from '../middleware/auth'
 import { EncaminhamentoRegraSchema } from '@shared/api'
 import { encaminharPendentes, destinoWhere } from '../services/encaminhamento'
+import { categoriaExigeLiberacao, liberouCategoria } from '../services/escopo'
 
 const router = Router()
 
@@ -53,12 +54,23 @@ router.put('/', async (req: AuthenticatedRequest, res) => {
     if (data.modo === 'TECNICO' && data.tecnicoId) {
       const t = await prisma.usuario.findFirst({
         where: { id: data.tecnicoId, ...destinoWhere },
-        select: { nome: true },
+        select: { nome: true, escopoTipos: true },
       })
       if (!t) {
         return res.status(400).json({
           error: 'VALIDATION_ERROR',
           message: 'Técnico de destino inválido ou inativo.',
+        })
+      }
+      // Sistemas e E-mail só chegam a quem está liberado no perfil. Salvar a
+      // regra mesmo assim criaria uma regra que nunca dispara: o encaminhamento
+      // é recusado na hora de aplicar, e aí o problema aparece longe de quem
+      // configurou.
+      if (categoriaExigeLiberacao(data.categoriaChave) && !liberouCategoria(t, data.categoriaChave)) {
+        return res.status(400).json({
+          error: 'VALIDATION_ERROR',
+          message:
+            'Este técnico não tem esta categoria liberada no perfil (Escopo de tipos de chamado). Libere antes de apontar a regra para ele.',
         })
       }
       tecnicoNome = t.nome

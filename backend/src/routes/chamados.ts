@@ -11,7 +11,7 @@ import { notificarChamadoStatusAlterado, notificarChamadoCriado } from '../servi
 import { notificarAdmins, notificarUnidade, notificarTecnicoResponsavel } from '../services/notificacoes'
 import { encaminharChamado, encaminharPorRegras, tecnicosDaUnidade, destinoWhere } from '../services/encaminhamento'
 import { filtroUnidadesDoUsuario, usuarioAtendeUnidade } from '../services/unidades'
-import { casaComEscopo, clauseDeEscopo, temEscopo } from '../services/escopo'
+import { casaComEscopo, categoriaExigeLiberacao, clauseDeEscopo, liberouCategoria, temEscopo } from '../services/escopo'
 import { salvarAnexo, salvarAnexoComPath } from '../services/anexos'
 import {
   avaliarRespostasFormulario,
@@ -374,6 +374,30 @@ function filtroUnidadeTolerante(filial: string) {
   return {
     OR: partes.map((p) => ({ unidade: { contains: p, mode: 'insensitive' as const } })),
   }
+}
+
+/**
+ * Unidades de todos os usuários cujo nome casa com o informado, num único
+ * `filial` no formato de `Usuario.filial` (vírgula separa).
+ *
+ * Sem diferenciar caixa porque o select do filtro manda o nome como está no
+ * cadastro e o histórico gravou "JOÃO" onde a conta se chama "João". Traz
+ * TODOS os que casam em vez do primeiro: nome repetido no setor é comum e
+ * perder a fila de um deles por causa disso seria pior do que listar a união.
+ *
+ * Nome que não casa com ninguém devolve string vazia, e `filtroUnidadesDoUsuario`
+ * transforma isso em lista vazia — filtro por técnico inexistente não traz nada,
+ * que é a resposta honesta.
+ */
+async function filiaisDeUsuarios(nome: string): Promise<string> {
+  const usuarios = await prisma.usuario.findMany({
+    where: { nome: { equals: nome.trim(), mode: 'insensitive' } },
+    select: { filial: true },
+  })
+  return usuarios
+    .map((u) => u.filial || '')
+    .filter(Boolean)
+    .join(', ')
 }
 
 function getTecnicoSetor(unidade: string): string {
@@ -990,7 +1014,13 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res) => {
     if (filtros.status) where.status = filtros.status
     if (filtros.urgencia) where.urgencia = { contains: filtros.urgencia, mode: 'insensitive' }
     if (filtros.tecnico) where.tecnicoSetor = filtros.tecnico
-    if (filtros.responsavel) where.responsavel = { contains: filtros.responsavel, mode: 'insensitive' }
+    if (filtros.responsavel) {
+      // O técnico escolhido no filtro é quem ATENDE as escolas, não quem ficou
+      // com o chamado. A fila que interessa é a das escolas dele — e o chamado
+      // recém-aberto está nela justamente por ainda NÃO ter responsável, que é o
+      // que o filtro antigo (por `responsavel`) nunca trazia.
+      where.AND = [...(where.AND || []), filtroUnidadesDoUsuario(await filiaisDeUsuarios(filtros.responsavel))]
+    }
     if (filtros.inventario) where.inventarioStatus = filtros.inventario
     if (filtros.dataDe || filtros.dataAte) {
       where.timestamp = {}
@@ -1033,13 +1063,9 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res) => {
  * saiu da equipe. Na prática o select encheu de ruído: o mesmo técnico em
  * caixa diferente virava duas opções ("Hebert"/"HERBERT", "Joao"/"JOÃO"),
  * nomes órfãos de conta removida seguiam listados para sempre ("SEINTEC") e
- * as contas de teste dos cenários entravam junto. Como o filtro casa por
- * `contains` sem diferenciar acento, nenhuma dessas opções extras encontrava
- * chamado que a opção do cadastro já não trouxesse — só poluição.
- *
- * Consequência aceita: chamado antigo cujo `responsavel` não bate com o nome
- * do cadastro (ex.: "JOÃO" gravado, cadastro "Joao") deixa de ser alcançável
- * pelo filtro.
+ * as contas de teste dos cenários entravam junto. Como o filtro já não casa por
+ * `responsavel` (e sim pelas escolas do técnico, via `Usuario.filial`), nenhuma
+ * dessas opções extras teria a que casual achar chamado — só poluição.
  *
  * Fica ANTES de `/:id` para não ser capturada pela rota de chamado por id.
  */
@@ -1074,15 +1100,32 @@ router.get('/filtros/tecnicos', authMiddleware, async (_req: AuthenticatedReques
  * Destinos ativos para o seletor de encaminhamento do modal de detalhes:
  * ADMIN e TECNICO (ver `NIVEIS_DESTINO`). Fica ANTES de `/:id` para não ser
  * capturada pela rota de chamado por id.
+ *
+ * `?categoriaChave=` limita a lista aos técnicos liberados para aquela
+ * categoria. Nas categorias com liberação (Sistemas e E-mail) é o perfil que
+ * decide quem entra, e oferecer no select quem vai ser recusado no POST só
+ * gera encaminhamento que volta como 422. Sem o parâmetro devolve a lista
+ * inteira — é o que a tela de Regras de Encaminhamento usa para escolher o
+ * técnico fixo de qualquer categoria.
  */
-router.get('/encaminhar/tecnicos', authMiddleware, requireRole('ADMIN', 'TECNICO'), async (_req: AuthenticatedRequest, res) => {
+router.get('/encaminhar/tecnicos', authMiddleware, requireRole('ADMIN', 'TECNICO'), async (req: AuthenticatedRequest, res) => {
   try {
-    const tecnicos = await prisma.usuario.findMany({
+    const chave = typeof req.query.categoriaChave === 'string' ? req.query.categoriaChave.trim() : ''
+
+    const usuarios = await prisma.usuario.findMany({
       where: destinoWhere,
-      select: { id: true, nome: true, email: true, filial: true },
+      select: { id: true, nome: true, email: true, filial: true, escopoTipos: true },
       orderBy: { nome: 'asc' },
     })
-    return res.json({ data: tecnicos })
+
+    // A categoria só muda a lista quando exige liberação. `escopoTipos` não sai
+    // na resposta: é dado de configuração do perfil, não do chamado.
+    const elegiveis = categoriaExigeLiberacao(chave)
+      ? usuarios.filter((u) => liberouCategoria(u, chave))
+      : usuarios
+
+    const data = elegiveis.map(({ id, nome, email, filial }) => ({ id, nome, email, filial }))
+    return res.json({ data })
   } catch (err) {
     throw err
   }
@@ -1091,11 +1134,18 @@ router.get('/encaminhar/tecnicos', authMiddleware, requireRole('ADMIN', 'TECNICO
 /** Técnicos que atendem a unidade do chamado (sugestão do "Técnico da unidade"). */
 router.get('/encaminhar/tecnicos/:id', authMiddleware, requireRole('ADMIN', 'TECNICO'), async (req: AuthenticatedRequest, res) => {
   try {
-    const chamado = await prisma.chamado.findUnique({ where: { id: req.params.id }, select: { unidade: true } })
+    // `tipo` e `categoriaChave` vêm junto porque a fila é filtrada pelo perfil do
+    // técnico. Sem eles, um técnico de sistemas — que não atende a escola —
+    // nunca aparecia na sugestão, e o técnico da unidade aparecia mesmo em
+    // chamado de Sistemas, que ele não pode receber.
+    const chamado = await prisma.chamado.findUnique({
+      where: { id: req.params.id },
+      select: { unidade: true, tipo: true, categoriaChave: true },
+    })
     if (!chamado) {
       return res.status(404).json({ error: 'NOT_FOUND', message: 'Chamado não encontrado' })
     }
-    const tecnicos = await tecnicosDaUnidade(chamado.unidade)
+    const tecnicos = await tecnicosDaUnidade(chamado.unidade, chamado)
     return res.json({ data: tecnicos })
   } catch (err) {
     throw err

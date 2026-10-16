@@ -12,6 +12,12 @@ import {
   casaComPrefixos,
   prefixosDoUsuario,
   escoposInvalidos,
+  categoriaExigeLiberacao,
+  chaveDaCategoria,
+  exigeLiberacao,
+  liberouCategoria,
+  podeReceberChamado,
+  filtrarPorEscopo,
 } from './escopo'
 
 vi.mock('../config/prisma', () => ({
@@ -38,8 +44,10 @@ const CATEGORIAS = [
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mockCategorias.mockImplementation(async ({ where }: any) => {
-    const chaves = where?.chave?.in as string[] | undefined
+  // `args?.where` porque `chaveDaCategoria` lista as categorias SEM filtro, no
+  // caminho dos chamados antigos que não gravaram a chave.
+  mockCategorias.mockImplementation(async (args: any) => {
+    const chaves = args?.where?.chave?.in as string[] | undefined
     return CATEGORIAS.filter((c) => !chaves || chaves.includes(c.chave))
   })
   mockPergunta.mockResolvedValue({ id: 'p1' } as any)
@@ -247,5 +255,140 @@ describe('escoposInvalidos', () => {
 
   it('lista vazia não tem nada inválido', async () => {
     expect(await escoposInvalidos([])).toEqual([])
+  })
+})
+
+/**
+ * CATEGORIAS COM LIBERACAO — Sistemas e E-mail so chegam a quem as marcou no
+ * perfil. E a excecao que cria: a regra da lista vazia ("sem escopo = sem
+ * restricao") continua valendo para VER chamado e para as outras categorias.
+ */
+describe('categorias com liberacao', () => {
+  it('so Sistemas e E-mail exigem liberacao', () => {
+    expect(categoriaExigeLiberacao('sistemas')).toBe(true)
+    expect(categoriaExigeLiberacao('email')).toBe(true)
+    // Grafia com hifen, e a chave do cadastro vem em caixa que nao importa.
+    expect(categoriaExigeLiberacao('e-mail')).toBe(true)
+    expect(categoriaExigeLiberacao('SISTEMAS')).toBe(true)
+    expect(categoriaExigeLiberacao('rede')).toBe(false)
+    expect(categoriaExigeLiberacao('equipamento')).toBe(false)
+    expect(categoriaExigeLiberacao('')).toBe(false)
+  })
+
+  describe('chaveDaCategoria', () => {
+    it('usa a chave gravada na criacao, sem consultar o formulario', async () => {
+      expect(await chaveDaCategoria({ tipo: 'Sistemas - PortalNet', categoriaChave: 'sistemas' })).toBe('sistemas')
+      expect(mockCategorias).not.toHaveBeenCalled()
+    })
+
+    it('chamado antigo: acha a categoria pelo nome com que o tipo comeca', async () => {
+      expect(await chaveDaCategoria({ tipo: 'Sistemas - PortalNet' })).toBe('sistemas')
+      expect(await chaveDaCategoria({ tipo: 'E-mail institucional' })).toBe('email')
+      expect(await chaveDaCategoria({ tipo: 'Rede - Lentidão' })).toBe('rede')
+    })
+
+    it('"Equip. - Sistema" e equipamento, nao sistemas', async () => {
+      expect(await chaveDaCategoria({ tipo: 'Equipamento - Sistema operacional' })).toBe('equipamento')
+    })
+
+    it('tipo vazio ou desconhecido devolve vazio', async () => {
+      expect(await chaveDaCategoria({ tipo: null })).toBe('')
+      expect(await chaveDaCategoria({ tipo: 'Categoria Que Nao Existe' })).toBe('')
+    })
+  })
+
+  it('exigeLiberacao pergunta a chave, inclusive nos chamados antigos', async () => {
+    expect(await exigeLiberacao({ tipo: 'Sistemas - PortalNet', categoriaChave: 'sistemas' })).toBe(true)
+    expect(await exigeLiberacao({ tipo: 'Sistemas - PortalNet' })).toBe(true)
+    expect(await exigeLiberacao({ tipo: 'E-mail institucional' })).toBe(true)
+    expect(await exigeLiberacao({ tipo: 'Rede - Lentidão', categoriaChave: 'rede' })).toBe(false)
+  })
+
+  describe('liberouCategoria', () => {
+    const usuario = { escopoTipos: ['sistemas::PortalNet', 'sistemas::SEI', 'email::'] }
+
+    it('vale qualquer um dos tipos marcados da categoria', () => {
+      expect(liberouCategoria(usuario, 'sistemas')).toBe(true)
+      expect(liberouCategoria(usuario, 'email')).toBe(true)
+    })
+
+    it('categoria nao marcada, escopo vazio ou usuario inexistente: nao liberou', () => {
+      expect(liberouCategoria(usuario, 'rede')).toBe(false)
+      expect(liberouCategoria({ escopoTipos: [] }, 'sistemas')).toBe(false)
+      expect(liberouCategoria(undefined, 'sistemas')).toBe(false)
+      expect(liberouCategoria(usuario, '')).toBe(false)
+    })
+
+    it('"e-mail" e outra categoria, nao outra grafia de "email"', () => {
+      // O alias existe para RECUSAR a categoria sem liberacao; para casar com o
+      // que o ADMIN marcou, vale a chave de verdade que o cadastro gravou.
+      expect(categoriaExigeLiberacao('e-mail')).toBe(true)
+      expect(liberouCategoria(usuario, 'e-mail')).toBe(false)
+    })
+  })
+
+  describe('podeReceberChamado', () => {
+    const deSistemas = { filial: 'URE Leste 3', escopoTipos: ['sistemas::PortalNet'] }
+    const semEscopo = { filial: 'E.E. A', escopoTipos: [] }
+    const soRede = { filial: 'E.E. A', escopoTipos: ['rede::Lentidão'] }
+
+    it('categoria com liberacao: quem nao marcou nao recebe', async () => {
+      expect(await podeReceberChamado({ tipo: 'Sistemas - PortalNet', categoriaChave: 'sistemas' }, semEscopo)).toBe(false)
+      expect(await podeReceberChamado({ tipo: 'Rede - Lentidão', categoriaChave: 'rede' }, soRede)).toBe(true)
+    })
+
+    it('categoria com liberacao: quem marcou recebe', async () => {
+      expect(await podeReceberChamado({ tipo: 'Sistemas - PortalNet', categoriaChave: 'sistemas' }, deSistemas)).toBe(true)
+    })
+
+    it('categoria com liberacao: escopo de outro assunto nao libera', async () => {
+      expect(await podeReceberChamado({ tipo: 'Sistemas - PortalNet', categoriaChave: 'sistemas' }, soRede)).toBe(false)
+    })
+
+    it('categoria comum: a lista vazia continua significando "atende tudo"', async () => {
+      expect(await podeReceberChamado({ tipo: 'Rede - Lentidão', categoriaChave: 'rede' }, semEscopo)).toBe(true)
+      expect(await podeReceberChamado({ tipo: 'Equipamento - Formatação', categoriaChave: 'equipamento' }, undefined)).toBe(true)
+    })
+
+    it('escopo preenchido barra o tipo de fora, liberada ou nao', async () => {
+      expect(await podeReceberChamado({ tipo: 'Equipamento - Formatação', categoriaChave: 'equipamento' }, soRede)).toBe(false)
+    })
+
+    it('liberadaJaResolvida pula a consulta de resolver a categoria', async () => {
+      // Sem o atalho, o caminho do chamado antigo faz duas consultas: uma para
+      // descobrir a categoria e outra (dentro de casaComEscopo) para os prefixos.
+      // Com ele, só a segunda — é o que permite chamar isto num laço de candidatos.
+      await podeReceberChamado({ tipo: 'Sistemas - PortalNet' }, deSistemas)
+      const semAtalho = mockCategorias.mock.calls.length
+
+      mockCategorias.mockClear()
+      await podeReceberChamado({ tipo: 'Sistemas - PortalNet' }, deSistemas, true)
+      expect(mockCategorias.mock.calls.length).toBe(semAtalho - 1)
+    })
+  })
+
+  describe('filtrarPorEscopo', () => {
+    const deSistemas = { id: 1, escopoTipos: ['sistemas::PortalNet'] }
+    const semEscopo = { id: 2, escopoTipos: [] }
+
+    it('categoria comum sem ninguem com escopo: sai tudo', async () => {
+      expect(await filtrarPorEscopo({ tipo: 'Rede - Lentidão', categoriaChave: 'rede' }, [semEscopo], (c) => c)).toEqual([semEscopo])
+    })
+
+    it('categoria com liberacao sem ninguem com escopo: sai ninguem', async () => {
+      // O desfecho que a regra da lista vazia produziria errado: devolver
+      // "todos" colocaria o chamado de sistemas na mao de qualquer volante.
+      expect(await filtrarPorEscopo({ tipo: 'Sistemas - PortalNet', categoriaChave: 'sistemas' }, [semEscopo], (c) => c)).toEqual([])
+    })
+
+    it('categoria comum: escopo preenchido continua barrando o tipo de fora', async () => {
+      const resultado = await filtrarPorEscopo({ tipo: 'Rede - Lentidão', categoriaChave: 'rede' }, [deSistemas, semEscopo], (c) => c)
+      expect(resultado).toEqual([semEscopo])
+    })
+
+    it('categoria com liberacao: fica quem marcou', async () => {
+      const resultado = await filtrarPorEscopo({ tipo: 'Sistemas - PortalNet', categoriaChave: 'sistemas' }, [deSistemas, semEscopo], (c) => c)
+      expect(resultado).toEqual([deSistemas])
+    })
   })
 })
