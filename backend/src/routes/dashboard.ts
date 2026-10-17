@@ -55,7 +55,7 @@ const router = Router()
  *  2. técnico → pelas unidades do `filial` (lista separada por vírgula)
  *  3. escola → pela unidade, com casamento tolerante
  */
-async function filtroVisibilidade(
+export async function filtroVisibilidade(
   user: { filial?: string; nivel?: string; escopoTipos?: string[] | null } | undefined,
 ): Promise<Record<string, unknown> | null> {
   if (!user) return null
