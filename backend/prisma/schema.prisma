@@ -15,7 +15,11 @@ model Usuario {
   senhaHash         String
   nivel             String   // ADMIN, TECNICO, GESTOR, VISUALIZADOR
   filial            String
-  status            String   @default("ATIVO") // ATIVO, INATIVO
+  // Cor do usuário no portal, hex de 6 dígitos ("#3b82f6"). NULL = sem cor
+  // definida: o portal usa a cor padrão do tema. Quem preenche é a tela de
+  // edição do usuário no portal (ainda não existe — ver T-007).
+  cor               String?
+  status            String  @default("ATIVO") // ATIVO, INATIVO
   primeiroLogin     Boolean  @default(true)
   refreshTokenHash  String?
   // Escopo de TIPOS de chamado que este usuário enxerga, no formato
