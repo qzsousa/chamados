@@ -49,7 +49,7 @@ const ToolSchema = z.object({
 
 export const ChatIASchema = z.object({
   messages: z.array(MensagemSchema).min(1).max(60),
-  tools: z.array(ToolSchema).max(20).optional(),
+  tools: z.array(ToolSchema).max(80).optional(),
   tool_choice: z.enum(['auto', 'none', 'required']).optional(),
   temperature: z.number().min(0).max(2).optional(),
   max_tokens: z.number().int().min(64).max(32000).optional(),
