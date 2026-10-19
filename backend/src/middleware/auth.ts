@@ -11,6 +11,11 @@ export interface AuthenticatedRequest extends Request {
     nome: string
     nivel: string
     filial: string
+    /**
+     * Cor do usuário no portal (`#RRGGBB`), escolhida na tela de usuários.
+     * NULL = sem cor definida; o portal cai para a cor padrão do tema.
+     */
+    cor: string | null
     status: string
     primeiroLogin: boolean
     /**
@@ -74,6 +79,7 @@ export async function attachUserRecord(req: AuthenticatedRequest, res: Response,
         nome: true,
         nivel: true,
         filial: true,
+        cor: true,
         status: true,
         primeiroLogin: true,
         escopoTipos: true,

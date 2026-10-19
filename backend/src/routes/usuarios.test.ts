@@ -572,4 +572,94 @@ describe('Usuários Routes (ADMIN)', () => {
       expect(vi.mocked(prisma.usuario.update).mock.calls[0][0].data.escopoTipos).toBeUndefined()
     })
   })
+
+  /* ---- Cor do usuário (#RRGGBB) ---- */
+  describe('cor', () => {
+    // O bloco de escopo acima troca a implementação do authMiddleware por um
+    // GESTOR e `vi.clearAllMocks()` NÃO devolve a implementação original. Sem
+    // repinar o ADMIN aqui, estes testes herdam o GESTOR do teste anterior e o
+    // POST cai na trava de limite por unidade em vez de criar.
+    beforeEach(() => {
+      vi.mocked(authMiddleware).mockImplementation(((req: any, _res: any, next: any) => {
+        req.user = { sub: 'admin-1', email: 'admin@test.com', nome: 'Admin User', nivel: 'ADMIN', filial: 'FILIAL1', type: 'access', iat: Date.now(), exp: Date.now() + 900000 }
+        req.userRecord = { id: 'admin-1', email: 'admin@test.com', nome: 'Admin User', nivel: 'ADMIN', filial: 'FILIAL1', status: 'ATIVO', primeiroLogin: false, escopoTipos: [], cor: null }
+        next()
+      }) as any)
+    })
+
+    it('ADMIN cria usuário com cor válida: 201 e a cor volta na resposta', async () => {
+      vi.mocked(prisma.usuario.findUnique).mockResolvedValue(null)
+      vi.mocked(prisma.usuario.create).mockResolvedValue({
+        id: 'u-cor',
+        email: 'cor@test.com',
+        nome: 'Colorido',
+        nivel: 'TECNICO',
+        filial: 'E.E. TESTE',
+        cor: '#3b82f6',
+        status: 'ATIVO',
+        primeiroLogin: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as any)
+      vi.mocked(prisma.codigoPrimeiroAcesso.deleteMany).mockResolvedValue({ count: 0 })
+      vi.mocked(prisma.codigoPrimeiroAcesso.create).mockResolvedValue({} as any)
+
+      const res = await request(app)
+        .post('/api/usuarios')
+        .send({
+          email: 'cor@test.com',
+          nome: 'Colorido',
+          nivel: 'TECNICO',
+          filial: 'E.E. TESTE',
+          cor: '#3b82f6',
+        })
+
+      expect(res.status).toBe(201)
+      expect(res.body.cor).toBe('#3b82f6')
+      // Não basta aparecer na resposta: o valor precisa ter ido para o create,
+      // senão o campo só existe no mock e morre antes do banco.
+      expect(vi.mocked(prisma.usuario.create).mock.calls[0][0].data.cor).toBe('#3b82f6')
+    })
+
+    it('recusa cor fora do formato #RRGGBB com 400 VALIDATION_ERROR', async () => {
+      const res = await request(app)
+        .post('/api/usuarios')
+        .send({
+          email: 'cor@test.com',
+          nome: 'Colorido',
+          nivel: 'TECNICO',
+          filial: 'E.E. TESTE',
+          cor: '#12345',
+        })
+
+      expect(res.status).toBe(400)
+      expect(res.body.error).toBe('VALIDATION_ERROR')
+      expect(prisma.usuario.create).not.toHaveBeenCalled()
+    })
+
+    it('a listagem devolve a cor de quem tem', async () => {
+      vi.mocked(prisma.usuario.count).mockResolvedValue(1)
+      vi.mocked(prisma.usuario.findMany).mockResolvedValue([
+        {
+          id: 'u-cor',
+          email: 'cor@test.com',
+          nome: 'Colorido',
+          nivel: 'TECNICO',
+          filial: 'E.E. TESTE',
+          cor: '#3b82f6',
+          status: 'ATIVO',
+          primeiroLogin: false,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ] as any)
+
+      const res = await request(app).get('/api/usuarios')
+
+      expect(res.status).toBe(200)
+      expect(res.body.data[0].cor).toBe('#3b82f6')
+      // O select precisa pedir a coluna — sem isso o Prisma não traria a cor.
+      expect(vi.mocked(prisma.usuario.findMany).mock.calls[0][0].select).toMatchObject({ cor: true })
+    })
+  })
 })

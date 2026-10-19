@@ -30,6 +30,7 @@ const selectUsuario = {
   nome: true,
   nivel: true,
   filial: true,
+  cor: true,
   status: true,
   primeiroLogin: true,
   escopoTipos: true,
@@ -251,6 +252,7 @@ router.post('/', authMiddleware, adminOuGestor, async (req: AuthenticatedRequest
         nome: data.nome,
         nivel: data.nivel,
         filial: data.filial,
+        cor: data.cor,
         senhaHash,
         primeiroLogin: true,
         escopoTipos: escopo.escopo,
@@ -342,6 +344,7 @@ router.patch('/:id', authMiddleware, adminOuGestor, async (req: AuthenticatedReq
         nome: data.nome,
         nivel: data.nivel,
         filial: data.filial,
+        cor: data.cor,
         status: data.status,
         escopoTipos: escopo,
         rotasPermitidas: rotas
