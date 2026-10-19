@@ -72,6 +72,7 @@ const CAMPOS_PUBLICAVEIS = [
   'nome',
   'nivel',
   'filial',
+  'cor',
   'status',
   'primeiroLogin',
   /**
@@ -118,6 +119,7 @@ router.post('/login', async (req, res) => {
         nome: true,
         nivel: true,
         filial: true,
+        cor: true,
         status: true,
         primeiroLogin: true,
         escopoTipos: true,
@@ -198,7 +200,7 @@ router.post('/refresh', async (req, res) => {
 
     const user = await prisma.usuario.findUnique({
       where: { id: payload.sub },
-      select: { id: true, email: true, nome: true, nivel: true, filial: true, primeiroLogin: true, senhaProvisoria: true, status: true, escopoTipos: true, rotasPermitidas: true }
+      select: { id: true, email: true, nome: true, nivel: true, filial: true, cor: true, primeiroLogin: true, senhaProvisoria: true, status: true, escopoTipos: true, rotasPermitidas: true }
     })
 
     if (!user || user.status !== 'ATIVO') {
@@ -258,7 +260,7 @@ router.get('/me', authMiddleware, async (req: AuthenticatedRequest, res) => {
 
     const user = await prisma.usuario.findUnique({
       where: { id: req.user.sub },
-      select: { id: true, email: true, nome: true, nivel: true, filial: true, status: true, primeiroLogin: true, senhaProvisoria: true, escopoTipos: true, rotasPermitidas: true, createdAt: true, updatedAt: true }
+      select: { id: true, email: true, nome: true, nivel: true, filial: true, cor: true, status: true, primeiroLogin: true, senhaProvisoria: true, escopoTipos: true, rotasPermitidas: true, createdAt: true, updatedAt: true }
     })
 
     if (!user) {
@@ -513,6 +515,7 @@ router.post('/primeiro-acesso/definir-senha', async (req, res) => {
         nome: true,
         nivel: true,
         filial: true,
+        cor: true,
         status: true,
         primeiroLogin: true,
         senhaProvisoria: true,
