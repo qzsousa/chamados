@@ -62,3 +62,20 @@ services:
         value: https://sce-nyjc.onrender.com
       - key: SCE_SYNC_KEY
         sync: false
+      # Proxy de LLM da CafeIA. As chaves ficam AQUI, no servidor: se viessem
+      # como VITE_* no portal, o Vite as embutiria no bundle e qualquer pessoa
+      # leria no console do navegador.
+      - key: IA_PROVEDOR
+        value: nvidia
+      - key: IA_API_KEY_NVIDIA
+        sync: false
+      - key: IA_API_KEY_GEMINI
+        sync: false
+      - key: IA_API_KEY_GROQ
+        sync: false
+      - key: IA_MODELO_NVIDIA
+        value: z-ai/glm-5.3-flash
+      - key: IA_MODELO_GEMINI
+        value: gemini-3-flash-preview
+      - key: IA_MODELO_GROQ
+        value: openai/gpt-oss-20b

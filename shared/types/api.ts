@@ -331,7 +331,9 @@ export const ChamadoSchema = z.object({
    */
   aceitoEm: z.string().datetime().nullable(),
   /** Quando o chamado foi concluído (status -> RESOLVIDO). NULL se reaberto. */
-  concluidoEm: z.string().datetime().nullable()
+  concluidoEm: z.string().datetime().nullable(),
+  equipamentosVinculados: z.array(z.string()).optional(),
+  equipamentosManutencao: z.array(z.string()).optional()
 })
 
 export type Chamado = z.infer<typeof ChamadoSchema>
@@ -507,7 +509,8 @@ export const CriarChamadoSchema = z
    * É o que permite encaminhar o chamado automaticamente para o técnico
    * sem depender do texto livre de `tipo` (que quebra se a categoria for renomeada).
    */
-  categoriaChave: z.string().optional()
+  categoriaChave: z.string().optional(),
+  equipamentos: z.array(z.string().min(1)).optional()
   })
   // `anexoBase64` é o caminho LEGADO (formulário antigo, um arquivo só), mas
   // entra no mesmo bucket público dos demais — então passa pelas MESMAS travas.
@@ -601,7 +604,8 @@ export const ConcluirChamadoSchema = z.object({
     .trim()
     .min(1, 'Registre o que foi feito para concluir o chamado')
     .max(5000),
-  anexos: z.array(AnexoMensagemSchema).max(ANEXO_MAX_POR_PEDIDO).optional()
+  anexos: z.array(AnexoMensagemSchema).max(ANEXO_MAX_POR_PEDIDO).optional(),
+  equipamentos: z.array(z.string().min(1)).optional()
 })
 
 export type ConcluirChamado = z.infer<typeof ConcluirChamadoSchema>

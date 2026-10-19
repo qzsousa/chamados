@@ -170,11 +170,30 @@ const consultando = ref(false)
 const consultaErro = ref('')
 const consultaResultado = ref<any>(null)
 
-const categories = [{id:'rede',cor:'#1E7FC7',titulo:'Problema de Rede',desc:'Lentidão, queda de internet, Wi-Fi instável ou solicitação de pontos de rede.'},{id:'equip',cor:'#1E7A4C',titulo:'Problema de Equipamento',desc:'Notebook, tablet ou impressora com problema físico, de software, Wi-Fi ou formatação.'},{id:'sistema',cor:'#7A4FB5',titulo:'Problema em Sistema',desc:'Erros em sistemas como PortalNet e outros sistemas educacionais.'},{id:'email',cor:'#C9711A',titulo:'Problema no E-mail',desc:'Sem acesso, senha bloqueada ou problemas de login.'}]
+// `categoriaChave` é a chave REAL da categoria no formulário público. Sem ela o
+// chamado nasce com `categoriaChave` nulo, e é por isso que 439 chamados do
+// banco não casam com nenhuma regra de encaminhamento nem com nenhum escopo.
+const categories = [{id:'rede',categoriaChave:'rede',cor:'#1E7FC7',titulo:'Problema de Rede',desc:'Lentidão, queda de internet, Wi-Fi instável ou solicitação de pontos de rede.'},{id:'equip',categoriaChave:'equipamento',cor:'#1E7A4C',titulo:'Problema de Equipamento',desc:'Notebook, tablet ou impressora com problema físico, de software, Wi-Fi ou formatação.'},{id:'sistema',categoriaChave:'sistemas',cor:'#7A4FB5',titulo:'Problema em Sistema',desc:'Erros em sistemas como PortalNet e outros sistemas educacionais.'},{id:'email',categoriaChave:'email',cor:'#C9711A',titulo:'Problema no E-mail',desc:'Sem acesso, senha bloqueada ou problemas de login.'}]
 const redeOptions = [{value:'lentidao',label:'Lentidão'},{value:'queda-total',label:'Queda total de internet'},{value:'wifi-salas',label:'Queda de Wi-Fi em salas ou locais específicos'},{value:'pontos',label:'Solicitação de Pontos de Rede'},{value:'outro',label:'Outro'}]
 const equipOptions = [{value:'wifi',label:'Wi-Fi (equipamento não conecta à rede)'},{value:'impressora',label:'Impressora'},{value:'fisico',label:'Manutenção — Problemas Físicos'},{value:'software',label:'Manutenção — Problemas de Software'},{value:'formatacao',label:'Formatação'},{value:'sistema',label:'Sistema (login, configuração, perfil)'},{value:'outro',label:'Outro'}]
 const fisicoOptions = ['Bateria','Teclado','Tela','Som','Câmera','Outro']
 const sistemaOptions = [{value:'PortalNet',label:'PortalNet'},{value:'SEI',label:'SEI'},{value:'SCI - Sistema de Chamados',label:'SCI - Sistema de Chamados'},{value:'SCE - Sistema de Controle de Equipamentos',label:'SCE - Sistema de Controle de Equipamentos'},{value:'outro',label:'Outro'}]
+/** Nome de cada categoria no banco, por chave. Vazio até a busca responder. */
+const nomeCategoria=ref<Record<string,string>>({})
+/** Usado só se a busca falhar — o formulário não pode deixar de abrir por isso. */
+const NOMES_FALLBACK:Record<string,string>={rede:'Rede',equipamento:'Equipamento',sistemas:'Sistemas',email:'E-mail institucional'}
+/** Busca os nomes reais das categorias. `tipo` é lido daqui, não do código. */
+async function carregarNomesCategorias(){
+  try{
+    const res=await fetch(`${API_BASE}/formulario/publico`,{cache:'no-cache'})
+    if(!res.ok)return
+    const body=await res.json()
+    const lista=(body&&body.data)||[]
+    const mapa:Record<string,string>={}
+    for(const c of lista) if(c&&c.chave&&c.nome) mapa[c.chave]=c.nome
+    if(Object.keys(mapa).length) nomeCategoria.value=mapa
+  }catch{/* fallback acima cobre */}
+}
 const seiOpcoes = [{value:'acesso',label:'Solicitação de acesso'},{value:'erro',label:'Reportar problema'}]
 const cargoOptions = [{value:'Diretor',label:'Diretor'},{value:'Vice-diretor',label:'Vice-diretor'},{value:'Coordenador',label:'Coordenador'},{value:'Gerente de Organização Escolar',label:'Gerente de Organização Escolar'},{value:'Agente de Organização Escolar',label:'Agente de Organização Escolar'},{value:'Professor',label:'Professor'},{value:'Estagiário (Proati)',label:'Estagiário (Proati)'}]
 const escolaOptions = ref<Array<{value:string,label:string}>>([])
@@ -294,8 +313,9 @@ function onModeloSelect() {
 }
 
 onMounted(async() => {
-  await loadCategorias()
-  await loadEscolas()
+  // Os nomes vêm antes de tudo: é deles que sai o `tipo` do chamado, e uma
+  // busca que falha não pode travar o formulário.
+  await Promise.all([carregarNomesCategorias(), loadCategorias(), loadEscolas()])
 })
 
 function abrirCat(id:string){activeCategory.value=categories.find(c=>c.id===id)||null;currentView.value='questions'}
@@ -326,14 +346,21 @@ function handleAnexo(e:Event){const t=e.target as HTMLInputElement;if(t.files&&t
 function mkTipo(){
   const cat=activeCategory.value
   if(!cat) return 'Outro'
-  if(cat.id==='rede'){const m:Record<string,string>={lentidao:'Rede - Lentidão','queda-total':'Rede - Queda Total','wifi-salas':'Rede - Queda Wi-Fi em Salas',pontos:'Rede - Pontos de Rede'};return m[form.rede]||'Problema de Rede'}
-  if(cat.id==='equip'){const m:Record<string,string>={wifi:'Equip. - Wi-Fi',impressora:'Equip. - Impressora',fisico:'Equip. - Manutenção Física',software:'Equip. - Manutenção Software',formatacao:'Equip. - Formatação',sistema:'Equip. - Sistema'};let t=m[form.equip]||'Problema de Equipamento';if(form.equip==='fisico'&&form.tipoFisico)t+=` (${form.tipoFisico})`;return t}
-  if(cat.id==='sistema'){const s=sistemaOptions.find(o=>o.value===form.sistema);return 'Sistema - '+(s?.label||'')}
-  if(cat.id==='email') return 'E-mail Institucional'
-  return cat.titulo
+  // O NOME da categoria vem do banco, não do código. Esta tela escrevia
+  // 'Sistema - ' fixo, e quando a categoria foi renomeada para "Sistemas" o
+  // formulário continuou gravando o nome velho: 79 chamados ficaram fora do
+  // escopo de quem deveria atendê-los, sem erro nenhum. O texto abaixo é só o
+  // fallback para quando a busca dos nomes falhar — o formulário nunca pode
+  // deixar de abrir por causa disso.
+  const nome=nomeCategoria.value[cat.categoriaChave]||NOMES_FALLBACK[cat.categoriaChave]||cat.titulo
+  if(cat.id==='rede'){const m:Record<string,string>={lentidao:'Rede - Lentidão','queda-total':'Rede - Queda Total','wifi-salas':'Rede - Queda Wi-Fi em Salas',pontos:'Rede - Pontos de Rede'};return m[form.rede]||`${nome} - Outro`}
+  if(cat.id==='equip'){const m:Record<string,string>={wifi:'Equip. - Wi-Fi',impressora:'Equip. - Impressora',fisico:'Equip. - Manutenção Física',software:'Equip. - Manutenção Software',formatacao:'Equip. - Formatação',sistema:'Equip. - Sistema'};let t=m[form.equip]||`${nome} - Problema de Equipamento`;if(form.equip==='fisico'&&form.tipoFisico)t+=` (${form.tipoFisico})`;return t}
+  if(cat.id==='sistema'){const s=sistemaOptions.find(o=>o.value===form.sistema);return `${nome} - `+(s?.label||'Outro')}
+  if(cat.id==='email') return `${nome}`
+  return nome
 }
 
-async function enviar(){if(submitting.value)return;errors.nome=form.nome?'':'Informe seu nome';errors.cargo=form.cargo?'':'Selecione seu cargo';errors.email=form.email&&form.email.includes('@')?'':'E-mail inválido';errors.escola=form.escola?'':'Selecione a escola';errors.urgencia=form.urgencia?'':'Selecione a urgência';errors.seiAnexo=form.sistema==='SEI'&&form.seiTipo==='erro'&&!form.seiAnexo?'O anexo do erro é obrigatório para reportar problema no SEI.':'';if(errors.nome||errors.cargo||errors.email||errors.escola||errors.urgencia||errors.seiAnexo){if(errors.seiAnexo)currentView.value='questions';return}submitting.value=true;try{const anexo=form.seiAnexo||form.anexo;const anexoBase64=anexo?await fileToBase64(anexo):undefined;const descBase=buildDescricao();const descFinal=form.descAdicional?descBase+(descBase?' | ':'')+form.descAdicional:descBase;const result=await chamados.criar({unidade:form.escola,solicitante:form.nome,funcao:form.cargo,tipo:mkTipo(),descricao:descFinal,urgencia:form.urgencia,email:form.email,anexoBase64,anexoNome:anexo?.name,anexoTipo:anexo?.type});protocolo.value=result.protocolo;currentView.value='success'}catch(err:any){ui.showToast('error',err.response?.data?.message||'Erro ao enviar chamado')}finally{submitting.value=false}}
+async function enviar(){if(submitting.value)return;errors.nome=form.nome?'':'Informe seu nome';errors.cargo=form.cargo?'':'Selecione seu cargo';errors.email=form.email&&form.email.includes('@')?'':'E-mail inválido';errors.escola=form.escola?'':'Selecione a escola';errors.urgencia=form.urgencia?'':'Selecione a urgência';errors.seiAnexo=form.sistema==='SEI'&&form.seiTipo==='erro'&&!form.seiAnexo?'O anexo do erro é obrigatório para reportar problema no SEI.':'';if(errors.nome||errors.cargo||errors.email||errors.escola||errors.urgencia||errors.seiAnexo){if(errors.seiAnexo)currentView.value='questions';return}submitting.value=true;try{const anexo=form.seiAnexo||form.anexo;const anexoBase64=anexo?await fileToBase64(anexo):undefined;const descBase=buildDescricao();const descFinal=form.descAdicional?descBase+(descBase?' | ':'')+form.descAdicional:descBase;const result=await chamados.criar({unidade:form.escola,solicitante:form.nome,funcao:form.cargo,tipo:mkTipo(),categoriaChave:activeCategory.value?.categoriaChave,descricao:descFinal,urgencia:form.urgencia,email:form.email,anexoBase64,anexoNome:anexo?.name,anexoTipo:anexo?.type});protocolo.value=result.protocolo;currentView.value='success'}catch(err:any){ui.showToast('error',err.response?.data?.message||'Erro ao enviar chamado')}finally{submitting.value=false}}
 
 function buildDescricao(){const parts:string[]=[];if(form.rede)parts.push(`Rede: ${form.rede}`);if(form.energia)parts.push(`Energia: ${form.energia}`);if(form.locais)parts.push(`Locais: ${form.locais}`);if(form.equip)parts.push(`Equip: ${form.equip}`);if(form.tipoFisico)parts.push(`Físico: ${form.tipoFisico}`);if(form.sistema)parts.push(`Sistema: ${form.sistema}`);if(form.seiTipo)parts.push(`SEI: ${seiOpcoes.find(o=>o.value===form.seiTipo)?.label||form.seiTipo}`);if(form.seiNome)parts.push(`Nome: ${form.seiNome}`);if(form.seiCpf)parts.push(`CPF: ${form.seiCpf}`);if(form.seiEmail)parts.push(`Email: ${form.seiEmail}`);if(form.seiEscola)parts.push(`Esc: ${form.seiEscola}`);if(form.seiCie)parts.push(`CIE: ${form.seiCie}`);if(form.outro)parts.push(`Outro: ${form.outro}`);if(form.pnRg)parts.push(`RG: ${form.pnRg}`);if(form.pnNome)parts.push(`Nome: ${form.pnNome}`);if(form.pnCie)parts.push(`CIE: ${form.pnCie}`);if(form.pnAtrib)parts.push(`Atrib: ${form.pnAtrib}`);if(form.emCie)parts.push(`CIE: ${form.emCie}`);if(form.emEscola)parts.push(`Esc: ${form.emEscola}`);if(form.emLogin)parts.push(`Login: ${form.emLogin}`);if(form.emEmail)parts.push(`Email: ${form.emEmail}`);if(form.categoria)parts.push(`Cat: ${form.categoria}`);if(form.marca)parts.push(`Marca: ${form.marca}`);if(form.modelo)parts.push(`Mod: ${form.modelo}`);return parts.join(' | ')}
 

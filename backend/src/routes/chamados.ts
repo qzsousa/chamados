@@ -871,6 +871,7 @@ export async function criarChamadoPublic(req: Request, res: Response) {
             email: data.email || null,
             tecnicoSetor,
             categoriaChave: data.categoriaChave || null,
+            equipamentosVinculados: data.equipamentos ?? [],
             // `Prisma.DbNull` (e não `null`) porque coluna Json nullable em Prisma 5 exige o
   // marcador explícito para gravar NULL — é o que separa "sem formulário" de
   // "formulário em branco".
@@ -1545,7 +1546,7 @@ router.post('/:id/atividades', authMiddleware, requireRole('ADMIN', 'TECNICO'), 
  */
 router.post('/:id/concluir', authMiddleware, requireRole('ADMIN', 'TECNICO'), async (req: AuthenticatedRequest, res) => {
   try {
-    const { descricaoResolucao, anexos } = ConcluirChamadoSchema.parse(req.body)
+    const { descricaoResolucao, anexos, equipamentos } = ConcluirChamadoSchema.parse(req.body)
 
     const chamado = await carregarChamadoAtivo(req.params.id)
     if (!chamado) {
@@ -1576,9 +1577,10 @@ router.post('/:id/concluir', authMiddleware, requireRole('ADMIN', 'TECNICO'), as
         concluidoEm: agora,
         // `descricaoResolucao`/`tecnicoResolucao` guardam só a ÚLTIMA
         // conclusão: o histórico de todas as tentativas fica nas atividades.
-        tecnicoResolucao: autor,
-        descricaoResolucao,
-        ultimaAtualizacao: agora,
+         tecnicoResolucao: autor,
+         descricaoResolucao,
+         equipamentosManutencao: equipamentos ?? [],
+         ultimaAtualizacao: agora,
         historico: `${chamado.historico || ''}\n${entrada}`.trim()
       }
     })

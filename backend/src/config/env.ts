@@ -37,7 +37,14 @@ const envSchema = z.object({
   SCE_API_URL: z.string().url().optional(),
   SCE_SYNC_KEY: z.string().optional(),
 
-  // Proxy de LLM (Chat da CafeIA). As chaves vivem AQUI, no servidor - se
+  // Migração lazy de senhas para o Supabase Auth do SCE (Fase 1).
+  // Quando true, cada login bem-sucedido no chamados cria/atualiza o usuário
+  // no Supabase Auth do projeto SCE com a senha informada.
+  SCE_SUPABASE_URL: z.string().url().optional(),
+  SCE_SUPABASE_SERVICE_KEY: z.string().optional(),
+  MIGRAR_USUARIOS_PARA_SCE: z.string().optional().transform((v) => v === 'true').default('false'),
+
+  // Proxy de LLM (Chat da Caf\u00c9IA). As chaves vivem AQUI, no servidor - se
   // fossem VITE_* no portal, o Vite as embutiria no bundle e qualquer pessoa
   // leria no console do navegador.
   IA_PROVEDOR: z.enum(['nvidia', 'gemini', 'groq']).optional(),
@@ -45,7 +52,7 @@ const envSchema = z.object({
   IA_API_KEY_GEMINI: z.string().optional(),
   IA_API_KEY_GROQ: z.string().optional(),
   IA_MODELO_NVIDIA: z.string().default('z-ai/glm-5.3-flash'),
-  IA_MODELO_GEMINI: z.string().default('gemini-1.5-flash'),
+  IA_MODELO_GEMINI: z.string().default('gemini-3-flash-preview'),
   IA_MODELO_GROQ: z.string().default('openai/gpt-oss-20b'),
 
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),

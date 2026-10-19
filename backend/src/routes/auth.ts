@@ -16,6 +16,9 @@ import {
 import { ZodError } from 'zod'
 import { isZodError } from '../utils/zodError'
 import { grupoDaUnidade, papelDaUnidade } from '../services/normalization'
+import { env } from '../config/env'
+import { syncUsuarioParaSce } from '../services/sceSync'
+import { upsertSceAuthUser } from '../services/sceAuth'
 import {
   gerarCodigoPrimeiroAcesso,
   gerarSenhaProvisoria,
@@ -134,6 +137,23 @@ router.post('/login', async (req, res) => {
     const valid = await bcrypt.compare(senha, user.senhaHash)
     if (!valid) {
       return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Credenciais inválidas' })
+    }
+
+    // Migração lazy para o SCE: quem loga com sucesso aqui passa a existir
+    // no Supabase Auth do SCE com a mesma senha (Fase 1). Best-effort.
+    if (env.MIGRAR_USUARIOS_PARA_SCE) {
+      await syncUsuarioParaSce({
+        email: user.email,
+        nome: user.nome,
+        nivel: user.nivel,
+        filial: user.filial,
+        status: user.status,
+      })
+      await upsertSceAuthUser(user.email, senha, {
+        nome: user.nome,
+        nivel: user.nivel,
+        filial: user.filial,
+      })
     }
 
     const { accessToken, refreshToken, refreshTokenHash, user: userResponse } = buildLoginResponse(user)

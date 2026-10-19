@@ -94,6 +94,10 @@ model Chamado {
   inventarioStatus   String?  // CONCLUIDO, EM_ANDAMENTO, NAO_REALIZADO, NAO_INFORMADO
   email              String?  // e-mail do solicitante
   categoriaChave     String?  // chave da categoria do formulário público (ex.: 'equipamento')
+  // Equipamentos (patrimônio/série) vinculados pela escola na abertura (opcional).
+  equipamentosVinculados String[] @default([])
+  // Equipamentos (ids/patrimônio) atribuídos pelo técnico na conclusão.
+  equipamentosManutencao String[] @default([])
   // Respostas do formulário dinâmico, como foram respondidas na abertura.
   // Vai como Json (lista de { perguntaId, rotulo, resposta }) e não como linhas
   // de tabela porque é um retrato do momento da abertura: se o ADMIN reescrever a
