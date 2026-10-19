@@ -83,6 +83,8 @@ export const UserSchema = z.object({
   nome: z.string(),
   nivel: NivelSchema,
   filial: z.string(),
+  /** Cor do usuário no portal, hex de 6 dígitos. Ausente = cor padrão do tema. */
+  cor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
   status: StatusUsuarioSchema,
   primeiroLogin: z.boolean(),
   /**
@@ -162,6 +164,8 @@ export const UserCreateSchema = z.object({
   nome: z.string().min(1),
   nivel: NivelSchema,
   filial: z.string().min(1),
+  /** Cor do usuário no portal, hex de 6 dígitos. */
+  cor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
   /** Só o ADMIN pode mandar; o Gestor tem o campo descartado no backend. */
   escopoTipos: z.array(EscopoTipoSchema).max(100).optional(),
   /** Vazio = acesso normal, decidido só pelo nível. Só o ADMIN define. */
@@ -179,6 +183,8 @@ export const UserUpdateSchema = z.object({
   nome: z.string().min(1).optional(),
   nivel: NivelSchema.optional(),
   filial: z.string().min(1).optional(),
+  /** Cor do usuário no portal, hex de 6 dígitos. */
+  cor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
   escopoTipos: z.array(EscopoTipoSchema).max(100).optional(),
   status: StatusUsuarioSchema.optional(),
   rotasPermitidas: RotasPermitidasSchema.optional()
