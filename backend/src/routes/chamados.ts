@@ -1038,8 +1038,16 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res) => {
       })
     ])
 
+    // Garante que toda escola tenha técnico exibido, mesmo em chamados antigos
+    // que foram gravados com `tecnicoSetor` vazio (escola combinada ou mapa
+    // incompleto na época da abertura).
+    const dataComTecnico = data.map((c: any) => ({
+      ...c,
+      tecnicoSetor: c.tecnicoSetor || getTecnicoSetor(c.unidade) || null,
+    }))
+
     return res.json({
-      data,
+      data: dataComTecnico,
       meta: { total, page: filtros.page, limit: filtros.limit, totalPages: Math.ceil(total / filtros.limit) }
     })
   } catch (err) {
@@ -1228,7 +1236,10 @@ router.get('/:id', authMiddleware, async (req: AuthenticatedRequest, res) => {
       }
     }
 
-    return res.json(chamado)
+    const chamadoComTecnico = chamado
+      ? { ...chamado, tecnicoSetor: chamado.tecnicoSetor || getTecnicoSetor(chamado.unidade) || null }
+      : chamado
+    return res.json(chamadoComTecnico)
   } catch (err) {
     throw err
   }

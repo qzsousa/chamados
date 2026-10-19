@@ -133,6 +133,14 @@ export function getMapaTecnicos(): Record<string, string> {
   LISTA_ESCOLAS_TECNICOS.forEach(item => {
     const chave = normalizarNomeEscola(item.escola)
     if (chave) mapa[chave] = item.tecnico
+    // Escolas que compartilham prédio (nome com "/") também precisam resolver
+    // individualmente: um chamado pode vir com o nome de uma delas sozinha.
+    if (item.escola.includes('/')) {
+      item.escola.split('/').map(p => p.trim()).filter(Boolean).forEach(parte => {
+        const chaveParte = normalizarNomeEscola(parte)
+        if (chaveParte && !mapa[chaveParte]) mapa[chaveParte] = item.tecnico
+      })
+    }
   })
   return mapa
 }
