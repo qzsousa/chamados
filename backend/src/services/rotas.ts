@@ -28,6 +28,7 @@ export const PREFIXO_POR_ROTA: Record<string, string> = {
   dashboard: '/api/dashboard',
   usuarios: '/api/usuarios',
   escolas: '/api/escolas',
+  agenda: '/api/agenda',
   inventario: '/api/inventario',
   dvr: '/api/dvr',
   tutoriais: '/api/tutoriais',

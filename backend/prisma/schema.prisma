@@ -213,6 +213,34 @@ model EncaminhamentoRegra {
   @@index([ativa])
 }
 
+// =============================================================================
+// Agenda de atendimento
+// =============================================================================
+// Atribuição de um técnico a uma escola em um DIA. A chave natural é
+// (escola, data): a mesma escola não tem dois técnicos no mesmo dia — o
+// @@unique garante isso no banco, não só na aplicação.
+//
+// `escola` guarda o NOME da unidade (mesma semântica de `Chamado.unidade`),
+// não o id de `Escola`: a agenda é lida e filtrada por unidade visível, e o
+// nome é o que o portal e o filtro de visibilidade já usam.
+//
+// `tecnicoId` é o id do `Usuario` (de onde vem a `cor` do T-003) e
+// `tecnicoNome` é o snapshot do nome no momento da atribuição — se o técnico
+// for renomeado, o histórico daquele dia não muda.
+model AtribuicaoAgenda {
+  id          String   @id @default(cuid())
+  escola      String
+  data        DateTime
+  tecnicoId   String
+  tecnicoNome String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([escola, data])
+  @@index([tecnicoId])
+  @@index([data])
+}
+
 model Inventario {
   id        String   @id @default(cuid())
   escolaId  String   @unique
