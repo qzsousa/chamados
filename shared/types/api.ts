@@ -150,7 +150,8 @@ export const ROTAS_USUARIO = [
   'encaminhamentos',
   'notificacoes',
   'formulario',
-  'feedback'
+  'feedback',
+  'agenda'
 ] as const
 
 export const RotaUsuarioSchema = z.enum(ROTAS_USUARIO)
@@ -977,6 +978,74 @@ export const EscolaCreateSchema = z.object({
 })
 
 export type EscolaCreate = z.infer<typeof EscolaCreateSchema>
+
+// ============================================
+// AGENDA DE ATENDIMENTO
+// ============================================
+
+/**
+ * Atribuição de um técnico a uma escola em um dia.
+ *
+ * A chave natural é (escola, data): a mesma escola não tem dois técnicos no
+ * mesmo dia. `escola` é o NOME da unidade (mesma semântica de
+ * `Chamado.unidade`), não o id de `Escola`.
+ *
+ * `tecnicoCor` vem do `Usuario.cor` (T-003) e é calculado no GET: o calendário
+ * precisa pintar a célula e não vale a pena o portal fazer um segundo request
+ * por técnico. NULL = sem cor definida (o portal usa a cor padrão do tema).
+ */
+export const AtribuicaoAgendaSchema = z.object({
+  id: z.string().cuid(),
+  escola: z.string(),
+  data: z.string().datetime(),
+  tecnicoId: z.string(),
+  tecnicoNome: z.string(),
+  tecnicoCor: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime()
+})
+
+export type AtribuicaoAgenda = z.infer<typeof AtribuicaoAgendaSchema>
+
+export const AtribuicaoAgendaCreateSchema = z.object({
+  escola: z.string().min(1),
+  /**
+   * Dia do atendimento. Aceita "AAAA-MM-DD" ou ISO completo; o handler
+   * normaliza para o dia (meia-noite UTC), que é a granularidade da chave
+   * natural (escola, data).
+   */
+  data: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}(T.*)?$/, 'Data inválida')
+    .refine((v) => !Number.isNaN(new Date(v).getTime()), 'Data inválida'),
+  tecnicoId: z.string().min(1),
+  tecnicoNome: z.string().min(1)
+})
+
+export type AtribuicaoAgendaCreate = z.infer<typeof AtribuicaoAgendaCreateSchema>
+
+/**
+ * Filtros do GET /api/agenda. Todos opcionais: sem eles, o recorte é só o de
+ * visibilidade (ADMIN vê tudo).
+ */
+export const AgendaFiltroSchema = z.object({
+  /** Início do intervalo, inclusive. */
+  de: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}(T.*)?$/, 'Data inválida')
+    .refine((v) => !Number.isNaN(new Date(v).getTime()), 'Data inválida')
+    .optional(),
+  /** Fim do intervalo, inclusive. */
+  ate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}(T.*)?$/, 'Data inválida')
+    .refine((v) => !Number.isNaN(new Date(v).getTime()), 'Data inválida')
+    .optional(),
+  tecnicoId: z.string().min(1).optional(),
+  escola: z.string().min(1).optional()
+})
+
+export type AgendaFiltro = z.infer<typeof AgendaFiltroSchema>
 
 // ============================================
 // EQUIPAMENTO

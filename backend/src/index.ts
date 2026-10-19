@@ -27,6 +27,7 @@ import notificacaoRoutes from './routes/notificacoes'
 import tutorialRoutes, { obterTutorialPublic } from './routes/tutoriais'
 import formularioRoutes, { formularioPublicoHandler } from './routes/formulario'
 import escolaRoutes from './routes/escolas'
+import agendaRoutes from './routes/agenda'
 import encaminhamentoRoutes from './routes/encaminhamentos'
 import iaRoutes from './routes/ia'
 import equipamentoRoutes from './routes/equipamentos'
@@ -263,6 +264,10 @@ app.use('/api/dashboard', (req, res, next) => {
   })
 }, dashboardRoutes)
 app.use('/api', authMiddleware, attachUserRecord, exigirRotaPermitida)
+// Agenda DEPOIS da parede de auth: sem isso, um usuário com rotasPermitidas
+// preenchido tomaria 403 de domínio desconhecido (o middleware roda antes das
+// rotas abaixo).
+app.use('/api/agenda', agendaRoutes)
 app.use('/api/usuarios', usuarioRoutes)
 app.use('/api/chamados', chamadoRoutes)
 app.use('/api/escolas', escolaRoutes)
