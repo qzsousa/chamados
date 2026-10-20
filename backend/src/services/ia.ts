@@ -82,10 +82,15 @@ function modeloDe(p: ProvedorIA, body?: ChatIAPayload): string {
   return envValor('IA_MODELO_GROQ', 'GROQ_MODEL') || 'openai/gpt-oss-20b'
 }
 
-function chaveDe(p: ProvedorIA): string | undefined {
-  if (p === 'nvidia') return envValor('IA_API_KEY_NVIDIA', 'NVIDIA_API_KEY')
-  if (p === 'gemini') return envValor('IA_API_KEY_GEMINI', 'GEMINI_API_KEY')
-  return envValor('IA_API_KEY_GROQ', 'GROQ_API_KEY')
+function chavesDe(p: ProvedorIA): string[] {
+  const raw =
+    p === 'nvidia'
+      ? envValor('IA_API_KEY_NVIDIA', 'NVIDIA_API_KEY')
+      : p === 'gemini'
+        ? envValor('IA_API_KEY_GEMINI', 'GEMINI_API_KEY')
+        : envValor('IA_API_KEY_GROQ', 'GROQ_API_KEY')
+  if (!raw) return []
+  return raw.split(',').map((s) => s.trim()).filter(Boolean)
 }
 
 /** Ordem de tentativa. Sem `provedores` no corpo, usa esta. */
@@ -244,21 +249,36 @@ export async function consultarIA(body: ChatIAPayload): Promise<{ provedor: Prov
   const falhas: string[] = []
 
   for (const p of pedidos) {
-    const chave = chaveDe(p)
-    if (!chave) {
+    const chaves = chavesDe(p)
+    if (!chaves.length) {
       falhas.push(`${p}: sem chave configurada`)
       continue
     }
-    try {
-      const resposta = await chamarProvedor(p, chave, body)
-      if (!respostaUtil(resposta)) {
-        falhas.push(`${p}: ${modeloDe(p, body)} devolveu resposta vazia`)
-        continue
+    let allRateLimited = true
+    for (let i = 0; i < chaves.length; i++) {
+      const chave = chaves[i]
+      try {
+        const resposta = await chamarProvedor(p, chave, body)
+        if (!respostaUtil(resposta)) {
+          falhas.push(`${p}: ${modeloDe(p, body)} devolveu resposta vazia`)
+          allRateLimited = false
+          break
+        }
+        return { provedor: p, resposta: limparEscolha(resposta) }
+      } catch (e) {
+        const motivo = e instanceof ErroProvedor ? `${e.status} ${e.message}`.slice(0, 300) : String(e)
+        const ultima = i === chaves.length - 1
+        if (e instanceof ErroProvedor && e.status === 429 && !ultima) {
+          falhas.push(`${p}: chave ${i + 1} rate-limited, tentando próxima`)
+          continue
+        }
+        allRateLimited = false
+        falhas.push(`${p}: ${motivo}`)
+        break
       }
-      return { provedor: p, resposta: limparEscolha(resposta) }
-    } catch (e) {
-      const motivo = e instanceof ErroProvedor ? `${e.status} ${e.message}`.slice(0, 300) : String(e)
-      falhas.push(`${p}: ${motivo}`)
+    }
+    if (allRateLimited) {
+      falhas.push(`${p}: todas as chaves rate-limited`)
     }
   }
 
@@ -267,7 +287,7 @@ export async function consultarIA(body: ChatIAPayload): Promise<{ provedor: Prov
 
 /** Lista os modelos disponiveis na API NIM (NVIDIA). */
 export async function listarModelosNvidia(): Promise<string[]> {
-  const chave = envValor('IA_API_KEY_NVIDIA', 'NVIDIA_API_KEY')
+  const chave = chavesDe('nvidia')[0]
   if (!chave) throw new Error('IA_API_KEY_NVIDIA não configurada')
   const r = await fetch('https://integrate.api.nvidia.com/v1/models', {
     headers: { Authorization: `Bearer ${chave}` },
