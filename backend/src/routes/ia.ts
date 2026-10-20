@@ -24,9 +24,17 @@ router.post(
   attachUserRecord,
   requireRole('ADMIN'),
   async (req: AuthenticatedRequest, res) => {
-    const body = ChatIASchema.parse(req.body)
-    const { provedor, resposta } = await consultarIA(body)
-    return res.json({ provedor, ...(resposta as object) })
+    try {
+      const body = ChatIASchema.parse(req.body)
+      const { provedor, resposta } = await consultarIA(body)
+      return res.json({ provedor, ...(resposta as object) })
+    } catch (err) {
+      if (isZodError(err)) {
+        return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: err.flatten().fieldErrors })
+      }
+      const message = err instanceof Error ? err.message : String(err)
+      return res.status(502).json({ error: 'IA_UNAVAILABLE', message })
+    }
   },
 )
 
