@@ -608,6 +608,7 @@ export const ConcluirChamadoSchema = z.object({
     .trim()
     .min(1, 'Registre o que foi feito para concluir o chamado')
     .max(5000),
+  equipamentos: z.array(z.string().trim().min(1)).max(100).optional(),
   anexos: z.array(AnexoMensagemSchema).max(ANEXO_MAX_POR_PEDIDO).optional()
 })
 
