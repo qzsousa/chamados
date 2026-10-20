@@ -24,6 +24,8 @@ export type ProvedorIA = (typeof provedoresIA)[number]
 const MensagemSchema = z.object({
   role: z.enum(['system', 'user', 'assistant', 'tool']),
   content: z.string().nullable().optional(),
+  reasoning_content: z.string().nullable().optional(),
+  reasoning: z.string().nullable().optional(),
   name: z.string().optional(),
   tool_call_id: z.string().optional(),
   tool_calls: z
@@ -215,8 +217,9 @@ function limparEscolha(resposta: any) {
           (m.reasoning_content ?? m.reasoning).trim()) {
         m.content = m.reasoning_content ?? m.reasoning
       }
-      delete e.message.reasoning_content
-      delete e.message.reasoning
+      // Modelos de raciocinio (ex.: Reflection/Beam) exigem o reasoning_content
+      // de volta nas mensagens de assistant anteriores. Mantemos o campo para
+      // que o front possa reenviá-lo no turno seguinte.
     }
   }
   return resposta
