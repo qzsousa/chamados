@@ -52,6 +52,8 @@ model Usuario {
   tutorialCurtidas              TutorialCurtida[]
   tutorialComentarios           TutorialComentario[]
   tutorialComentarioCurtidas    TutorialComentarioCurtida[]
+  chatIaConversas              ChatIaConversa[]
+
 
   @@index([email])
   @@index([filial])
@@ -590,4 +592,17 @@ model DvrAmostra {
   @@index([importacaoId])
   @@index([importacaoId, ip])
   @@unique([ip, importacaoId])
+}
+
+model ChatIaConversa {
+  id        String   @id @default(cuid())
+  usuarioId String
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  title     String
+  mensagens Json
+  atualizado DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([usuarioId, updatedAt])
 }
