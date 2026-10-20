@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { isZodError } from '../utils/zodError'
 import { authMiddleware, attachUserRecord, requireRole, AuthenticatedRequest } from '../middleware/auth'
-import { ChatIASchema, consultarIA, listarModelosNvidia } from '../services/ia'
+import { ChatIASchema, consultarIA, listarModelosIA } from '../services/ia'
 import { prisma } from '../config/prisma'
 import { filtroVisibilidade } from './dashboard'
 
@@ -45,7 +45,7 @@ router.get(
   requireRole('ADMIN'),
   async (_req, res) => {
     try {
-      const modelos = await listarModelosNvidia()
+      const modelos = await listarModelosIA()
       return res.json({ modelos })
     } catch (e: any) {
       return res.status(502).json({ error: 'MODELS_FETCH_FAILED', message: String(e?.message || e) })

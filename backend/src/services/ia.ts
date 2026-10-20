@@ -18,7 +18,7 @@ import { env } from '../config/env'
  * quem perguntou. O backend so traduz o formato de cada provedor.
  */
 
-export const provedoresIA = ['nvidia', 'gemini', 'groq'] as const
+export const provedoresIA = ['nvidia', 'gemini', 'groq', 'reflection'] as const
 export type ProvedorIA = (typeof provedoresIA)[number]
 
 const MensagemSchema = z.object({
@@ -53,7 +53,7 @@ export const ChatIASchema = z.object({
   tool_choice: z.enum(['auto', 'none', 'required']).optional(),
   temperature: z.number().min(0).max(2).optional(),
   max_tokens: z.number().int().min(64).max(32000).optional(),
-  provedores: z.array(z.enum(provedoresIA)).max(3).optional(),
+  provedores: z.array(z.enum(provedoresIA)).max(4).optional(),
   modelo: z.string().max(200).optional(),
 })
 
@@ -79,6 +79,7 @@ function modeloDe(p: ProvedorIA, body?: ChatIAPayload): string {
   if (p === 'nvidia' && body?.modelo) return body.modelo
   if (p === 'nvidia') return envValor('IA_MODELO_NVIDIA', 'NVIDIA_MODEL') || 'nvidia/nemotron-3-super-120b-a12b'
   if (p === 'gemini') return envValor('IA_MODELO_GEMINI', 'GEMINI_MODEL') || 'gemini-3-flash-preview'
+  if (p === 'reflection') return (body?.modelo && body.modelo.trim()) || envValor('IA_MODELO_REFLECTION', 'REFLECTION_MODEL') || 'Beam-1.0-501B-A23B'
   return envValor('IA_MODELO_GROQ', 'GROQ_MODEL') || 'openai/gpt-oss-20b'
 }
 
@@ -88,7 +89,9 @@ function chavesDe(p: ProvedorIA): string[] {
       ? envValor('IA_API_KEY_NVIDIA', 'NVIDIA_API_KEY')
       : p === 'gemini'
         ? envValor('IA_API_KEY_GEMINI', 'GEMINI_API_KEY')
-        : envValor('IA_API_KEY_GROQ', 'GROQ_API_KEY')
+        : p === 'reflection'
+          ? envValor('IA_API_KEY_REFLECTION', 'REFLECTION_API_KEY')
+          : envValor('IA_API_KEY_GROQ', 'GROQ_API_KEY')
   if (!raw) return []
   return raw.split(',').map((s) => s.trim()).filter(Boolean)
 }
@@ -106,6 +109,7 @@ function ordemPadrao(): ProvedorIA[] {
 function baseDe(p: ProvedorIA): string {
   if (p === 'nvidia') return 'https://integrate.api.nvidia.com/v1/chat/completions'
   if (p === 'groq') return 'https://api.groq.com/openai/v1/chat/completions'
+  if (p === 'reflection') return 'https://api.reflection.ai/openai/v1/chat/completions'
   return `https://generativelanguage.googleapis.com/v1beta/models/${modeloDe('gemini')}:generateContent`
 }
 
@@ -181,7 +185,7 @@ async function chamarProvedor(p: ProvedorIA, chave: string, body: ChatIAPayload)
       tool_choice: body.tool_choice ?? 'auto',
       temperature: body.temperature ?? 0.2,
       max_tokens: body.max_tokens ?? 4000,
-      ...(p === 'groq' ? { reasoning_effort: 'low' } : {}),
+      ...(p === 'groq' || p === 'reflection' ? { reasoning_effort: 'low' } : {}),
       // O GLM e modelo de raciocinio: sem isto ele gasta cota pensando antes de
       // responder. O proxy so consulta dados e monta tabela, entao nao precisa.
       ...(p === 'nvidia' ? { chat_template_kwargs: { thinking: false } } : {}),
@@ -296,6 +300,21 @@ export async function listarModelosNvidia(): Promise<string[]> {
   const json = (await r.json()) as { data?: Array<{ id?: string }> }
   const ids = (json?.data ?? []).map((m) => m?.id).filter((id): id is string => Boolean(id))
   return Array.from(new Set(ids)).sort()
+}
+
+/** Lista os modelos disponiveis no provedor configurado como principal. */
+export async function listarModelosIA(): Promise<string[]> {
+  const provedor = (process.env.IA_PROVEDOR || '').trim().toLowerCase() as ProvedorIA
+  if (provedor === 'reflection') {
+    return [envValor('IA_MODELO_REFLECTION', 'REFLECTION_MODEL') || 'Beam-1.0-501B-A23B']
+  }
+  if (provedor === 'gemini') {
+    return [envValor('IA_MODELO_GEMINI', 'GEMINI_MODEL') || 'gemini-3-flash-preview']
+  }
+  if (provedor === 'groq') {
+    return [envValor('IA_MODELO_GROQ', 'GROQ_MODEL') || 'openai/gpt-oss-20b']
+  }
+  return listarModelosNvidia()
 }
 
 /** Reexportado para a rota montar a resposta de erro sem vazar a chave. */

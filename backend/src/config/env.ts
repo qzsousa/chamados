@@ -40,13 +40,15 @@ const envSchema = z.object({
   // Proxy de LLM (Chat da CafeIA). As chaves vivem AQUI, no servidor - se
   // fossem VITE_* no portal, o Vite as embutiria no bundle e qualquer pessoa
   // leria no console do navegador.
-  IA_PROVEDOR: z.enum(['nvidia', 'gemini', 'groq']).optional(),
+  IA_PROVEDOR: z.enum(['nvidia', 'gemini', 'groq', 'reflection']).optional(),
   IA_API_KEY_NVIDIA: z.string().optional(),
   IA_API_KEY_GEMINI: z.string().optional(),
   IA_API_KEY_GROQ: z.string().optional(),
+  IA_API_KEY_REFLECTION: z.string().optional(),
   IA_MODELO_NVIDIA: z.string().default('z-ai/glm-5.3-flash'),
   IA_MODELO_GEMINI: z.string().default('gemini-1.5-flash'),
   IA_MODELO_GROQ: z.string().default('openai/gpt-oss-20b'),
+  IA_MODELO_REFLECTION: z.string().default('Beam-1.0-501B-A23B'),
 
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
 
