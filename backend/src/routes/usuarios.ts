@@ -35,6 +35,8 @@ const selectUsuario = {
   primeiroLogin: true,
   escopoTipos: true,
   rotasPermitidas: true,
+  feriasInicio: true,
+  feriasFim: true,
   createdAt: true,
   updatedAt: true,
 } as const
@@ -395,6 +397,23 @@ router.delete('/:id', authMiddleware, adminOuGestor, async (req: AuthenticatedRe
     syncUsuarioParaSce({ ...user, status: 'INATIVO' }).catch(() => {})
 
     return res.json({ success: true })
+  } catch (err) {
+    throw err
+  }
+})
+
+// PATCH /api/usuarios/:id/ferias - marca período de férias (ADMIN)
+router.patch('/:id/ferias', authMiddleware, requireRole('ADMIN'), async (req: AuthenticatedRequest, res) => {
+  try {
+    const { inicio, fim } = req.body || {}
+    const feriasInicio = inicio ? new Date(inicio) : null
+    const feriasFim = fim ? new Date(fim) : null
+    const updated = await prisma.usuario.update({
+      where: { id: req.params.id },
+      data: { feriasInicio, feriasFim },
+      select: selectUsuario,
+    })
+    return res.json(updated)
   } catch (err) {
     throw err
   }

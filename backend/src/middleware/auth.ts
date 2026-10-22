@@ -36,6 +36,8 @@ export interface AuthenticatedRequest extends Request {
      * "esta senha é provisória" são perguntas diferentes.
      */
     senhaProvisoria: boolean
+    feriasInicio: Date | null
+    feriasFim: Date | null
   }
 }
 
@@ -84,7 +86,9 @@ export async function attachUserRecord(req: AuthenticatedRequest, res: Response,
         primeiroLogin: true,
         escopoTipos: true,
         rotasPermitidas: true,
-        senhaProvisoria: true
+        senhaProvisoria: true,
+        feriasInicio: true,
+        feriasFim: true
       }
     })
 
