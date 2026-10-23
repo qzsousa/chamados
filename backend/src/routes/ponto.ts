@@ -68,15 +68,19 @@ async function coordsEscola(nome: string): Promise<{ latitude: number | null; lo
   return { latitude: found?.latitude ?? null, longitude: found?.longitude ?? null }
 }
 
-async function visitasDoDia(usuarioId: string, filial: string): Promise<{ agendaId: string | null; escola: string }[]> {
+async function visitasDoDia(usuarioId: string, filial: string): Promise<{ agendaId: string | null; escola: string; principal: boolean }[]> {
   const { data } = agoraSP()
   const dia = diaUTC(data)
   const atribuicoes = await prisma.atribuicaoAgenda.findMany({ where: { tecnicoId: usuarioId, data: dia } })
-  if (atribuicoes.length > 0) {
-    // uma visita por atribuição (escola pode repetir? dedup por agendaId)
-    return atribuicoes.map((a) => ({ agendaId: a.id, escola: a.escola }))
+  const comPonto = atribuicoes.filter((a) => a.solicitarPonto !== false)
+  if (comPonto.length > 0) {
+    return comPonto.map((a) => ({ agendaId: a.id, escola: a.escola, principal: a.principal }))
   }
-  return [{ agendaId: null, escola: filial }]
+  if (atribuicoes.length > 0) {
+    // Todas as atribuicoes do dia pediram para nao solicitar ponto: trata como sem agenda.
+    return []
+  }
+  return [{ agendaId: null, escola: filial, principal: true }]
 }
 
 // GET /api/ponto/hoje
@@ -109,6 +113,7 @@ router.get('/hoje', authMiddleware, async (req: AuthenticatedRequest, res) => {
       return {
         agendaId: v.agendaId,
         escola: v.escola,
+        principal: v.principal,
         latitude: coords.latitude,
         longitude: coords.longitude,
         ponto,
@@ -122,7 +127,7 @@ router.get('/hoje', authMiddleware, async (req: AuthenticatedRequest, res) => {
       visitas.some((v) => v.ponto?.status === 'TARDIO_REPROVADO') ? 'REPROVADO' :
       'NAO_BATIDO'
 
-    const temAgenda = (await prisma.atribuicaoAgenda.findFirst({ where: { tecnicoId: req.userRecord.id, data: dia } })) !== null
+    const temAgenda = visitasBase.length > 0
 
     return res.json({
       status,
@@ -184,7 +189,8 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res) => {
       dentroDoRaio = distanciaMetros <= RAIO_METROS
     }
 
-    const dentroDaJanela = minutos <= JANELA_FIM
+    const janelaAplicavel = alvo.principal
+    const dentroDaJanela = !janelaAplicavel || minutos <= JANELA_FIM
 
     const registro = await prisma.registroPonto.create({
       data: {
@@ -205,7 +211,7 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res) => {
       },
     })
 
-    if (!dentroDaJanela) {
+    if (janelaAplicavel && !dentroDaJanela) {
       await notificarAdmins(
         'PONTO_TARDIO' as any,
         'Solicitação de ponto tardio',
@@ -293,6 +299,40 @@ router.patch('/:id/reprovar', authMiddleware, requireRole('ADMIN'), async (req: 
       data: { status: 'TARDIO_REPROVADO', autorizadoPor: req.userRecord?.nome, autorizadoEm: new Date() },
     })
     return res.json(registro)
+  } catch (err) {
+    throw err
+  }
+})
+
+// GET /api/ponto/resumo-hoje (admin) - status de ponto de hoje por tecnico
+router.get('/resumo-hoje', authMiddleware, requireRole('ADMIN'), async (req: AuthenticatedRequest, res) => {
+  try {
+    const { data } = agoraSP()
+    const dia = diaUTC(data)
+    const tecnicos = await prisma.usuario.findMany({
+      where: { nivel: 'TECNICO', status: 'ATIVO' },
+      select: { id: true, nome: true, filial: true, feriasInicio: true, feriasFim: true },
+    })
+    const result = await Promise.all(tecnicos.map(async (t) => {
+      if (emFerias(t)) {
+        return { usuario: t, status: 'FERIAS', visitas: [] }
+      }
+      const visitasBase = await visitasDoDia(t.id, t.filial)
+      const regs = await prisma.registroPonto.findMany({ where: { usuarioId: t.id, data: dia } })
+      const regMap = new Map(regs.map((r) => [r.agendaId ?? r.escola ?? '', r]))
+      const visitas = visitasBase.map((v) => {
+        const r = regMap.get(v.agendaId ?? v.escola) || null
+        return { escola: v.escola, status: r ? r.status : 'NAO_BATIDO' }
+      })
+      const status =
+        visitas.length === 0 ? 'BATIDO' :
+        visitas.every((v) => v.status === 'NO_HORARIO' || v.status === 'TARDIO_AUTORIZADO') ? 'BATIDO' :
+        visitas.some((v) => v.status === 'TARDIO_PENDENTE') ? 'PENDENTE' :
+        visitas.some((v) => v.status === 'TARDIO_REPROVADO') ? 'REPROVADO' :
+        'NAO_BATIDO'
+      return { usuario: t, status, visitas }
+    }))
+    return res.json(result)
   } catch (err) {
     throw err
   }

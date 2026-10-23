@@ -271,6 +271,9 @@ model AtribuicaoAgenda {
   data        DateTime
   tecnicoId   String
   tecnicoNome String
+  observacao  String?
+  principal   Boolean  @default(false)
+  solicitarPonto Boolean @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

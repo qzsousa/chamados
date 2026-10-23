@@ -1002,6 +1002,9 @@ export const AtribuicaoAgendaSchema = z.object({
   tecnicoId: z.string(),
   tecnicoNome: z.string(),
   tecnicoCor: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
+  observacao: z.string().nullable().optional(),
+  principal: z.boolean().optional(),
+  solicitarPonto: z.boolean().optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime()
 })
@@ -1020,7 +1023,9 @@ export const AtribuicaoAgendaCreateSchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}(T.*)?$/, 'Data inválida')
     .refine((v) => !Number.isNaN(new Date(v).getTime()), 'Data inválida'),
   tecnicoId: z.string().min(1),
-  tecnicoNome: z.string().min(1)
+  tecnicoNome: z.string().min(1),
+  observacao: z.string().max(500).optional(),
+  solicitarPonto: z.boolean().optional(),
 })
 
 export type AtribuicaoAgendaCreate = z.infer<typeof AtribuicaoAgendaCreateSchema>
