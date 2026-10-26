@@ -320,10 +320,31 @@ router.get('/resumo-hoje', authMiddleware, requireRole('ADMIN'), async (req: Aut
       const visitasBase = await visitasDoDia(t.id, t.filial)
       const regs = await prisma.registroPonto.findMany({ where: { usuarioId: t.id, data: dia } })
       const regMap = new Map(regs.map((r) => [r.agendaId ?? r.escola ?? '', r]))
+      const baseKeys = new Set(visitasBase.map((v) => v.agendaId ?? v.escola ?? ''))
       const visitas = visitasBase.map((v) => {
         const r = regMap.get(v.agendaId ?? v.escola) || null
-        return { escola: v.escola, status: r ? r.status : 'NAO_BATIDO' }
+        return {
+          escola: v.escola,
+          status: r ? r.status : 'NAO_BATIDO',
+          batidoEm: r?.batidoEm ?? null,
+          distanciaMetros: r?.distanciaMetros ?? null,
+          dentroDoRaio: r?.dentroDoRaio ?? null,
+          semAgenda: r?.semAgenda ?? false,
+        }
       })
+      // Inclui registros batidos que nao correspondem a nenhuma visita base (ex.: agenda sem solicitar ponto, ou ponto manual)
+      for (const r of regs) {
+        const key = r.agendaId ?? r.escola ?? ''
+        if (baseKeys.has(key)) continue
+        visitas.push({
+          escola: r.escola || '—',
+          status: r.status,
+          batidoEm: r.batidoEm,
+          distanciaMetros: r.distanciaMetros,
+          dentroDoRaio: r.dentroDoRaio,
+          semAgenda: r.semAgenda,
+        })
+      }
       const status =
         visitas.length === 0 ? 'BATIDO' :
         visitas.every((v) => v.status === 'NO_HORARIO' || v.status === 'TARDIO_AUTORIZADO') ? 'BATIDO' :
