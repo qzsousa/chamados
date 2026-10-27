@@ -20,6 +20,9 @@ import ToastContainer from '@/components/ui/ToastContainer.vue'
   min-height: 100vh;
 }
 .maintenance-banner {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
   background: #d32f2f;
   color: #fff;
   padding: 14px 16px;
