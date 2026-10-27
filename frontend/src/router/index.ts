@@ -37,12 +37,6 @@ const routes: RouteRecordRaw[] = [
     meta: { public: true }
   },
   {
-    path: '/manutencao',
-    name: 'manutencao',
-    component: () => import('@/views/MaintenanceView.vue'),
-    meta: { public: true }
-  },
-  {
     path: '/dashboard',
     name: 'dashboard',
     component: () => import('@/views/DashboardFiltradoView.vue'),
@@ -65,20 +59,7 @@ const router = createRouter({
   routes
 })
 
-function emManutencao() {
-  const agora = new Date();
-  const inicio = new Date(agora);
-  inicio.setHours(17, 0, 0, 0);
-  const fim = new Date(agora);
-  fim.setHours(20, 0, 0, 0);
-  return agora >= inicio && agora <= fim;
-}
-
 router.beforeEach(async (to, _from, next) => {
-  if (emManutencao() && to.name !== 'manutencao') {
-    return next({ name: 'manutencao' });
-  }
-
   const authStore = useAuthStore()
 
   if (!authStore.isInitialized) {
