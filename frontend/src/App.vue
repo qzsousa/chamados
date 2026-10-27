@@ -1,6 +1,6 @@
 <template>
   <div class="app">
-    <div class="maintenance-banner">Aviso: o sistema estará em manutenção das 16:30 às 19:30.</div>
+    <div class="maintenance-banner">AVISO: o sistema estará em manutenção das 17:00 às 20:00.</div>
     <router-view v-slot="{ Component }">
       <transition name="fade" mode="out-in">
         <component :is="Component" />
@@ -20,12 +20,13 @@ import ToastContainer from '@/components/ui/ToastContainer.vue'
   min-height: 100vh;
 }
 .maintenance-banner {
-  background: #fff3cd;
-  color: #856404;
-  padding: 10px 16px;
+  background: #d32f2f;
+  color: #fff;
+  padding: 14px 16px;
   text-align: center;
-  font-size: 0.9rem;
-  border-bottom: 1px solid #ffeeba;
+  font-size: 1rem;
+  font-weight: 700;
+  border-bottom: 2px solid #b71c1c;
 }
 
 .fade-enter-active,

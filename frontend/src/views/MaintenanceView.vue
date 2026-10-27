@@ -4,7 +4,7 @@
       <img src="https://i.ibb.co/3yBdJq67/IMG-9095.png" alt="Logo URE" width="72" height="72" class="maintenance-logo" />
       <h1>Sistema em manutenção</h1>
       <p>O sistema de chamados estará temporariamente indisponível para manutenção programada.</p>
-      <div class="maintenance-window">Manutenção: 16:30 às 19:30</div>
+      <div class="maintenance-window">Manutenção: 17:00 às 20:00</div>
       <p>Por favor, tente novamente após esse horário. Pedimos desculpas pelo inconveniente.</p>
     </div>
   </div>

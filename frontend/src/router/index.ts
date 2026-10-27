@@ -68,9 +68,9 @@ const router = createRouter({
 function emManutencao() {
   const agora = new Date();
   const inicio = new Date(agora);
-  inicio.setHours(16, 30, 0, 0);
+  inicio.setHours(17, 0, 0, 0);
   const fim = new Date(agora);
-  fim.setHours(19, 30, 0, 0);
+  fim.setHours(20, 0, 0, 0);
   return agora >= inicio && agora <= fim;
 }
 
