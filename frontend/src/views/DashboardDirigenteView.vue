@@ -385,7 +385,7 @@ async function carregar() {
 
 onMounted(() => {
   carregar()
-  autoRefresh = window.setInterval(carregar, 60_000)
+  autoRefresh = window.setInterval(carregar, 300_000)
 })
 
 onUnmounted(() => {
