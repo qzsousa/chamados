@@ -18,12 +18,14 @@ import { env } from '../config/env'
  * quem perguntou. O backend so traduz o formato de cada provedor.
  */
 
-export const provedoresIA = ['nvidia', 'gemini', 'groq'] as const
+export const provedoresIA = ['nvidia', 'gemini', 'groq', 'reflection'] as const
 export type ProvedorIA = (typeof provedoresIA)[number]
 
 const MensagemSchema = z.object({
   role: z.enum(['system', 'user', 'assistant', 'tool']),
   content: z.string().nullable().optional(),
+  reasoning_content: z.string().nullable().optional(),
+  reasoning: z.string().nullable().optional(),
   name: z.string().optional(),
   tool_call_id: z.string().optional(),
   tool_calls: z
@@ -53,7 +55,7 @@ export const ChatIASchema = z.object({
   tool_choice: z.enum(['auto', 'none', 'required']).optional(),
   temperature: z.number().min(0).max(2).optional(),
   max_tokens: z.number().int().min(64).max(32000).optional(),
-  provedores: z.array(z.enum(provedoresIA)).max(3).optional(),
+  provedores: z.array(z.enum(provedoresIA)).max(4).optional(),
   modelo: z.string().max(200).optional(),
 })
 
@@ -67,17 +69,33 @@ export type ChatIAPayload = z.infer<typeof ChatIASchema>
  * abaixo e parametro de container local e nao desliga o raciocinio la). O
  * Nemotron 3 Super responde a mesma tool em ~5 s.
  */
-function modeloDe(p: ProvedorIA, body?: ChatIAPayload): string {
-  if (p === 'nvidia' && body?.modelo) return body.modelo
-  if (p === 'nvidia') return process.env.IA_MODELO_NVIDIA || 'nvidia/nemotron-3-super-120b-a12b'
-  if (p === 'gemini') return process.env.IA_MODELO_GEMINI || 'gemini-3-flash-preview'
-  return process.env.IA_MODELO_GROQ || 'openai/gpt-oss-20b'
+function envValor(...nomes: string[]): string | undefined {
+  for (const n of nomes) {
+    const v = process.env[n]
+    if (v && v.trim()) return v.trim()
+  }
+  return undefined
 }
 
-function chaveDe(p: ProvedorIA): string | undefined {
-  if (p === 'nvidia') return process.env.IA_API_KEY_NVIDIA
-  if (p === 'gemini') return process.env.IA_API_KEY_GEMINI
-  return process.env.IA_API_KEY_GROQ
+function modeloDe(p: ProvedorIA, body?: ChatIAPayload): string {
+  if (p === 'nvidia' && body?.modelo) return body.modelo
+  if (p === 'nvidia') return envValor('IA_MODELO_NVIDIA', 'NVIDIA_MODEL') || 'nvidia/nemotron-3-super-120b-a12b'
+  if (p === 'gemini') return envValor('IA_MODELO_GEMINI', 'GEMINI_MODEL') || 'gemini-3-flash-preview'
+  if (p === 'reflection') return (body?.modelo && body.modelo.trim()) || envValor('IA_MODELO_REFLECTION', 'REFLECTION_MODEL') || 'Beam-1.0-501B-A23B'
+  return envValor('IA_MODELO_GROQ', 'GROQ_MODEL') || 'openai/gpt-oss-20b'
+}
+
+function chavesDe(p: ProvedorIA): string[] {
+  const raw =
+    p === 'nvidia'
+      ? envValor('IA_API_KEY_NVIDIA', 'NVIDIA_API_KEY')
+      : p === 'gemini'
+        ? envValor('IA_API_KEY_GEMINI', 'GEMINI_API_KEY')
+        : p === 'reflection'
+          ? envValor('IA_API_KEY_REFLECTION', 'REFLECTION_API_KEY')
+          : envValor('IA_API_KEY_GROQ', 'GROQ_API_KEY')
+  if (!raw) return []
+  return raw.split(',').map((s) => s.trim()).filter(Boolean)
 }
 
 /** Ordem de tentativa. Sem `provedores` no corpo, usa esta. */
@@ -93,6 +111,7 @@ function ordemPadrao(): ProvedorIA[] {
 function baseDe(p: ProvedorIA): string {
   if (p === 'nvidia') return 'https://integrate.api.nvidia.com/v1/chat/completions'
   if (p === 'groq') return 'https://api.groq.com/openai/v1/chat/completions'
+  if (p === 'reflection') return 'https://api.reflection.ai/openai/v1/chat/completions'
   return `https://generativelanguage.googleapis.com/v1beta/models/${modeloDe('gemini')}:generateContent`
 }
 
@@ -168,6 +187,7 @@ async function chamarProvedor(p: ProvedorIA, chave: string, body: ChatIAPayload)
       tool_choice: body.tool_choice ?? 'auto',
       temperature: body.temperature ?? 0.2,
       max_tokens: body.max_tokens ?? 4000,
+      ...(p === 'groq' || p === 'reflection' ? { reasoning_effort: 'low' } : {}),
       // O GLM e modelo de raciocinio: sem isto ele gasta cota pensando antes de
       // responder. O proxy so consulta dados e monta tabela, entao nao precisa.
       ...(p === 'nvidia' ? { chat_template_kwargs: { thinking: false } } : {}),
@@ -189,8 +209,17 @@ function limparEscolha(resposta: any) {
   if (!Array.isArray(escolhas)) return resposta
   for (const e of escolhas) {
     if (e?.message && typeof e.message === 'object') {
-      delete e.message.reasoning_content
-      delete e.message.reasoning
+      const m = e.message
+      // Fallback: se o modelo devolveu apenas o raciocínio interno, expõe-o
+      // como conteúdo em vez de entregar um balão vazio.
+      if ((!m.content || (typeof m.content === 'string' && !m.content.trim())) &&
+          typeof (m.reasoning_content ?? m.reasoning) === 'string' &&
+          (m.reasoning_content ?? m.reasoning).trim()) {
+        m.content = m.reasoning_content ?? m.reasoning
+      }
+      // Modelos de raciocinio (ex.: Reflection/Beam) exigem o reasoning_content
+      // de volta nas mensagens de assistant anteriores. Mantemos o campo para
+      // que o front possa reenviá-lo no turno seguinte.
     }
   }
   return resposta
@@ -211,7 +240,9 @@ function respostaUtil(resposta: any): boolean {
   const mensagem = escolha.message
   if (!mensagem) return false
   if (Array.isArray(mensagem.tool_calls) && mensagem.tool_calls.length) return true
-  return typeof mensagem.content === 'string' && mensagem.content.trim().length > 0
+  if (typeof mensagem.content === 'string' && mensagem.content.trim().length > 0) return true
+  const raciocinio = mensagem.reasoning_content ?? mensagem.reasoning
+  return typeof raciocinio === 'string' && raciocinio.trim().length > 0
 }
 
 /**
@@ -225,21 +256,36 @@ export async function consultarIA(body: ChatIAPayload): Promise<{ provedor: Prov
   const falhas: string[] = []
 
   for (const p of pedidos) {
-    const chave = chaveDe(p)
-    if (!chave) {
+    const chaves = chavesDe(p)
+    if (!chaves.length) {
       falhas.push(`${p}: sem chave configurada`)
       continue
     }
-    try {
-      const resposta = await chamarProvedor(p, chave, body)
-      if (!respostaUtil(resposta)) {
-        falhas.push(`${p}: ${modeloDe(p, body)} devolveu resposta vazia`)
-        continue
+    let allRateLimited = true
+    for (let i = 0; i < chaves.length; i++) {
+      const chave = chaves[i]
+      try {
+        const resposta = await chamarProvedor(p, chave, body)
+        if (!respostaUtil(resposta)) {
+          falhas.push(`${p}: ${modeloDe(p, body)} devolveu resposta vazia`)
+          allRateLimited = false
+          break
+        }
+        return { provedor: p, resposta: limparEscolha(resposta) }
+      } catch (e) {
+        const motivo = e instanceof ErroProvedor ? `${e.status} ${e.message}`.slice(0, 300) : String(e)
+        const ultima = i === chaves.length - 1
+        if (e instanceof ErroProvedor && e.status === 429 && !ultima) {
+          falhas.push(`${p}: chave ${i + 1} rate-limited, tentando próxima`)
+          continue
+        }
+        allRateLimited = false
+        falhas.push(`${p}: ${motivo}`)
+        break
       }
-      return { provedor: p, resposta: limparEscolha(resposta) }
-    } catch (e) {
-      const motivo = e instanceof ErroProvedor ? `${e.status} ${e.message}`.slice(0, 300) : String(e)
-      falhas.push(`${p}: ${motivo}`)
+    }
+    if (allRateLimited) {
+      falhas.push(`${p}: todas as chaves rate-limited`)
     }
   }
 
@@ -248,7 +294,7 @@ export async function consultarIA(body: ChatIAPayload): Promise<{ provedor: Prov
 
 /** Lista os modelos disponiveis na API NIM (NVIDIA). */
 export async function listarModelosNvidia(): Promise<string[]> {
-  const chave = process.env.IA_API_KEY_NVIDIA
+  const chave = chavesDe('nvidia')[0]
   if (!chave) throw new Error('IA_API_KEY_NVIDIA não configurada')
   const r = await fetch('https://integrate.api.nvidia.com/v1/models', {
     headers: { Authorization: `Bearer ${chave}` },
@@ -257,6 +303,21 @@ export async function listarModelosNvidia(): Promise<string[]> {
   const json = (await r.json()) as { data?: Array<{ id?: string }> }
   const ids = (json?.data ?? []).map((m) => m?.id).filter((id): id is string => Boolean(id))
   return Array.from(new Set(ids)).sort()
+}
+
+/** Lista os modelos disponiveis no provedor configurado como principal. */
+export async function listarModelosIA(): Promise<string[]> {
+  const provedor = (process.env.IA_PROVEDOR || '').trim().toLowerCase() as ProvedorIA
+  if (provedor === 'reflection') {
+    return [envValor('IA_MODELO_REFLECTION', 'REFLECTION_MODEL') || 'Beam-1.0-501B-A23B']
+  }
+  if (provedor === 'gemini') {
+    return [envValor('IA_MODELO_GEMINI', 'GEMINI_MODEL') || 'gemini-3-flash-preview']
+  }
+  if (provedor === 'groq') {
+    return [envValor('IA_MODELO_GROQ', 'GROQ_MODEL') || 'openai/gpt-oss-20b']
+  }
+  return listarModelosNvidia()
 }
 
 /** Reexportado para a rota montar a resposta de erro sem vazar a chave. */

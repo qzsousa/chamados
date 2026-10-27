@@ -28,6 +28,7 @@ import tutorialRoutes, { obterTutorialPublic } from './routes/tutoriais'
 import formularioRoutes, { formularioPublicoHandler } from './routes/formulario'
 import escolaRoutes from './routes/escolas'
 import agendaRoutes from './routes/agenda'
+import pontoRoutes from './routes/ponto'
 import encaminhamentoRoutes from './routes/encaminhamentos'
 import iaRoutes from './routes/ia'
 import equipamentoRoutes from './routes/equipamentos'
@@ -263,6 +264,9 @@ app.use('/api/dashboard', (req, res, next) => {
     })
   })
 }, dashboardRoutes)
+// Ponto: autenticado, mas isento de exigirRotaPermitida (técnicos restritos
+// também precisam bater ponto para entrar no sistema).
+app.use('/api/ponto', authMiddleware, attachUserRecord, pontoRoutes)
 app.use('/api', authMiddleware, attachUserRecord, exigirRotaPermitida)
 // Agenda DEPOIS da parede de auth: sem isso, um usuário com rotasPermitidas
 // preenchido tomaria 403 de domínio desconhecido (o middleware roda antes das

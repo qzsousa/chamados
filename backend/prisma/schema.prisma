@@ -43,11 +43,15 @@ model Usuario {
   // representar senha temporária para quem já usa o sistema — que é o caso da
   // pessoa que esqueceu a senha.
   senhaProvisoria  Boolean  @default(false)
+  // Férias: período em que o técnico está dispensado de bater ponto.
+  feriasInicio     DateTime?
+  feriasFim        DateTime?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
   refreshTokens     RefreshToken[]
   codigosAcesso     CodigoPrimeiroAcesso[]
+  registrosPonto    RegistroPonto[]
   // Interações do usuário nos tutoriais (curtidas e comentários).
   tutorialCurtidas              TutorialCurtida[]
   tutorialComentarios           TutorialComentario[]
@@ -66,6 +70,8 @@ model Escola {
   nome             String   @unique
   nomeNormalizado  String   @unique
   tecnico          String
+  latitude         Float?
+  longitude        Float?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -73,6 +79,38 @@ model Escola {
   dvrs             DvrHost[]
 
   @@index([tecnico])
+}
+
+// =====================================================================
+// Ponto (registro diário de presença do técnico)
+// =====================================================================
+model RegistroPonto {
+  id                String   @id @default(cuid())
+  usuarioId         String
+  usuario           Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  agendaId          String?  // AtribuicaoAgenda correspondente (null = fallback filial)
+  escola            String?  // snapshot da escola visitada
+  data              DateTime // meia-noite UTC do dia em America/Sao_Paulo
+  batidoEm          DateTime @default(now())
+  latitude          Float?
+  longitude         Float?
+  accuracy          Float?
+  dentroDoRaio      Boolean?
+  distanciaMetros   Int?
+  escolasReferencia String[] @default([])
+  semAgenda         Boolean  @default(false)
+  status            String   @default("NO_HORARIO") // NO_HORARIO | TARDIO_PENDENTE | TARDIO_AUTORIZADO | TARDIO_REPROVADO
+  autorizadoPor     String?
+  autorizadoEm      DateTime?
+  justificativa     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([usuarioId, data, escola])
+  @@index([usuarioId])
+  @@index([data])
+  @@index([status])
+  @@index([agendaId])
 }
 
 model Chamado {
@@ -235,6 +273,9 @@ model AtribuicaoAgenda {
   data        DateTime
   tecnicoId   String
   tecnicoNome String
+  observacao  String?
+  principal   Boolean  @default(false)
+  solicitarPonto Boolean @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

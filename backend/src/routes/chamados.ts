@@ -1556,7 +1556,7 @@ router.post('/:id/atividades', authMiddleware, requireRole('ADMIN', 'TECNICO'), 
  */
 router.post('/:id/concluir', authMiddleware, requireRole('ADMIN', 'TECNICO'), async (req: AuthenticatedRequest, res) => {
   try {
-    const { descricaoResolucao, anexos } = ConcluirChamadoSchema.parse(req.body)
+    const { descricaoResolucao, anexos, equipamentos } = ConcluirChamadoSchema.parse(req.body)
 
     const chamado = await carregarChamadoAtivo(req.params.id)
     if (!chamado) {
@@ -1576,7 +1576,7 @@ router.post('/:id/concluir', authMiddleware, requireRole('ADMIN', 'TECNICO'), as
 
     const agora = new Date()
     const autor = req.userRecord?.nome || 'Sistema'
-    const entrada = `[${fmtHoraLocal(agora)}] Conclusão registrada por ${autor}\nDescrição da resolução: ${descricaoResolucao}`
+    const entrada = `[${fmtHoraLocal(agora)}] Conclusão registrada por ${autor}\nDescrição da resolução: ${descricaoResolucao}${equipamentos?.length ? `\nEquipamentos atendidos: ${equipamentos.join(', ')}` : ''}`
 
     await salvarAtividade(chamado.id, chamado.protocolo, 'CONCLUSAO', autor, req.userRecord?.nivel, descricaoResolucao, anexos)
 
@@ -1845,5 +1845,25 @@ async function gerarProtocolo(): Promise<string> {
 async function notificarAltaPrioridade(chamado: any): Promise<void> {
   console.log('Alta prioridade:', chamado.protocolo, chamado.unidade)
 }
+
+export async function criarChamadoGestor(req: Request, res: Response) {
+  const user = (req as AuthenticatedRequest).userRecord
+  if (!user || user.nivel !== 'GESTOR') {
+    return res.status(403).json({ error: 'FORBIDDEN', message: 'Apenas gestores podem abrir chamado interno' })
+  }
+  req.body = {
+    ...(req.body || {}),
+    unidade: user.filial,
+    solicitante: user.nome,
+    email: user.email,
+    funcao: 'Gestor',
+    categoriaChave: (req.body?.categoriaChave || 'equipamento'),
+    tipo: (req.body?.tipo || 'Equipamento - chamado interno'),
+    urgencia: (req.body?.urgencia || 'Média'),
+  }
+  return criarChamadoPublic(req, res)
+}
+
+router.post('/interno', requireRole('GESTOR'), criarChamadoGestor)
 
 export default router

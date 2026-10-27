@@ -132,14 +132,20 @@ router.post('/', authMiddleware, requireRole(...PERFIS_AGENDA), async (req: Auth
   try {
     const data = AtribuicaoAgendaCreateSchema.parse(req.body)
 
-    const criada = await prisma.atribuicaoAgenda.create({
-      data: {
-        escola: data.escola,
-        data: normalizarDia(data.data),
-        tecnicoId: data.tecnicoId,
-        tecnicoNome: data.tecnicoNome
-      }
+    const existentes = await prisma.atribuicaoAgenda.count({
+      where: { tecnicoId: data.tecnicoId, data: normalizarDia(data.data) },
     })
+  const criada = await prisma.atribuicaoAgenda.create({
+    data: {
+      escola: data.escola,
+      data: normalizarDia(data.data),
+      tecnicoId: data.tecnicoId,
+      tecnicoNome: data.tecnicoNome,
+      observacao: data.observacao ?? null,
+      principal: existentes === 0,
+      solicitarPonto: data.solicitarPonto ?? true,
+    }
+  })
 
     return res.status(201).json(criada)
   } catch (err) {

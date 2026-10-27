@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { z } from 'zod'
 import { isZodError } from '../utils/zodError'
 import { authMiddleware, attachUserRecord, requireRole, AuthenticatedRequest } from '../middleware/auth'
-import { ChatIASchema, consultarIA, listarModelosNvidia } from '../services/ia'
+import { ChatIASchema, consultarIA, listarModelosIA } from '../services/ia'
 import { prisma } from '../config/prisma'
 import { filtroVisibilidade } from './dashboard'
 
@@ -38,9 +38,17 @@ router.post(
   attachUserRecord,
   requireRole('ADMIN'),
   async (req: AuthenticatedRequest, res) => {
-    const body = ChatIASchema.parse(req.body)
-    const { provedor, resposta } = await consultarIA(body)
-    return res.json({ provedor, ...(resposta as object) })
+    try {
+      const body = ChatIASchema.parse(req.body)
+      const { provedor, resposta } = await consultarIA(body)
+      return res.json({ provedor, ...(resposta as object) })
+    } catch (err) {
+      if (isZodError(err)) {
+        return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: err.flatten().fieldErrors })
+      }
+      const message = err instanceof Error ? err.message : String(err)
+      return res.status(502).json({ error: 'IA_UNAVAILABLE', message })
+    }
   },
 )
 
@@ -51,7 +59,7 @@ router.get(
   requireRole('ADMIN'),
   async (_req, res) => {
     try {
-      const modelos = await listarModelosNvidia()
+      const modelos = await listarModelosIA()
       return res.json({ modelos })
     } catch (e: any) {
       return res.status(502).json({ error: 'MODELS_FETCH_FAILED', message: String(e?.message || e) })
