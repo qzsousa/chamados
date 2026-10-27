@@ -151,7 +151,6 @@ let chartTipo: Chart | null = null
 let chartStatus: Chart | null = null
 let chartUnidade: Chart | null = null
 let chartTecnico: Chart | null = null
-let autoRefresh: number | undefined
 
 /* --------------------------------- cores ----------------------------------- */
 
@@ -385,11 +384,9 @@ async function carregar() {
 
 onMounted(() => {
   carregar()
-  autoRefresh = window.setInterval(carregar, 300_000)
 })
 
 onUnmounted(() => {
-  if (autoRefresh) clearInterval(autoRefresh)
   ;[chartTipo, chartStatus, chartUnidade, chartTecnico].forEach(c => c?.destroy())
 })
 </script>
