@@ -11,8 +11,26 @@
 </template>
 
 <script setup lang="ts">
-import { RouterView } from 'vue-router'
+import { onMounted } from 'vue'
+import { RouterView, useRouter } from 'vue-router'
 import ToastContainer from '@/components/ui/ToastContainer.vue'
+
+const router = useRouter()
+
+onMounted(() => {
+  const agora = new Date()
+  const inicio = new Date(agora)
+  inicio.setHours(17, 0, 0, 0)
+  const fim = new Date(agora)
+  fim.setHours(20, 0, 0, 0)
+  const ms = inicio.getTime() - agora.getTime()
+  if (ms > 0) {
+    setTimeout(() => {
+      const n = new Date()
+      if (n >= inicio && n <= fim) router.push({ name: 'manutencao' })
+    }, ms)
+  }
+})
 </script>
 
 <style>
