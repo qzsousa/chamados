@@ -30,9 +30,10 @@ import escolaRoutes from './routes/escolas'
 import agendaRoutes from './routes/agenda'
 import pontoRoutes from './routes/ponto'
 import encaminhamentoRoutes from './routes/encaminhamentos'
-import iaRoutes from './routes/ia'
+import iaRoutes, { chatIAPublicoHandler, modelosIAPublicoHandler } from './routes/ia'
 import equipamentoRoutes from './routes/equipamentos'
 import inventarioRoutes from './routes/inventario'
+import wifiRoutes from './routes/wifi'
 import dvrRoutes from './routes/dvr'
 import dashboardRoutes from './routes/dashboard'
 import { LISTA_ESCOLAS_EMAILS } from './services/normalization'
@@ -155,6 +156,14 @@ const consultaChamadoLimiter = rateLimit({
   legacyHeaders: false
 })
 
+const iaPublicaLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: { error: 'RATE_LIMITED', message: 'Muitas requisições ao assistente, aguarde um minuto' },
+  standardHeaders: true,
+  legacyHeaders: false
+})
+
 app.use(generalLimiter)
 app.use(requestLogger(logger))
 
@@ -247,6 +256,11 @@ app.get('/api/tutoriais/publico/:id', obterTutorialPublic)
 // Formulário de chamados configurável (público — semeado na primeira leitura)
 app.get('/api/formulario/publico', formularioPublicoHandler)
 
+// Assistente público (Beam) — proxy de IA sem autenticação, com rate limit forte.
+// A criação do chamado em si ocorre via /api/chamados (já público) chamado pelo front.
+app.post('/api/ia/publico/chat', iaPublicaLimiter, chatIAPublicoHandler)
+app.get('/api/ia/publico/modelos', iaPublicaLimiter, modelosIAPublicoHandler)
+
 // /api/dashboard fica ACIMA da parede porque reaplica o próprio par de auth
 // dentro de dashboard.ts. A trava de rota entra junto, senão um usuário
 // restrito a /chamados leria os KPIs por aqui.
@@ -277,6 +291,7 @@ app.use('/api/chamados', chamadoRoutes)
 app.use('/api/escolas', escolaRoutes)
 app.use('/api/equipamentos', equipamentoRoutes)
 app.use('/api/inventario', inventarioRoutes)
+app.use('/api/wifi', wifiRoutes)
 app.use('/api/dvr', dvrRoutes)
 app.use('/api/feedback', feedbackRoutes)
 app.use('/api/notificacoes', notificacaoRoutes)

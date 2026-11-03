@@ -294,6 +294,64 @@ model Inventario {
   @@index([status])
 }
 
+// =====================================================================
+// Levantamento de infra Wi-Fi nas escolas
+// =====================================================================
+model VisitaWifi {
+  id                 String           @id @default(cuid())
+  createdAt          DateTime         @default(now())
+  dataVisita         DateTime
+  tecnico            String
+  escola             String
+  cie                String?
+  salasTotal         Int
+  rackCond           String?
+  totalAps           Int              @default(0)
+  apsOn              Int              @default(0)
+  apsOff             Int              @default(0)
+  apsDown            Int              @default(0)
+  salasSemAp         Int              @default(0)
+  semApComInfra      Int              @default(0)
+  semApParcial       Int              @default(0)
+  semApSemInfra      Int              @default(0)
+  latitude           Float?
+  longitude          Float?
+  obs                String?
+  aps                ApWifi[]
+  salasSem           SalaSemApWifi[]
+
+  @@index([escola])
+  @@index([tecnico])
+  @@index([dataVisita])
+}
+
+model ApWifi {
+  id        String     @id @default(cuid())
+  visitaId  String
+  visita    VisitaWifi @relation(fields: [visitaId], references: [id], onDelete: Cascade)
+  numero    String
+  local     String
+  bloco     String?
+  status    String
+  obs       String?
+
+  @@index([visitaId])
+}
+
+model SalaSemApWifi {
+  id        String     @id @default(cuid())
+  visitaId  String
+  visita    VisitaWifi @relation(fields: [visitaId], references: [id], onDelete: Cascade)
+  sala      String
+  tipo      String?
+  bloco     String?
+  infra     String
+  falta     String[]   @default([])
+  obs       String?
+
+  @@index([visitaId])
+}
+
 model Equipamento {
   id         String   @id @default(cuid())
   categoria  String
