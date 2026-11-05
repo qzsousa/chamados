@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { Prisma } from '@prisma/client'
 import { prisma } from '../config/prisma'
 import { authMiddleware, AuthenticatedRequest, requireRole } from '../middleware/auth'
+import { unidadesDoUsuario } from '../services/unidades'
 import { isZodError } from '../utils/zodError'
 import { z } from 'zod'
 import { notificarAdmins } from '../services/notificacoes'
@@ -80,7 +81,9 @@ async function visitasDoDia(usuarioId: string, filial: string): Promise<{ agenda
     // Todas as atribuicoes do dia pediram para nao solicitar ponto: trata como sem agenda.
     return []
   }
-  return [{ agendaId: null, escola: filial, principal: true }]
+  // Sem agenda: uma visita por escola do técnico, para que o ponto registre a
+  // escola mais próxima (obtida via localização) em vez do conjunto inteiro.
+  return unidadesDoUsuario(filial).map((e) => ({ agendaId: null, escola: e, principal: true }))
 }
 
 // GET /api/ponto/hoje
@@ -120,14 +123,23 @@ router.get('/hoje', authMiddleware, async (req: AuthenticatedRequest, res) => {
       }
     }))
 
-    const status =
-      visitas.length === 0 ? 'BATIDO' :
-      visitas.every((v) => v.ponto && (v.ponto.status === 'NO_HORARIO' || v.ponto.status === 'TARDIO_AUTORIZADO')) ? 'BATIDO' :
-      visitas.some((v) => v.ponto?.status === 'TARDIO_PENDENTE') ? 'PENDENTE' :
-      visitas.some((v) => v.ponto?.status === 'TARDIO_REPROVADO') ? 'REPROVADO' :
-      'NAO_BATIDO'
+    const temAgenda = (await prisma.atribuicaoAgenda.findFirst({ where: { tecnicoId: req.userRecord.id, data: dia } })) !== null
 
-    const temAgenda = visitasBase.length > 0
+    let status: string
+    if (visitas.length === 0) {
+      status = 'BATIDO'
+    } else if (!temAgenda) {
+      if (registros.some((r) => r.status === 'TARDIO_PENDENTE')) status = 'PENDENTE'
+      else if (registros.some((r) => r.status === 'TARDIO_REPROVADO')) status = 'REPROVADO'
+      else if (registros.length > 0) status = 'BATIDO'
+      else status = 'NAO_BATIDO'
+    } else {
+      status =
+        visitas.every((v) => v.ponto && (v.ponto.status === 'NO_HORARIO' || v.ponto.status === 'TARDIO_AUTORIZADO')) ? 'BATIDO' :
+        visitas.some((v) => v.ponto?.status === 'TARDIO_PENDENTE') ? 'PENDENTE' :
+        visitas.some((v) => v.ponto?.status === 'TARDIO_REPROVADO') ? 'REPROVADO' :
+        'NAO_BATIDO'
+    }
 
     return res.json({
       status,
@@ -159,6 +171,19 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res) => {
     // determina visita alvo
     let alvo = body.agendaId ? visitasBase.find((v) => v.agendaId === body.agendaId) : null
     if (!alvo && body.escola) alvo = visitasBase.find((v) => v.escola === body.escola)
+    if (!alvo && body.latitude != null && body.longitude != null && visitasBase.length > 0) {
+      // Sem agenda com localização: escolhe a escola mais próxima do técnico.
+      let best: (typeof visitasBase)[number] | null = null
+      let bestDist = Infinity
+      for (const v of visitasBase) {
+        const c = await coordsEscola(v.escola)
+        if (c.latitude != null && c.longitude != null) {
+          const d = haversineMetros(body.latitude, body.longitude, c.latitude, c.longitude)
+          if (d < bestDist) { bestDist = d; best = v }
+        }
+      }
+      if (best) alvo = best
+    }
     if (!alvo) {
       // primeira visita sem ponto
       const regs = await prisma.registroPonto.findMany({ where: { usuarioId: req.userRecord.id, data: dia } })
@@ -317,7 +342,8 @@ router.get('/resumo-hoje', authMiddleware, requireRole('ADMIN'), async (req: Aut
       if (emFerias(t)) {
         return { usuario: t, status: 'FERIAS', visitas: [] }
       }
-      const visitasBase = await visitasDoDia(t.id, t.filial)
+      const temAgenda = (await prisma.atribuicaoAgenda.findFirst({ where: { tecnicoId: t.id, data: dia } })) !== null
+      const visitasBase = temAgenda ? await visitasDoDia(t.id, t.filial) : []
       const regs = await prisma.registroPonto.findMany({ where: { usuarioId: t.id, data: dia } })
       const regMap = new Map(regs.map((r) => [r.agendaId ?? r.escola ?? '', r]))
       const baseKeys = new Set(visitasBase.map((v) => v.agendaId ?? v.escola ?? ''))
@@ -332,7 +358,7 @@ router.get('/resumo-hoje', authMiddleware, requireRole('ADMIN'), async (req: Aut
           semAgenda: r?.semAgenda ?? false,
         }
       })
-      // Inclui registros batidos que nao correspondem a nenhuma visita base (ex.: agenda sem solicitar ponto, ou ponto manual)
+      // Inclui registros batidos que nao correspondem a nenhuma visita base (ex.: agenda sem solicitar ponto, ou ponto manual / sem agenda)
       for (const r of regs) {
         const key = r.agendaId ?? r.escola ?? ''
         if (baseKeys.has(key)) continue
@@ -345,12 +371,15 @@ router.get('/resumo-hoje', authMiddleware, requireRole('ADMIN'), async (req: Aut
           semAgenda: r.semAgenda,
         })
       }
-      const status =
-        visitas.length === 0 ? 'BATIDO' :
-        visitas.every((v) => v.status === 'NO_HORARIO' || v.status === 'TARDIO_AUTORIZADO') ? 'BATIDO' :
-        visitas.some((v) => v.status === 'TARDIO_PENDENTE') ? 'PENDENTE' :
-        visitas.some((v) => v.status === 'TARDIO_REPROVADO') ? 'REPROVADO' :
-        'NAO_BATIDO'
+      const status = temAgenda
+        ? (visitas.length === 0 ? 'BATIDO' :
+          visitas.every((v) => v.status === 'NO_HORARIO' || v.status === 'TARDIO_AUTORIZADO') ? 'BATIDO' :
+          visitas.some((v) => v.status === 'TARDIO_PENDENTE') ? 'PENDENTE' :
+          visitas.some((v) => v.status === 'TARDIO_REPROVADO') ? 'REPROVADO' :
+          'NAO_BATIDO')
+        : (regs.some((r) => r.status === 'TARDIO_PENDENTE') ? 'PENDENTE' :
+          regs.some((r) => r.status === 'TARDIO_REPROVADO') ? 'REPROVADO' :
+          regs.length > 0 ? 'BATIDO' : 'NAO_BATIDO')
       return { usuario: t, status, visitas }
     }))
     return res.json(result)
