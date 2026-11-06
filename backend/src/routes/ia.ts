@@ -205,4 +205,31 @@ router.delete(
   },
 )
 
+/**
+ * Handlers públicos do assistente (sem autenticação). Reutilizam o mesmo
+ * proxy de IA, mas são montados em `index.ts` antes da parede de auth.
+ */
+export async function chatIAPublicoHandler(req: any, res: any) {
+  try {
+    const body = ChatIASchema.parse(req.body)
+    const { provedor, resposta } = await consultarIA(body)
+    return res.json({ provedor, ...(resposta as object) })
+  } catch (err) {
+    if (isZodError(err)) {
+      return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: (err as any).flatten?.().fieldErrors })
+    }
+    const message = err instanceof Error ? err.message : String(err)
+    return res.status(502).json({ error: 'IA_UNAVAILABLE', message })
+  }
+}
+
+export async function modelosIAPublicoHandler(_req: any, res: any) {
+  try {
+    const modelos = await listarModelosIA()
+    return res.json({ modelos })
+  } catch (e: any) {
+    return res.status(502).json({ error: 'MODELS_FETCH_FAILED', message: String(e?.message || e) })
+  }
+}
+
 export default router
