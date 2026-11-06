@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { prisma } from '../config/prisma'
-import { authMiddleware, AuthenticatedRequest } from '../middleware/auth'
+import { authMiddleware, AuthenticatedRequest, requireRole } from '../middleware/auth'
 
 const router = Router()
 
@@ -119,6 +119,16 @@ router.get('/', authMiddleware, async (_req: AuthenticatedRequest, res) => {
     orderBy: { createdAt: 'desc' },
   })
   return res.json(visitas)
+})
+
+router.delete('/:id', authMiddleware, requireRole('ADMIN'), async (req: AuthenticatedRequest, res) => {
+  const id = req.params.id
+  try {
+    await prisma.visitaWifi.delete({ where: { id } })
+    return res.json({ ok: true })
+  } catch (err) {
+    return res.status(404).json({ error: 'NOT_FOUND', message: 'Visita não encontrada.' })
+  }
 })
 
 router.get('/ultimas', authMiddleware, async (_req: AuthenticatedRequest, res) => {
