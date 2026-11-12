@@ -9,7 +9,7 @@ import { normalizarNomeEscola, getMapaTecnicos } from '../services/normalization
 import { getMapaInventario } from '../services/migration'
 import { notificarChamadoStatusAlterado, notificarChamadoCriado } from '../services/email'
 import { notificarAdmins, notificarUnidade, notificarTecnicoResponsavel } from '../services/notificacoes'
-import { encaminharChamado, encaminharPorRegras, tecnicosDaUnidade, destinoWhere } from '../services/encaminhamento'
+import { encaminharChamado, tecnicosDaUnidade, destinoWhere } from '../services/encaminhamento'
 import { filtroUnidadesDoUsuario, usuarioAtendeUnidade } from '../services/unidades'
 import { casaComEscopo, categoriaExigeLiberacao, clauseDeEscopo, liberouCategoria, temEscopo } from '../services/escopo'
 import { salvarAnexo, salvarAnexoComPath } from '../services/anexos'
@@ -905,15 +905,6 @@ export async function criarChamadoPublic(req: Request, res: Response) {
       await notificarAltaPrioridade(chamado)
     }
 
-    // Encaminhamento automático: chamado de uma categoria com regra ativa
-    // (ex.: equipamento) já nasce com o técnico da unidade como responsável.
-    // Falha aqui não pode impedir a criação do chamado.
-    try {
-      await encaminharPorRegras(chamado)
-    } catch {
-      /* silencioso: o chamado foi criado e os admins seguem notificados abaixo */
-    }
-
     notificarChamadoCriado(chamado).catch(() => {})
     notificarAdmins(
       'CHAMADO_NOVO',
@@ -1295,7 +1286,12 @@ router.patch('/:id/status', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GES
       where: { id: req.params.id },
       data: {
         status,
-        responsavel: responsavel || req.userRecord?.nome || chamado.responsavel,
+        // Ao (re)abrir o chamado, o responsável não muda: quem já era o técnico
+        // continua dono do atendimento. Só troca de responsável em outros status.
+        responsavel:
+          status === 'ABERTO'
+            ? chamado.responsavel
+            : responsavel || req.userRecord?.nome || chamado.responsavel,
         ultimaAtualizacao: agora,
         tecnicoResolucao: tecnicoResolucao || chamado.tecnicoResolucao,
         descricaoResolucao: descricaoResolucao || chamado.descricaoResolucao,
@@ -1340,6 +1336,51 @@ router.patch('/:id/status', authMiddleware, requireRole('ADMIN', 'TECNICO', 'GES
     if (isZodError(err)) {
       return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Dados inválidos', details: err.flatten().fieldErrors })
     }
+    throw err
+  }
+})
+
+router.patch('/:id/categoria', authMiddleware, requireRole('ADMIN'), async (req: AuthenticatedRequest, res) => {
+  try {
+    const categoriaChave = String(req.body?.categoriaChave || '').trim()
+    const tipo = req.body?.tipo !== undefined ? String(req.body.tipo).trim() : undefined
+
+    if (!categoriaChave && tipo === undefined) {
+      return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Informe categoria ou tipo' })
+    }
+
+    const chamado = await carregarChamadoAtivo(req.params.id)
+    if (!chamado) {
+      return res.status(404).json({ error: 'NOT_FOUND', message: 'Chamado não encontrado' })
+    }
+
+    let categoria: { nome: string } | null = null
+    if (categoriaChave) {
+      const encontrada = await prisma.formularioCategoria.findUnique({ where: { chave: categoriaChave } })
+      if (!encontrada || !encontrada.ativa) {
+        return res.status(400).json({ error: 'VALIDATION_ERROR', message: 'Categoria inválida ou inativa' })
+      }
+      categoria = encontrada
+    }
+
+    const agora = new Date()
+    const autor = req.userRecord?.nome || 'Sistema'
+    const partesHistorico: string[] = []
+    if (categoria) partesHistorico.push(`Categoria alterada para "${categoria.nome}"`)
+    if (tipo !== undefined) partesHistorico.push(`Tipo alterado para "${tipo}"`)
+    const updated = await prisma.chamado.update({
+      where: { id: chamado.id },
+      data: {
+        ...(categoriaChave ? { categoriaChave } : {}),
+        ...(tipo !== undefined ? { tipo: tipo || chamado.tipo } : {}),
+        ultimaAtualizacao: agora,
+        historico: `${chamado.historico || ''}\n[${fmtHoraLocal(agora)}] ${partesHistorico.join('; ')} por ${autor}`.trim(),
+      },
+    })
+
+    const completo = await prisma.chamado.findUnique({ where: { id: updated.id }, include: includeDetalhe })
+    return res.json(completo ?? updated)
+  } catch (err) {
     throw err
   }
 })
@@ -1755,7 +1796,7 @@ router.patch('/batch', authMiddleware, requireRole('ADMIN', 'TECNICO'), async (r
         where: { id },
         data: {
           status: status || chamado.status,
-          responsavel: req.userRecord?.nome,
+          responsavel: status === 'ABERTO' ? chamado.responsavel : req.userRecord?.nome,
           ultimaAtualizacao: agora,
           tecnicoResolucao: tecnicoResolucao || chamado.tecnicoResolucao,
           // Mesmo carimbo do PATCH individual: grava na 1ª conclusão, zera se reaberto.
